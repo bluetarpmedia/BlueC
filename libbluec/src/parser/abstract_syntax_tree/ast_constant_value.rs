@@ -34,7 +34,7 @@ pub enum AstConstantFp {
 pub enum AstConstantPtrInitializer {
     NullPointerConstant,
     CastExpression(u64),
-    AddressConstant { object: AstUniqueName },
+    AddressConstant { symbol: AstUniqueName },
 }
 
 /// A constant integer or floating-point value.

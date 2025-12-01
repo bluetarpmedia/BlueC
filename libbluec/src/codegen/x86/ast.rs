@@ -34,7 +34,7 @@ impl From<BtType> for AsmType {
             BtType::Void => internal_error::ICE("No AsmType for BtType::Void"),
             BtType::Int16 | BtType::UInt16 => AsmType::Word,
             BtType::Int32 | BtType::UInt32 => AsmType::DoubleWord,
-            BtType::Int64 | BtType::UInt64 => AsmType::QuadWord,
+            BtType::Int64 | BtType::UInt64 | BtType::Pointer => AsmType::QuadWord,
             BtType::Float32 => AsmType::FpSingle,
             BtType::Float64 => AsmType::FpDouble,
         }

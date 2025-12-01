@@ -181,7 +181,7 @@ fn generate_asm_static_storage_variable(bt_static_var: &ir::BtStaticStorageVaria
             AsmConstantInitializer::Imm64 { value, align: 8, signed: false }
         }
 
-        ir::BtConstantValue::AddressConstant { ref object } => {
+        ir::BtConstantValue::AddressConstant { symbol: ref object } => {
             AsmConstantInitializer::AddressConstant { object: object.clone() }
         }
     };

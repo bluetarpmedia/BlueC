@@ -215,6 +215,7 @@ pub enum BtType {
     UInt64,
     Float32,
     Float64,
+    Pointer, // Opaque pointer, effectively a UInt64 address.
 }
 
 impl From<&AstType> for BtType {
@@ -231,7 +232,7 @@ impl From<&AstType> for BtType {
             AstType::UnsignedLongLong => BtType::UInt64,
             AstType::Float => BtType::Float32,
             AstType::Double | AstType::LongDouble => BtType::Float64,
-            AstType::Pointer(_) => BtType::UInt64,
+            AstType::Pointer(_) => BtType::Pointer,
             AstType::Function { .. } => ICE!("AstType::Function is not translated to a BtType"),
         }
     }
@@ -255,6 +256,7 @@ impl fmt::Display for BtType {
             BtType::UInt64 => write!(f, "UInt64"),
             BtType::Float32 => write!(f, "Float32"),
             BtType::Float64 => write!(f, "Float64"),
+            BtType::Pointer => write!(f, "Pointer"),
         }
     }
 }
@@ -272,6 +274,7 @@ impl BtType {
             BtType::UInt64 => BtConstantValue::UInt64(0),
             BtType::Float32 => BtConstantValue::Float32(0.0),
             BtType::Float64 => BtConstantValue::Float64(0.0),
+            BtType::Pointer => BtConstantValue::UInt64(0),
         }
     }
 
@@ -284,6 +287,7 @@ impl BtType {
             BtType::Int64 | BtType::UInt64 => 64,
             BtType::Float32 => 32,
             BtType::Float64 => 64,
+            BtType::Pointer => 64,
         }
     }
 
@@ -319,7 +323,7 @@ pub enum BtConstantValue {
     UInt64(u64),
     Float32(f32),
     Float64(f64),
-    AddressConstant { object: String }
+    AddressConstant { symbol: String },
 }
 
 impl From<AstConstantValue> for BtConstantValue {
@@ -339,13 +343,13 @@ impl From<AstConstantValue> for BtConstantValue {
                 AstConstantFp::Double(value) => BtConstantValue::Float64(value),
             },
 
-            AstConstantValue::Pointer(_, init) => {
-                match init {
-                    parser::AstConstantPtrInitializer::NullPointerConstant => BtConstantValue::UInt64(0),
-                    parser::AstConstantPtrInitializer::CastExpression(val) => BtConstantValue::UInt64(val),
-                    parser::AstConstantPtrInitializer::AddressConstant { object } => BtConstantValue::AddressConstant { object: object.to_string() }
+            AstConstantValue::Pointer(_, init) => match init {
+                parser::AstConstantPtrInitializer::NullPointerConstant => BtConstantValue::UInt64(0),
+                parser::AstConstantPtrInitializer::CastExpression(val) => BtConstantValue::UInt64(val),
+                parser::AstConstantPtrInitializer::AddressConstant { symbol: object } => {
+                    BtConstantValue::AddressConstant { symbol: object.to_string() }
                 }
-            }
+            },
         }
     }
 }
@@ -361,7 +365,7 @@ impl fmt::Display for BtConstantValue {
             BtConstantValue::UInt64(value) => write!(f, "{value}"),
             BtConstantValue::Float32(value) => write!(f, "{value}"),
             BtConstantValue::Float64(value) => write!(f, "{value}"),
-            BtConstantValue::AddressConstant { object } => write!(f, "{object}"),
+            BtConstantValue::AddressConstant { symbol: object } => write!(f, "@{object}"),
         }
     }
 }
@@ -379,6 +383,7 @@ impl BtConstantValue {
             BtType::UInt64 => BtConstantValue::UInt64(1),
             BtType::Float32 => BtConstantValue::Float32(1.0),
             BtType::Float64 => BtConstantValue::Float64(1.0),
+            BtType::Pointer => ICE!("Cannot create a value of 1 for a pointer type"),
         }
     }
 
@@ -393,7 +398,7 @@ impl BtConstantValue {
             BtConstantValue::UInt64(_) => BtType::UInt64,
             BtConstantValue::Float32(_) => BtType::Float32,
             BtConstantValue::Float64(_) => BtType::Float64,
-            BtConstantValue::AddressConstant { .. } => todo!(),
+            BtConstantValue::AddressConstant { .. } => BtType::Pointer,
         }
     }
 

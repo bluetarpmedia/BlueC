@@ -76,9 +76,9 @@ fn print_instruction(instr: &BtInstruction, symbols: &SymbolTable) {
         BtInstruction::Unary { op, src, dst } => print_unary_instr(op, src, dst, symbols),
         BtInstruction::Binary { op, src1, src2, dst } => print_binary_instr(op, src1, src2, dst, symbols),
         BtInstruction::Copy { src, dst } => print_src_dst_instr("", src, dst, symbols),
-        BtInstruction::GetAddress { src, dst } => print_src_dst_instr("addr", src, dst, symbols),
-        BtInstruction::Load { src_ptr, dst } => print_src_dst_instr("ld", src_ptr, dst, symbols),
-        BtInstruction::Store { src, dst_ptr } => print_src_dst_instr("st", src, dst_ptr, symbols),
+        BtInstruction::GetAddress { src, dst } => print_getaddress_instr(src, dst, symbols),
+        BtInstruction::Load { src_ptr, dst } => print_load_instr(src_ptr, dst, symbols),
+        BtInstruction::Store { src, dst_ptr } => print_store_instr(src, dst_ptr, symbols),
         BtInstruction::Jump { target } => print_jump(target),
         BtInstruction::JumpIfZero { condition, target } => print_jump_if_condition(condition, false, target, symbols),
         BtInstruction::JumpIfNotZero { condition, target } => print_jump_if_condition(condition, true, target, symbols),
@@ -92,31 +92,45 @@ fn print_instruction(instr: &BtInstruction, symbols: &SymbolTable) {
 
 fn print_return(value: &BtValue, symbols: &SymbolTable) {
     let bt_type = get_ir_type(value, symbols);
-    println!("  ret {value} {bt_type}");
+    println!("  ret {bt_type} {value}");
 }
 
 fn print_src_dst_instr(instr: &str, src: &BtValue, dst: &BtValue, symbols: &SymbolTable) {
     let src_type = get_ir_type(src, symbols);
-    let dst_type = get_ir_type(dst, symbols);
 
     if instr.is_empty() {
-        println!("  {dst} {dst_type} = {src} {src_type}");
+        println!("  {dst} = {src_type} {src}");
     } else {
-        println!("  {dst} {dst_type} = {instr} {src} {src_type}");
+        println!("  {dst} = {instr} {src_type} {src}");
     }
+}
+
+fn print_load_instr(src_ptr: &BtValue, dst: &BtValue, symbols: &SymbolTable) {
+    let src_type = get_ir_type(src_ptr, symbols);
+    let dst_type = get_ir_type(dst, symbols);
+    println!("  {dst} = load {dst_type}, {src_type} {src_ptr}");
+}
+
+fn print_getaddress_instr(src: &BtValue, dst_ptr: &BtValue, symbols: &SymbolTable) {
+    let dst_type = get_ir_type(dst_ptr, symbols);
+    println!("  store address-of {src}, {dst_type} {dst_ptr}");
+}
+
+fn print_store_instr(src: &BtValue, dst_ptr: &BtValue, symbols: &SymbolTable) {
+    let src_type = get_ir_type(src, symbols);
+    let dst_type = get_ir_type(dst_ptr, symbols);
+    println!("  store {src_type} {src}, {dst_type} {dst_ptr}");
 }
 
 fn print_unary_instr(op: &BtUnaryOp, src: &BtValue, dst: &BtValue, symbols: &SymbolTable) {
     let src_type = get_ir_type(src, symbols);
-    let dst_type = get_ir_type(dst, symbols);
-    println!("  {dst} {dst_type} = {op} {src} {src_type}");
+    println!("  {dst} = {op} {src} {src_type}");
 }
 
 fn print_binary_instr(op: &BtBinaryOp, src1: &BtValue, src2: &BtValue, dst: &BtValue, symbols: &SymbolTable) {
     let src1_type = get_ir_type(src1, symbols);
     let src2_type = get_ir_type(src2, symbols);
-    let dst_type = get_ir_type(dst, symbols);
-    println!("  {dst} {dst_type} = {op} {src1} {src1_type}, {src2} {src2_type}");
+    println!("  {dst} = {op} {src1_type} {src1}, {src2_type} {src2}");
 }
 
 fn print_jump(target: &BtLabelIdentifier) {
@@ -206,5 +220,6 @@ fn bt_type_to_string(bt_type: &BtType) -> String {
         BtType::UInt64 => "u64".to_string(),
         BtType::Float32 => "f32".to_string(),
         BtType::Float64 => "f64".to_string(),
+        BtType::Pointer => "ptr".to_string(),
     }
 }

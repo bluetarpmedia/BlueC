@@ -120,7 +120,7 @@ fn evaluate_const_expr_recursively(expr: &AstExpression, chk: Option<&TypeChecke
                     let ptr_type = chk.get_data_type(node_id);
 
                     let init = AstConstantPtrInitializer::AddressConstant {
-                        object: unique_name.clone(),
+                        symbol: unique_name.clone(),
                     };
 
                     Some(ConstantValue::Pointer(ptr_type, init))
