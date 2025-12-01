@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ResolutionError"],"fn":["resolve_declared_type"]};

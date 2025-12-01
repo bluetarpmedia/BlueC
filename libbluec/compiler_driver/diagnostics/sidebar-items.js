@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["DiagnosticKind"],"struct":["Diagnostic","Note","Printer","SourceIdentifier"]};
