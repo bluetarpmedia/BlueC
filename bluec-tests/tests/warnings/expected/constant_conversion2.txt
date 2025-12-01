@@ -1,0 +1,7 @@
+warning: Implicit conversion from 'int' to 'short' changes value from 65536 to 0
+   |
+   | short a = 65536;
+   |           ^^^^^
+   |
+
+1 warning generated

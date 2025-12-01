@@ -1,0 +1,9 @@
+[
+    {"filename": "stmt_goto_goto_after_declaration.c", "exit_code": 1},
+    {"filename": "stmt_goto_goto_backwards.c", "exit_code": 5},
+    {"filename": "stmt_goto_goto_label_and_var.c", "exit_code": 5},
+    {"filename": "stmt_goto_goto_label_main_2.c", "exit_code": 1},
+    {"filename": "stmt_goto_goto_label_main.c", "exit_code": 0},
+    {"filename": "stmt_goto_goto_label.c", "exit_code": 1},
+    {"filename": "stmt_goto_goto_nested_label.c", "exit_code": 5}
+]

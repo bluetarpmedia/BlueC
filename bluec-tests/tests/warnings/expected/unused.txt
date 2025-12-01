@@ -1,0 +1,25 @@
+warning: Variable 'c' is unused
+   |
+   | static int c = 0;
+   |            ^
+   |
+
+warning: Function 'foo' is unused
+   |
+   | static int foo(void) {
+   |            ^^^
+   |
+
+warning: Locally defined type alias 'MyInt' is unused
+   |
+   |     typedef int MyInt;
+   |                 ^^^^^
+   |
+
+warning: Variable 'f' is unused
+   |
+   |     int f = 0;
+   |         ^
+   |
+
+4 warnings generated

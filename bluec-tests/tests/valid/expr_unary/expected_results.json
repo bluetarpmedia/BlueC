@@ -1,0 +1,17 @@
+[
+    {"filename": "expr_unary_bitwise_int_min.c", "exit_code": 254},
+    {"filename": "expr_unary_bitwise_zero.c", "exit_code": 255},
+    {"filename": "expr_unary_bitwise.c", "exit_code": 243},
+    {"filename": "expr_unary_neg_zero.c", "exit_code": 0},
+    {"filename": "expr_unary_neg.c", "exit_code": 251},
+    {"filename": "expr_unary_negate_int_max.c", "exit_code": 1},
+    {"filename": "expr_unary_nested_ops_2.c", "exit_code": 1},
+    {"filename": "expr_unary_nested_ops.c", "exit_code": 2},
+    {"filename": "expr_unary_parens_2.c", "exit_code": 253},
+    {"filename": "expr_unary_parens_3.c", "exit_code": 4},
+    {"filename": "expr_unary_parens_4.c", "exit_code": 4},
+    {"filename": "expr_unary_parens.c", "exit_code": 254},
+    {"filename": "expr_unary_plus_zero.c", "exit_code": 0},
+    {"filename": "expr_unary_plus.c", "exit_code": 5},
+    {"filename": "expr_unary_redundant_parens.c", "exit_code": 246}
+]

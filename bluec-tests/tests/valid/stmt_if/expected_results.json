@@ -1,0 +1,17 @@
+[
+    {"filename": "stmt_if_binary_condition.c", "exit_code": 5},
+    {"filename": "stmt_if_binary_false_condition.c", "exit_code": 0},
+    {"filename": "stmt_if_compound_if_expression.c", "exit_code": 1},
+    {"filename": "stmt_if_else.c", "exit_code": 2},
+    {"filename": "stmt_if_if_nested_2.c", "exit_code": 2},
+    {"filename": "stmt_if_if_nested_3.c", "exit_code": 3},
+    {"filename": "stmt_if_if_nested_4.c", "exit_code": 4},
+    {"filename": "stmt_if_if_nested_5.c", "exit_code": 1},
+    {"filename": "stmt_if_if_nested.c", "exit_code": 1},
+    {"filename": "stmt_if_if_not_taken.c", "exit_code": 0},
+    {"filename": "stmt_if_if_null_body.c", "exit_code": 1},
+    {"filename": "stmt_if_if_taken.c", "exit_code": 1},
+    {"filename": "stmt_if_multiple_if.c", "exit_code": 8},
+    {"filename": "stmt_if_postfix_if.c", "exit_code": 1},
+    {"filename": "stmt_if_prefix_if.c", "exit_code": 1}
+]

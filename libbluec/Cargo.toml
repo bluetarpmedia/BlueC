@@ -1,0 +1,14 @@
+[package]
+name = "libbluec"
+version = "0.3.0"
+edition = "2024"
+authors = ["Neil Henderson <neil@bluetarpmedia.com>"]
+description = "The BlueC library. Requires `gcc` for the preprocessor and assembler."
+
+[features]
+default = ["hex-float-literal"]
+
+# Enable support for parsing hexadecimal floating-point literals (e.g. `0xFFp-1`).
+# BlueC calls two C stdlib functions `strtod` and `strtof` for parsing these literals, which require `unsafe` blocks,
+# so we allow users to opt-out of this feature in case they have a strict policy of no unsafe Rust.
+hex-float-literal = []

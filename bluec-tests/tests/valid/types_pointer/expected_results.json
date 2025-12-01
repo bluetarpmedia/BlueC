@@ -1,0 +1,5 @@
+[
+    {"filename": "types_pointer_declare_pointer_in_for_loop.c", "exit_code": 5},
+    {"filename": "types_pointer_simple.c", "exit_code": 3},
+    {"filename": "types_pointer_multi_global", "exit_code": 1}
+]

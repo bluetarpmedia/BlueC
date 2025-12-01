@@ -1,0 +1,7 @@
+warning: Comparison of different pointer types ('int*' and 'unsigned int*')
+   |
+   |     return x == y;
+   |            ~ ^^ ~
+   |
+
+1 warning generated

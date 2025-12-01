@@ -1,0 +1,7 @@
+warning: Pointer type mismatch ('int*' and 'float*')
+   |
+   |     void *c = (10 > 1) ? a : b;
+   |                        ^ ~   ~
+   |
+
+1 warning generated

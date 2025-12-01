@@ -1,0 +1,49 @@
+warning: '&&' used within '||' without parentheses
+   |
+   |     if (a && b || c) {
+   |           ~~   ^^
+   |
+note: Add parentheses around the '&&' expression to clarify the precedence of
+      operations to readers of this source code.
+   |
+   |     if (a && b || c) {
+   |           ^^
+   |
+
+warning: '&&' used within '||' without parentheses
+    |
+    |     if (a || b && c) {
+    |           ^^   ~~
+    |
+note: Add parentheses around the '&&' expression to clarify the precedence of
+      operations to readers of this source code.
+    |
+    |     if (a || b && c) {
+    |                ^^
+    |
+
+warning: '&&' used within '||' without parentheses
+    |
+    |     if (a && b || c && b) {
+    |           ~~   ^^
+    |
+note: Add parentheses around the '&&' expression to clarify the precedence of
+      operations to readers of this source code.
+    |
+    |     if (a && b || c && b) {
+    |           ^^
+    |
+
+warning: '&&' used within '||' without parentheses
+    |
+    |     if (a && b || c && b) {
+    |                ^^   ~~
+    |
+note: Add parentheses around the '&&' expression to clarify the precedence of
+      operations to readers of this source code.
+    |
+    |     if (a && b || c && b) {
+    |                     ^^
+    |
+
+4 warnings generated

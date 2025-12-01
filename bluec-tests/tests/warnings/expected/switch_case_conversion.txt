@@ -1,0 +1,8 @@
+warning: Implicit conversion from case value type 'int' to switch condition type
+         'unsigned int' changes value from -1 to 4294967295
+   |
+   |         case -1:
+   |              ^^
+   |
+
+1 warning generated

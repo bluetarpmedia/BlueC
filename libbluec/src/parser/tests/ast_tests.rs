@@ -1,0 +1,199 @@
+// Copyright 2025 Neil Henderson, Blue Tarp Media.
+
+use crate::parser::AstType;
+
+#[test]
+fn ast_type_integer_promotion() {
+    assert_eq!(AstType::Short.promote_if_rank_lower_than_int(), AstType::Int);
+    assert_eq!(AstType::UnsignedShort.promote_if_rank_lower_than_int(), AstType::Int);
+
+    // No change
+    assert_eq!(AstType::Int.promote_if_rank_lower_than_int(), AstType::Int);
+    assert_eq!(AstType::Long.promote_if_rank_lower_than_int(), AstType::Long);
+    assert_eq!(AstType::LongLong.promote_if_rank_lower_than_int(), AstType::LongLong);
+    assert_eq!(AstType::UnsignedInt.promote_if_rank_lower_than_int(), AstType::UnsignedInt);
+    assert_eq!(AstType::UnsignedLong.promote_if_rank_lower_than_int(), AstType::UnsignedLong);
+    assert_eq!(AstType::UnsignedLongLong.promote_if_rank_lower_than_int(), AstType::UnsignedLongLong);
+}
+
+#[test]
+fn ast_type_integer_common_type() {
+    test_common_type(AstType::Int, AstType::Int, AstType::Int);
+    test_common_type(AstType::UnsignedInt, AstType::UnsignedInt, AstType::UnsignedInt);
+
+    // If both types have the same signedness then promote to the larger of the two.
+    test_common_type(AstType::Short, AstType::Int, AstType::Int);
+    test_common_type(AstType::Short, AstType::Long, AstType::Long);
+    test_common_type(AstType::Short, AstType::LongLong, AstType::LongLong);
+    test_common_type(AstType::Int, AstType::Long, AstType::Long);
+    test_common_type(AstType::Int, AstType::LongLong, AstType::LongLong);
+    test_common_type(AstType::Long, AstType::LongLong, AstType::LongLong);
+
+    test_common_type(AstType::UnsignedShort, AstType::UnsignedInt, AstType::UnsignedInt);
+    test_common_type(AstType::UnsignedShort, AstType::UnsignedLong, AstType::UnsignedLong);
+    test_common_type(AstType::UnsignedShort, AstType::UnsignedLongLong, AstType::UnsignedLongLong);
+    test_common_type(AstType::UnsignedInt, AstType::UnsignedLong, AstType::UnsignedLong);
+    test_common_type(AstType::UnsignedInt, AstType::UnsignedLongLong, AstType::UnsignedLongLong);
+    test_common_type(AstType::UnsignedLong, AstType::UnsignedLongLong, AstType::UnsignedLongLong);
+
+    // If the types have different signedness and their ranks are the same, or the unsigned one is higher, then
+    // the common type is the unsigned one.
+    test_common_type(AstType::Short, AstType::UnsignedShort, AstType::UnsignedShort);
+    test_common_type(AstType::Short, AstType::UnsignedInt, AstType::UnsignedInt);
+    test_common_type(AstType::Short, AstType::UnsignedLong, AstType::UnsignedLong);
+    test_common_type(AstType::Short, AstType::UnsignedLongLong, AstType::UnsignedLongLong);
+    test_common_type(AstType::Int, AstType::UnsignedInt, AstType::UnsignedInt);
+    test_common_type(AstType::Int, AstType::UnsignedLong, AstType::UnsignedLong);
+    test_common_type(AstType::Int, AstType::UnsignedLongLong, AstType::UnsignedLongLong);
+    test_common_type(AstType::Long, AstType::UnsignedLong, AstType::UnsignedLong);
+    test_common_type(AstType::Long, AstType::UnsignedLongLong, AstType::UnsignedLongLong);
+
+    // If the signed type has a higher rank, and if all the values of the unsigned type can fit in the signed type then the
+    // common type is the signed one.
+    test_common_type(AstType::UnsignedShort, AstType::Int, AstType::Int);
+    test_common_type(AstType::UnsignedShort, AstType::Long, AstType::Long);
+    test_common_type(AstType::UnsignedShort, AstType::LongLong, AstType::LongLong);
+    test_common_type(AstType::UnsignedInt, AstType::Long, AstType::Long);
+    test_common_type(AstType::UnsignedInt, AstType::LongLong, AstType::LongLong);
+
+    // Otherwise, if the signed type has a higher rank, the common type is the unsigned version of the signed type.
+    test_common_type(AstType::UnsignedLong, AstType::LongLong, AstType::UnsignedLongLong);
+}
+
+#[test]
+fn ast_type_same_signedness() {
+    assert_eq!(true, AstType::Short.same_signedness(&AstType::Short));
+    assert_eq!(true, AstType::Short.same_signedness(&AstType::Int));
+    assert_eq!(true, AstType::Short.same_signedness(&AstType::Long));
+    assert_eq!(true, AstType::Short.same_signedness(&AstType::LongLong));
+
+    assert_eq!(true, AstType::UnsignedInt.same_signedness(&AstType::UnsignedShort));
+    assert_eq!(true, AstType::UnsignedInt.same_signedness(&AstType::UnsignedInt));
+    assert_eq!(true, AstType::UnsignedInt.same_signedness(&AstType::UnsignedLong));
+    assert_eq!(true, AstType::UnsignedInt.same_signedness(&AstType::UnsignedLongLong));
+
+    assert_eq!(false, AstType::UnsignedInt.same_signedness(&AstType::Short));
+    assert_eq!(false, AstType::Int.same_signedness(&AstType::UnsignedShort));
+}
+
+#[test]
+fn ast_type_can_hold_value() {
+    assert_eq!(true, AstType::Short.can_hold_value(0));
+    assert_eq!(true, AstType::Short.can_hold_value(32767));
+    assert_eq!(false, AstType::Short.can_hold_value(32768));
+
+    assert_eq!(true, AstType::UnsignedShort.can_hold_value(0));
+    assert_eq!(true, AstType::UnsignedShort.can_hold_value(65535));
+    assert_eq!(false, AstType::UnsignedShort.can_hold_value(65536));
+
+    assert_eq!(true, AstType::Int.can_hold_value(0));
+    assert_eq!(true, AstType::Int.can_hold_value(2147483647));
+    assert_eq!(false, AstType::Int.can_hold_value(2147483648));
+
+    assert_eq!(true, AstType::UnsignedInt.can_hold_value(0));
+    assert_eq!(true, AstType::UnsignedInt.can_hold_value(4294967295));
+    assert_eq!(false, AstType::UnsignedInt.can_hold_value(4294967296));
+
+    assert_eq!(true, AstType::Long.can_hold_value(0));
+    assert_eq!(true, AstType::Long.can_hold_value(9223372036854775807));
+    assert_eq!(false, AstType::Long.can_hold_value(9223372036854775808));
+
+    assert_eq!(true, AstType::UnsignedLong.can_hold_value(0));
+    assert_eq!(true, AstType::UnsignedLong.can_hold_value(18446744073709551615));
+}
+
+#[test]
+fn ast_type_signed_integer_fits_inside() {
+    test_fits_inside(
+        AstType::Short,
+        &[AstType::Short, AstType::Int, AstType::Long, AstType::LongLong],
+        &[AstType::UnsignedShort, AstType::UnsignedInt, AstType::UnsignedLong, AstType::UnsignedLongLong],
+    );
+
+    test_fits_inside(
+        AstType::Int,
+        &[AstType::Int, AstType::Long, AstType::LongLong],
+        &[
+            AstType::Short,
+            AstType::UnsignedShort,
+            AstType::UnsignedInt,
+            AstType::UnsignedLong,
+            AstType::UnsignedLongLong,
+        ],
+    );
+
+    test_fits_inside(
+        AstType::Long,
+        &[AstType::Long, AstType::LongLong],
+        &[
+            AstType::Short,
+            AstType::Int,
+            AstType::UnsignedShort,
+            AstType::UnsignedInt,
+            AstType::UnsignedLong,
+            AstType::UnsignedLongLong,
+        ],
+    );
+
+    test_fits_inside(
+        AstType::LongLong,
+        &[AstType::Long, AstType::LongLong],
+        &[
+            AstType::Short,
+            AstType::Int,
+            AstType::UnsignedShort,
+            AstType::UnsignedInt,
+            AstType::UnsignedLong,
+            AstType::UnsignedLongLong,
+        ],
+    );
+}
+
+#[test]
+fn ast_type_unsigned_integer_fits_inside() {
+    test_fits_inside(
+        AstType::UnsignedShort,
+        &[
+            AstType::UnsignedShort,
+            AstType::Int,
+            AstType::Long,
+            AstType::LongLong,
+            AstType::UnsignedInt,
+            AstType::UnsignedLong,
+            AstType::UnsignedLongLong,
+        ],
+        &[AstType::Short],
+    );
+
+    test_fits_inside(
+        AstType::UnsignedInt,
+        &[AstType::Long, AstType::LongLong, AstType::UnsignedInt, AstType::UnsignedLong, AstType::UnsignedLongLong],
+        &[AstType::Short, AstType::Int, AstType::UnsignedShort],
+    );
+
+    test_fits_inside(
+        AstType::UnsignedLong,
+        &[AstType::UnsignedLong, AstType::UnsignedLongLong],
+        &[AstType::Short, AstType::Int, AstType::Long, AstType::LongLong, AstType::UnsignedShort, AstType::UnsignedInt],
+    );
+
+    test_fits_inside(
+        AstType::UnsignedLong,
+        &[AstType::UnsignedLong, AstType::UnsignedLongLong],
+        &[AstType::Short, AstType::Int, AstType::Long, AstType::LongLong, AstType::UnsignedShort, AstType::UnsignedInt],
+    );
+}
+
+fn test_common_type(a: AstType, b: AstType, common: AstType) {
+    assert_eq!(AstType::get_common_type(&a, &b), common);
+    assert_eq!(AstType::get_common_type(&b, &a), common);
+}
+
+fn test_fits_inside(data_type: AstType, yes: &[AstType], no: &[AstType]) {
+    for t in yes {
+        assert!(data_type.fits_inside(&t));
+    }
+    for t in no {
+        assert!(!data_type.fits_inside(&t));
+    }
+}

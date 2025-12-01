@@ -1,0 +1,16 @@
+[
+    {
+        "test_case": "types_pointer_multi_global",
+        "filenames": [
+            "multi/global.c",
+            "multi/global_client.c"
+        ]
+    },
+    {
+        "test_case": "types_pointer_multi_static",
+        "filenames": [
+            "multi/static.c",
+            "multi/static_client.c"
+        ]
+    }
+]

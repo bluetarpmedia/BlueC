@@ -1,0 +1,37 @@
+[
+    {
+        "test_case": "types_double_multi_double_and_int_params_recursive",
+        "filenames": [
+            "multi/double_and_int_params_recursive.c",
+            "multi/double_and_int_params_recursive_client.c"
+        ]
+    },
+    {
+        "test_case": "types_double_multi_double_parameters",
+        "filenames": [
+            "multi/double_parameters.c",
+            "multi/double_parameters_client.c"
+        ]
+    },
+    {
+        "test_case": "types_double_multi_double_params_and_result",
+        "filenames": [
+            "multi/double_params_and_result.c",
+            "multi/double_params_and_result_client.c"
+        ]
+    },
+    {
+        "test_case": "types_double_multi_extern_double",
+        "filenames": [
+            "multi/extern_double.c",
+            "multi/extern_double_client.c"
+        ]
+    },
+    {
+        "test_case": "types_double_multi_use_arg_after_fun_call",
+        "filenames": [
+            "multi/use_arg_after_fun_call.c",
+            "multi/use_arg_after_fun_call_client.c"
+        ]
+    }
+]

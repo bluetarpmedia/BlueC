@@ -1,0 +1,7 @@
+warning: Comparison between pointer type 'int*' and integer type 'unsigned long'
+   |
+   |     return ptr == ul;
+   |            ~~~ ^^ ~~
+   |
+
+1 warning generated

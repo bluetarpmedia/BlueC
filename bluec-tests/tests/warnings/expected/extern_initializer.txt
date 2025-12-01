@@ -1,0 +1,8 @@
+warning: 'extern' variable has an initializer, which makes it a variable definition.
+         Remove 'extern' since it has no effect.
+   |
+   | extern int i = 1;
+   | ^^^^^^
+   |
+
+1 warning generated

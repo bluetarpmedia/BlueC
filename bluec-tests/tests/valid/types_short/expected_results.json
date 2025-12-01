@@ -1,0 +1,86 @@
+[
+    {
+        "filename": "types_short_assign_truncate.c",
+        "exit_code": 1
+    },
+    {
+        "filename": "types_short_bitwise_and_shift.c",
+        "exit_code": 0
+    },
+    {
+        "filename": "types_short_compound.c",
+        "exit_code": 0
+    },
+    {
+        "filename": "types_short_convert_by_assignment.c",
+        "exit_code": 0
+    },
+    {
+        "filename": "types_short_convert_function_arguments.c",
+        "exit_code": 0
+    },
+    {
+        "filename": "types_short_convert_static_initializer.c",
+        "exit_code": 0
+    },
+    {
+        "filename": "types_short_integer_promotions.c",
+        "exit_code": 0
+    },
+    {
+        "filename": "types_short_logical.c",
+        "exit_code": 0
+    },
+    {
+        "filename": "types_short_mul_div.c",
+        "exit_code": 0
+    },
+    {
+        "filename": "types_short_prefix_postfix.c",
+        "exit_code": 0
+    },
+    {
+        "filename": "types_short_simple_integer_promotion.c",
+        "exit_code": 1
+    },
+    {
+        "filename": "types_short_static.c",
+        "exit_code": 0
+    },
+    {
+        "filename": "types_short_switch.c",
+        "exit_code": 0
+    },
+    {
+        "filename": "types_short_ternary.c",
+        "exit_code": 0
+    },
+    {
+        "filename": "types_short_truncate.c",
+        "exit_code": 0
+    },
+    {
+        "filename": "types_short_type_specifiers.c",
+        "exit_code": 0
+    },
+    {
+        "filename": "types_short_unary_plus.c",
+        "exit_code": 0
+    },
+    {
+        "filename": "types_short_multi_args",
+        "exit_code": 45
+    },
+    {
+        "filename": "types_short_multi_global_var",
+        "exit_code": 0
+    },
+    {
+        "filename": "types_short_multi_maintain_stack_alignment",
+        "exit_code": 12
+    },
+    {
+        "filename": "types_short_multi_return_short",
+        "exit_code": 0
+    }
+]

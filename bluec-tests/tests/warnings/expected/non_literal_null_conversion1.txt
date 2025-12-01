@@ -1,0 +1,8 @@
+warning: Expression evaluates to zero and is interpreted as a null pointer constant (of
+         type 'int*')
+   |
+   |     int *a = 10 - 10;
+   |                 ^
+   |
+
+1 warning generated

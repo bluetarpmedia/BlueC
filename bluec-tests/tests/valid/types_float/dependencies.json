@@ -1,0 +1,26 @@
+[
+    {
+        "filename": "nan.c",
+        "dependencies": [
+            "dependencies/math.c"
+        ]
+    },
+    {
+        "filename": "nan_compound_assign.c",
+        "dependencies": [
+            "dependencies/math.c"
+        ]
+    },
+    {
+        "filename": "nan_incr_and_decr.c",
+        "dependencies": [
+            "dependencies/math.c"
+        ]
+    },
+    {
+        "filename": "round_constants.c",
+        "dependencies": [
+            "dependencies/math.c"
+        ]
+    }
+]

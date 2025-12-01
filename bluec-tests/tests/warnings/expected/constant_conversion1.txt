@@ -1,0 +1,8 @@
+warning: Implicit conversion from 'long long' to 'unsigned short' changes signedness and
+         value from 100000 to 34464
+   |
+   | unsigned short a = 100000LL;
+   |                    ^^^^^^^^
+   |
+
+1 warning generated

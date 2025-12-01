@@ -1,0 +1,9 @@
+[package]
+name = "bluec"
+version = "0.3.0"
+edition = "2024"
+authors = ["Neil Henderson <neil@bluetarpmedia.com>"]
+description = "The BlueC compiler driver binary executable. Requires `gcc` for the preprocessor and assembler."
+
+[dependencies]
+libbluec = { path = "../libbluec" }

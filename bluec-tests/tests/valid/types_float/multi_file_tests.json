@@ -1,0 +1,37 @@
+[
+    {
+        "test_case": "types_float_multi_float_and_int_params_recursive",
+        "filenames": [
+            "multi/float_and_int_params_recursive.c",
+            "multi/float_and_int_params_recursive_client.c"
+        ]
+    },
+    {
+        "test_case": "types_float_multi_float_parameters",
+        "filenames": [
+            "multi/float_parameters.c",
+            "multi/float_parameters_client.c"
+        ]
+    },
+    {
+        "test_case": "types_float_multi_float_params_and_result",
+        "filenames": [
+            "multi/float_params_and_result.c",
+            "multi/float_params_and_result_client.c"
+        ]
+    },
+    {
+        "test_case": "types_float_multi_extern_float",
+        "filenames": [
+            "multi/extern_float.c",
+            "multi/extern_float_client.c"
+        ]
+    },
+    {
+        "test_case": "types_float_multi_use_arg_after_fun_call",
+        "filenames": [
+            "multi/use_arg_after_fun_call.c",
+            "multi/use_arg_after_fun_call_client.c"
+        ]
+    }
+]

@@ -1,0 +1,7 @@
+warning: Duplicate 'typedef' specifier has no effect
+   |
+   | typedef typedef int MyInt;
+   |         ^^^^^^^
+   |
+
+1 warning generated

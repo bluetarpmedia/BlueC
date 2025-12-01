@@ -1,0 +1,134 @@
+[
+    {
+        "filename": "types_longlong_arithmetic_ops.c",
+        "exit_code": 0
+    },
+    {
+        "filename": "types_longlong_assign.c",
+        "exit_code": 1
+    },
+    {
+        "filename": "types_longlong_bitshift.c",
+        "exit_code": 0
+    },
+    {
+        "filename": "types_longlong_bitwise_long_op.c",
+        "exit_code": 0
+    },
+    {
+        "filename": "types_longlong_common_type.c",
+        "exit_code": 0
+    },
+    {
+        "filename": "types_longlong_comparisons.c",
+        "exit_code": 0
+    },
+    {
+        "filename": "types_longlong_compound_assign_to_int.c",
+        "exit_code": 0
+    },
+    {
+        "filename": "types_longlong_compound_assign_to_long.c",
+        "exit_code": 0
+    },
+    {
+        "filename": "types_longlong_compound_bitshift.c",
+        "exit_code": 0
+    },
+    {
+        "filename": "types_longlong_compound_bitwise.c",
+        "exit_code": 0
+    },
+    {
+        "filename": "types_longlong_convert_by_assignment.c",
+        "exit_code": 0
+    },
+    {
+        "filename": "types_longlong_convert_function_arguments.c",
+        "exit_code": 0
+    },
+    {
+        "filename": "types_longlong_convert_static_initializer.c",
+        "exit_code": 0
+    },
+    {
+        "filename": "types_longlong_increment_long.c",
+        "exit_code": 0
+    },
+    {
+        "filename": "types_longlong_large_constants.c",
+        "exit_code": 0
+    },
+    {
+        "filename": "types_longlong_logical.c",
+        "exit_code": 0
+    },
+    {
+        "filename": "types_longlong_long_and_int_locals.c",
+        "exit_code": 0
+    },
+    {
+        "filename": "types_longlong_long_args.c",
+        "exit_code": 0
+    },
+    {
+        "filename": "types_longlong_long_constants.c",
+        "exit_code": 0
+    },
+    {
+        "filename": "types_longlong_multi_op.c",
+        "exit_code": 1
+    },
+    {
+        "filename": "types_longlong_return_long.c",
+        "exit_code": 1
+    },
+    {
+        "filename": "types_longlong_rewrite_large_multiply_regression.c",
+        "exit_code": 0
+    },
+    {
+        "filename": "types_longlong_sign_extend.c",
+        "exit_code": 0
+    },
+    {
+        "filename": "types_longlong_simple.c",
+        "exit_code": 1
+    },
+    {
+        "filename": "types_longlong_static_long.c",
+        "exit_code": 1
+    },
+    {
+        "filename": "types_longlong_switch_int.c",
+        "exit_code": 0
+    },
+    {
+        "filename": "types_longlong_switch_long_long.c",
+        "exit_code": 0
+    },
+    {
+        "filename": "types_longlong_truncate.c",
+        "exit_code": 0
+    },
+    {
+        "filename": "types_longlong_type_specifiers.c",
+        "exit_code": 0
+    },
+    {
+        "filename": "types_longlong_multi_longlong_args",
+        "exit_code": 0
+    },
+    {
+        "filename": "types_longlong_multi_longlong_global_var",
+        "exit_code": 0
+    },
+    {
+        "filename": "types_longlong_multi_maintain_stack_alignment",
+        "exit_code": 12
+    },
+    {
+        "filename": "types_longlong_multi_return_longlong",
+        "exit_code": 0
+    }
+]

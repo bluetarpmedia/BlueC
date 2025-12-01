@@ -1,0 +1,126 @@
+[
+    {
+        "filename": "functions_call_putchar.c",
+        "exit_code": 8
+    },
+    {
+        "filename": "functions_compound_assign_function_result.c",
+        "exit_code": 1
+    },
+    {
+        "filename": "functions_decl_does_not_need_param_names.c",
+        "exit_code": 10
+    },
+    {
+        "filename": "functions_dont_clobber_ecx.c",
+        "exit_code": 1
+    },
+    {
+        "filename": "functions_dont_clobber_edx.c",
+        "exit_code": 1
+    },
+    {
+        "filename": "functions_expression_args.c",
+        "exit_code": 2
+    },
+    {
+        "filename": "functions_fibonacci.c",
+        "exit_code": 8
+    },
+    {
+        "filename": "functions_forward_decl_multi_arg.c",
+        "exit_code": 1
+    },
+    {
+        "filename": "functions_forward_decl.c",
+        "exit_code": 3
+    },
+    {
+        "filename": "functions_function_shadows_variable.c",
+        "exit_code": 11
+    },
+    {
+        "filename": "functions_goto_label_multiple_functions.c",
+        "exit_code": 5
+    },
+    {
+        "filename": "functions_goto_shared_name.c",
+        "exit_code": 1
+    },
+    {
+        "filename": "functions_hello_world.c",
+        "exit_code": 0
+    },
+    {
+        "filename": "functions_label_naming_scheme.c",
+        "exit_code": 0
+    },
+    {
+        "filename": "functions_lots_of_arguments.c",
+        "exit_code": 1
+    },
+    {
+        "filename": "functions_no_return_value.c",
+        "exit_code": 3
+    },
+    {
+        "filename": "functions_param_shadows_local_var.c",
+        "exit_code": 20
+    },
+    {
+        "filename": "functions_parameter_shadows_function.c",
+        "exit_code": 3
+    },
+    {
+        "filename": "functions_parameter_shadows_own_function.c",
+        "exit_code": 2
+    },
+    {
+        "filename": "functions_parameters_are_preserved.c",
+        "exit_code": 1
+    },
+    {
+        "filename": "functions_precedence.c",
+        "exit_code": 0
+    },
+    {
+        "filename": "functions_repeat_declarations.c",
+        "exit_code": 3
+    },
+    {
+        "filename": "functions_single_arg.c",
+        "exit_code": 6
+    },
+    {
+        "filename": "functions_test_for_memory_leaks.c",
+        "exit_code": 1
+    },
+    {
+        "filename": "functions_use_function_in_expression.c",
+        "exit_code": 21
+    },
+    {
+        "filename": "functions_variable_shadows_function.c",
+        "exit_code": 7
+    },
+    {
+        "filename": "functions_addition",
+        "exit_code": 3
+    },
+    {
+        "filename": "functions_division",
+        "exit_code": 1
+    },
+    {
+        "filename": "functions_local_stack_variables",
+        "exit_code": 100
+    },
+    {
+        "filename": "functions_many_args",
+        "exit_code": 115
+    },
+    {
+        "filename": "functions_system_call",
+        "exit_code": 0
+    }
+]

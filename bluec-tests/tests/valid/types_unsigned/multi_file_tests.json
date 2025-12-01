@@ -1,0 +1,16 @@
+[
+    {
+        "test_case": "types_unsigned_multi_unsigned_args",
+        "filenames": [
+            "multi/unsigned_args.c",
+            "multi/unsigned_args_client.c"
+        ]
+    },
+    {
+        "test_case": "types_unsigned_multi_unsigned_global_var",
+        "filenames": [
+            "multi/unsigned_global_var.c",
+            "multi/unsigned_global_var_client.c"
+        ]
+    }
+]

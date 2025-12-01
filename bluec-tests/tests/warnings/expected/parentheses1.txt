@@ -1,0 +1,55 @@
+warning: '&' has a lower precedence than '==' which means the '==' expression is
+         evaluated first.
+   |
+   |     if (a & b == c) {
+   |           ^   ~~
+   |
+note: Add parentheses around the '==' expression to clarify the precedence of
+      operations to readers of this source code.
+   |
+   |     if (a & b == c) {
+   |               ^^
+   |
+note: Or add parentheses around the '&' expression to evaluate it first.
+   |
+   |     if (a & b == c) {
+   |           ^
+   |
+
+warning: '|' has a lower precedence than '<' which means the '<' expression is evaluated
+         first.
+   |
+   |     if (a | b < c) {
+   |           ^   ~
+   |
+note: Add parentheses around the '<' expression to clarify the precedence of
+      operations to readers of this source code.
+   |
+   |     if (a | b < c) {
+   |               ^
+   |
+note: Or add parentheses around the '|' expression to evaluate it first.
+   |
+   |     if (a | b < c) {
+   |           ^
+   |
+
+warning: '&' has a lower precedence than '!=' which means the '!=' expression is
+         evaluated first.
+   |
+   |     if (a & b != 0) {
+   |           ^   ~~
+   |
+note: Add parentheses around the '!=' expression to clarify the precedence of
+      operations to readers of this source code.
+   |
+   |     if (a & b != 0) {
+   |               ^^
+   |
+note: Or add parentheses around the '&' expression to evaluate it first.
+   |
+   |     if (a & b != 0) {
+   |           ^
+   |
+
+3 warnings generated

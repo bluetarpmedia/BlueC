@@ -1,0 +1,5 @@
+[
+    {"filename": "stmt_return_bitwise_ops_vars.c", "exit_code": 9},
+    {"filename": "stmt_return_bitwise_shiftl_variable.c", "exit_code": 24},
+    {"filename": "stmt_return_return_var.c", "exit_code": 2}
+]

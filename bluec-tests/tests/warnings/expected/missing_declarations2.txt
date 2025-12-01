@@ -1,0 +1,7 @@
+warning: Declaration does not declare anything
+   |
+   |     unsigned int;
+   |     ^^^^^^^^^^^^
+   |
+
+1 warning generated

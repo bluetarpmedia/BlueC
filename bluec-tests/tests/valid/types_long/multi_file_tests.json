@@ -1,0 +1,30 @@
+[
+    {
+        "test_case": "types_long_multi_long_args",
+        "filenames": [
+            "multi/long_args.c",
+            "multi/long_args_client.c"
+        ]
+    },
+    {
+        "test_case": "types_long_multi_long_global_var",
+        "filenames": [
+            "multi/long_global_var.c",
+            "multi/long_global_var_client.c"
+        ]
+    },
+    {
+        "test_case": "types_long_multi_maintain_stack_alignment",
+        "filenames": [
+            "multi/maintain_stack_alignment.c",
+            "multi/maintain_stack_alignment_client.c"
+        ]
+    },
+    {
+        "test_case": "types_long_multi_return_long",
+        "filenames": [
+            "multi/return_long.c",
+            "multi/return_long_client.c"
+        ]
+    }
+]

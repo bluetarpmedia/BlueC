@@ -1,0 +1,30 @@
+[
+    {
+        "test_case": "types_longlong_multi_longlong_args",
+        "filenames": [
+            "multi/longlong_args.c",
+            "multi/longlong_args_client.c"
+        ]
+    },
+    {
+        "test_case": "types_longlong_multi_longlong_global_var",
+        "filenames": [
+            "multi/longlong_global_var.c",
+            "multi/longlong_global_var_client.c"
+        ]
+    },
+    {
+        "test_case": "types_longlong_multi_maintain_stack_alignment",
+        "filenames": [
+            "multi/maintain_stack_alignment.c",
+            "multi/maintain_stack_alignment_client.c"
+        ]
+    },
+    {
+        "test_case": "types_longlong_multi_return_longlong",
+        "filenames": [
+            "multi/return_longlong.c",
+            "multi/return_longlong_client.c"
+        ]
+    }
+]

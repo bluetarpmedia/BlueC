@@ -1,0 +1,50 @@
+[
+    {
+        "test_case": "storage_class_external_linkage_function",
+        "filenames": [
+            "multi/external_linkage_function.c", "multi/external_linkage_function_client.c"
+        ]
+    },
+    {
+        "test_case": "storage_class_external_tentative_var",
+        "filenames": [
+            "multi/external_tentative_var.c", "multi/external_tentative_var_client.c"
+        ]
+    },
+    {
+        "test_case": "storage_class_external_var_scoping",
+        "filenames": [
+            "multi/external_var_scoping.c", "multi/external_var_scoping_client.c"
+        ]
+    },
+    {
+        "test_case": "storage_class_external_variable",
+        "filenames": [
+            "multi/external_variable.c", "multi/external_variable_client.c"
+        ]
+    },
+    {
+        "test_case": "storage_class_internal_hides_external_linkage",
+        "filenames": [
+            "multi/internal_hides_external_linkage.c", "multi/internal_hides_external_linkage_client.c"
+        ]
+    },
+    {
+        "test_case": "storage_class_internal_linkage_function",
+        "filenames": [
+            "multi/internal_linkage_function.c", "multi/internal_linkage_function_client.c"
+        ]
+    },
+    {
+        "test_case": "storage_class_internal_linkage_var",
+        "filenames": [
+            "multi/internal_linkage_var.c", "multi/internal_linkage_var_client.c"
+        ]
+    },
+    {
+        "test_case": "storage_class_same_label_same_fun",
+        "filenames": [
+            "multi/same_label_same_fun.c", "multi/same_label_same_fun_client.c"
+        ]
+    }
+]

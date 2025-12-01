@@ -1,0 +1,312 @@
+// Copyright 2025 Neil Henderson, Blue Tarp Media.
+//
+//! The `errors` module defines all the error diagnostics.
+
+use crate::ICE;
+use crate::compiler_driver::diagnostics::SourceIdentifier;
+use crate::compiler_driver::{Driver, diagnostics::Diagnostic};
+use crate::lexer::{NumericLiteralBase, SourceLocation, TokenType};
+use crate::parser::symbol::SymbolKind;
+use crate::parser::{AstLinkage, AstType};
+
+/// Kinds of redefinition errors.
+pub enum RedefineErr {
+    Type,
+    Linkage,
+    Redefined,
+}
+
+pub struct Error;
+
+impl Error {
+    /// Emits an error that a semicolon ';' is expected at the end of a declaration.
+    pub fn expect_semicolon_at_end_of_declaration(loc: SourceLocation, driver: &mut Driver) {
+        let err = "Expected ';' at end of declaration".to_string();
+        driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
+    }
+
+    /// Emits an error that a symbol cannot be redefined to a different kind of symbol.
+    pub fn redefine_as_different_symbol(
+        identifier: SourceIdentifier,
+        existing_kind: SymbolKind,
+        existing_loc: SourceLocation,
+        driver: &mut Driver,
+    ) {
+        let err = format!("Redefinition of '{}' as a different kind of symbol", identifier.0);
+        let mut diag = Diagnostic::error_at_location(err, identifier.1);
+        diag.add_note(
+            format!("{} '{}' was previously declared here:", existing_kind, identifier.0),
+            Some(existing_loc),
+        );
+        driver.add_diagnostic(diag);
+    }
+
+    /// Emits an error that a variable cannot be redefined with a different type.
+    pub fn redefine_variable_type(
+        variable: SourceIdentifier,
+        old_type: &AstType,
+        new_type: &AstType,
+        existing_symbol_loc: SourceLocation,
+        driver: &mut Driver,
+    ) {
+        let err =
+            format!("Redefinition of variable '{}' with a different type: '{new_type}' vs '{old_type}' ", variable.0);
+        let mut diag = Diagnostic::error_at_location(err, variable.1);
+        diag.add_note(format!("'{}' was previously declared here", variable.0), Some(existing_symbol_loc));
+        driver.add_diagnostic(diag);
+    }
+
+    /// Emits an error that a variable cannot be redefined with a different value.
+    pub fn redefine_variable_value(
+        variable: SourceIdentifier,
+        existing_symbol_loc: SourceLocation,
+        driver: &mut Driver,
+    ) {
+        let err = format!("Redefinition of variable '{}'", variable.0);
+        let mut diag = Diagnostic::error_at_location(err, variable.1);
+        diag.add_note(format!("`{}` was previously declared here:", variable.0), Some(existing_symbol_loc));
+        driver.add_diagnostic(diag);
+    }
+
+    /// Emits an error that a variable cannot be redefined with different linkage.
+    pub fn redefine_variable_linkage(
+        variable: SourceIdentifier,
+        linkage: AstLinkage,
+        existing_symbol_loc: SourceLocation,
+        driver: &mut Driver,
+    ) {
+        let err =
+            format!("Variable '{}' is declared with {} and does not match previous declaration", variable.0, &linkage);
+        let mut diag = Diagnostic::error_at_location(err, variable.1);
+        diag.add_note(format!("`{}` was previously declared here:", variable.0), Some(existing_symbol_loc));
+        driver.add_diagnostic(diag);
+    }
+
+    /// Emits an error that a local extern variable cannot have an initializer.
+    pub fn local_extern_variable_with_initializer(loc: SourceLocation, driver: &mut Driver) {
+        let err = "An 'extern' variable cannot have an initializer in block scope (i.e. inside a function)".to_string();
+        driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
+    }
+
+    /// Emits an error that a type alias cannot be redefined with different types.
+    pub fn redefine_type_alias_type(
+        alias: SourceIdentifier,
+        old_type: &AstType,
+        new_type: &AstType,
+        existing_symbol_loc: SourceLocation,
+        driver: &mut Driver,
+    ) {
+        let err = format!(
+            "Type alias redefinition for '{}' with different types ('{}' vs '{}')",
+            alias.0, new_type, old_type
+        );
+
+        let mut diag = Diagnostic::error_at_location(err, alias.1);
+        diag.add_note(format!("type alias `{}` was previously declared here:", alias.0), Some(existing_symbol_loc));
+        driver.add_diagnostic(diag);
+    }
+
+    /// Emits an error that a function cannot be redefined with different semantics.
+    pub fn redefine_function(
+        redefine_err: RedefineErr,
+        function: SourceIdentifier,
+        existing_symbol_loc: SourceLocation,
+        driver: &mut Driver,
+    ) {
+        let err = match redefine_err {
+            RedefineErr::Type => {
+                format!("Function '{}' has different types compared to previous declaration", function.0)
+            }
+            RedefineErr::Linkage => {
+                format!("Static declaration of '{}' follows non-static declaration", function.0)
+            }
+            RedefineErr::Redefined => format!("Redefinition of '{}' function", function.0),
+        };
+
+        let mut diag = Diagnostic::error_at_location(err, function.1);
+        diag.add_note(format!("'{}' was previously declared here", function.0), Some(existing_symbol_loc));
+        driver.add_diagnostic(diag);
+    }
+
+    /// Emits an error that there is an attempt to call an undeclared function.
+    pub fn call_undeclared_function(function: SourceIdentifier, driver: &mut Driver) {
+        let err = format!("Call to undeclared function '{}'", function.0);
+        driver.add_diagnostic(Diagnostic::error_at_location(err, function.1));
+    }
+
+    /// Emits an error that a type name is invalid.
+    pub fn unknown_type_name(type_name: SourceIdentifier, driver: &mut Driver) {
+        let err = format!("Unknown type name '{}'", type_name.0);
+        driver.add_diagnostic(Diagnostic::error_at_location(err, type_name.1));
+    }
+
+    /// Emits an error that a type specifier is missing.
+    pub fn missing_type_specifier(loc: SourceLocation, driver: &mut Driver) {
+        let err = "Missing type specifier (C99 and beyond do not support implicit 'int')".to_string();
+        driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
+    }
+
+    /// Emits an error that a type specifier is invalid.
+    pub fn invalid_type_specifier(loc: SourceLocation, driver: &mut Driver) {
+        let err = "Invalid type specifier".to_string();
+        driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
+    }
+
+    /// Emits an error that a type specifier cannot be combined with previous specifiers.
+    pub fn cannot_combine_type_specifier(specifier: SourceIdentifier, driver: &mut Driver) {
+        let err = format!("Cannot combine '{}' with previous specifiers", specifier.0);
+        driver.add_diagnostic(Diagnostic::error_at_location(err, specifier.1));
+    }
+
+    /// Emits an error that an identifier is expected.
+    pub fn expect_identifier(loc: SourceLocation, driver: &mut Driver) {
+        let err = "Expected identifier or '('".to_string();
+        driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
+    }
+
+    /// Emits an error that a token is unexpected.
+    pub fn identifier_cannot_be_keyword(identifier: SourceIdentifier, driver: &mut Driver) {
+        let err = format!("Expected identifier instead of keyword '{}'", identifier.0);
+        driver.add_diagnostic(Diagnostic::error_at_location(err, identifier.1));
+    }
+
+    /// Emits an error that a token is unexpected.
+    pub fn unexpected_token(token_type: &TokenType, loc: SourceLocation, driver: &mut Driver) {
+        let err = format!("Unexpected token '{token_type}'");
+        driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
+    }
+
+    /// Emits an error that an integer or floating-point literal is invalid.
+    pub fn invalid_numeric_literal(
+        literal: &str,
+        is_float: bool,
+        base: NumericLiteralBase,
+        loc: SourceLocation,
+        driver: &mut Driver,
+    ) {
+        let err = if is_float {
+            format!("Invalid floating-point literal '{literal}'")
+        } else {
+            format!("Invalid {base} literal '{literal}'")
+        };
+
+        driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
+    }
+
+    /// Emits an error that the suffix is invalid on an integer or floating-point literal.
+    pub fn invalid_numeric_literal_suffix(suffix: &str, is_float: bool, loc: SourceLocation, driver: &mut Driver) {
+        let literal_type = if is_float { "floating point" } else { "integer" };
+        let err = format!("Invalid suffix '{suffix}' on {literal_type} constant.");
+        driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
+    }
+
+    /// Emits an error that an expression is not assignable because it's not an lvalue.
+    pub fn expression_is_not_assignable(loc: SourceLocation, driver: &mut Driver) {
+        let err = "Expression is not assignable (must be an l-value)".to_string();
+        driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
+    }
+
+    /// Emits an error that the '*' operator requires a pointer type to dereference.
+    pub fn indirection_requires_pointer_type(expr_type: &AstType, loc: SourceLocation, driver: &mut Driver) {
+        let err =
+            format!("Indirection requires a pointer type (cannot dereference an expression of type '{}')", expr_type);
+        driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
+    }
+
+    /// Emits an error that the '&' operator cannot take the address of an rvalue.
+    pub fn cannot_take_address_of_rvalue(rvalue_type: &AstType, loc: SourceLocation, driver: &mut Driver) {
+        let err = format!("Cannot take the address of an r-value expression of type '{rvalue_type}'");
+        driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
+    }
+
+    /// Emits an error that two types in an expression are incompatible (i.e. there is no common type).
+    pub fn incompatible_types(
+        a: &AstType,
+        b: &AstType,
+        loc: SourceLocation,
+        a_loc: SourceLocation,
+        b_loc: SourceLocation,
+        driver: &mut Driver,
+    ) {
+        let err = format!("Incompatible types in expression ('{a}' and '{b}')");
+        let mut diag = Diagnostic::error_at_location(err, loc);
+        diag.add_location(a_loc);
+        diag.add_location(b_loc);
+        driver.add_diagnostic(diag);
+    }
+
+    /// Emits an error that two pointer types are incompatible (i.e. there is no common type).
+    ///
+    /// -Wincompatible-pointer-types
+    pub fn incompatible_pointer_types(a: &AstType, b: &AstType, loc: SourceLocation, driver: &mut Driver) {
+        let err = format!("Incompatible pointer types ('{a}' and '{b}')");
+        driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
+    }
+
+    /// Emits an error that a binary operation has operands with invalid types.
+    pub fn invalid_binary_expression_operands(lhs: &AstType, rhs: &AstType, loc: SourceLocation, driver: &mut Driver) {
+        let err = format!("Invalid operand types in binary expression ('{lhs}' and '{rhs}')");
+        driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
+    }
+
+    /// Emits an error that an expression is being casted to a function type (not a function pointer).
+    pub fn cannot_cast_to_function_type(
+        cast_op_loc: SourceLocation,
+        expr_loc: SourceLocation,
+        fn_type: &AstType,
+        driver: &mut Driver,
+    ) {
+        let err = format!("Cannot cast an expression to a function type ('{fn_type}')");
+        let mut diag = Diagnostic::error_at_location(err, cast_op_loc);
+        diag.add_location(expr_loc);
+        diag.add_note("Try casting to a function pointer instead.".to_string(), None);
+        // TODO: Create AstType(fn_type) and print that as the suggestion, after we support function pointers.
+        driver.add_diagnostic(diag);
+    }
+
+    /// Emits an error that an expression cannot be cast to the given dest type. E.g. pointer type to floating-point,
+    /// or vice versa.
+    pub fn invalid_cast(
+        expr_loc: SourceLocation,
+        expr_type: &AstType,
+        dest_type: &AstType,
+        driver: &mut Driver,
+    ) {
+        let err = format!("Cannot cast an expression of type '{expr_type}' to '{dest_type}'");
+        driver.add_diagnostic(Diagnostic::error_at_location(err, expr_loc));
+    }
+
+    /// Emits an error that a pointer cannot be converted to an arithmetic type.
+    pub fn incompatible_pointer_to_arithmetic_conversion(
+        ptr_type: &AstType,
+        arith_type: &AstType,
+        loc: SourceLocation,
+        driver: &mut Driver,
+    ) {
+        let arith = arithmetic_type_description(arith_type);
+        let err = format!("Incompatible pointer type to {arith} conversion ('{ptr_type}' to '{arith_type}')");
+        driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
+    }
+
+    /// Emits an error that a pointer cannot be converted to an arithmetic type.
+    pub fn incompatible_arithmetic_to_pointer_conversion(
+        arith_type: &AstType,
+        ptr_type: &AstType,
+        loc: SourceLocation,
+        driver: &mut Driver,
+    ) {
+        let arith = arithmetic_type_description(arith_type);
+        let err = format!("Incompatible {arith} to pointer type conversion ('{arith_type}' to '{ptr_type}')");
+        driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
+    }
+}
+
+fn arithmetic_type_description(arith_type: &AstType) -> &str {
+    if arith_type.is_integer() {
+        "integer"
+    } else if arith_type.is_floating_point() {
+        "floating-point"
+    } else {
+        ICE!("Unhandled arithmetic type '{arith_type}'")
+    }
+}

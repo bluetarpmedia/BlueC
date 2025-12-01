@@ -1,0 +1,14 @@
+[
+    {"filename": "decl_var_add_variables.c", "exit_code": 3},
+    {"filename": "decl_var_allocate_temps_and_vars.c", "exit_code": 1},
+    {"filename": "decl_var_assign_val_in_initializer.c", "exit_code": 5},
+    {"filename": "decl_var_assignment_in_initializer.c", "exit_code": 0},
+    {"filename": "decl_var_bitwise_in_initializer.c", "exit_code": 11},
+    {"filename": "decl_var_incr_in_binary_expr.c", "exit_code": 1},
+    {"filename": "decl_var_incr_parenthesized.c", "exit_code": 1},
+    {"filename": "decl_var_kw_var_names.c", "exit_code": 5},
+    {"filename": "decl_var_postfix_incr_and_decr.c", "exit_code": 1},
+    {"filename": "decl_var_postfix_precedence.c", "exit_code": 1},
+    {"filename": "decl_var_prefix_incr_and_decr.c", "exit_code": 1},
+    {"filename": "decl_var_use_val_in_own_initializer.c", "exit_code": 0}
+]

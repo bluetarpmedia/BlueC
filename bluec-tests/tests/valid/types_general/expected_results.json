@@ -1,0 +1,30 @@
+[
+    {
+        "filename": "types_general_int16_min_max.c",
+        "exit_code": 1
+    },
+    {
+        "filename": "types_general_int32_min_max.c",
+        "exit_code": 1
+    },
+    {
+        "filename": "types_general_int64_implicit_conversion.c",
+        "exit_code": 1
+    },
+    {
+        "filename": "types_general_int64_min_max.c",
+        "exit_code": 0
+    },
+    {
+        "filename": "types_general_uint16_min_max.c",
+        "exit_code": 1
+    },
+    {
+        "filename": "types_general_uint32_min_max.c",
+        "exit_code": 1
+    },
+    {
+        "filename": "types_general_uint64_min_max.c",
+        "exit_code": 1
+    }
+]

@@ -1,0 +1,32 @@
+[
+    {
+        "test_case": "functions_addition",
+        "filenames": [
+            "multi/addition.c", "multi/addition_client.c"
+        ]
+    },
+    {
+        "test_case": "functions_division",
+        "filenames": [
+            "multi/division.c", "multi/division_client.c"
+        ]
+    },
+    {
+        "test_case": "functions_local_stack_variables",
+        "filenames": [
+            "multi/local_stack_variables.c", "multi/local_stack_variables_client.c"
+        ]
+    },
+    {
+        "test_case": "functions_many_args",
+        "filenames": [
+            "multi/many_args.c", "multi/many_args_client.c"
+        ]
+    },
+    {
+        "test_case": "functions_system_call",
+        "filenames": [
+            "multi/system_call.c", "multi/system_call_client.c"
+        ]
+    }
+]

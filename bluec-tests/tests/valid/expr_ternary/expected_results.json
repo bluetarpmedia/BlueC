@@ -1,0 +1,19 @@
+[
+    {"filename": "expr_ternary_assign_ternary.c", "exit_code": 2},
+    {"filename": "expr_ternary_bitwise_ternary.c", "exit_code": 5},
+    {"filename": "expr_ternary_compound_assign_ternary.c", "exit_code": 8},
+    {"filename": "expr_ternary_lh_assignment.c", "exit_code": 1},
+    {"filename": "expr_ternary_lh_compound_assignment.c", "exit_code": 1},
+    {"filename": "expr_ternary_nested_ternary_2.c", "exit_code": 15},
+    {"filename": "expr_ternary_nested_ternary.c", "exit_code": 7},
+    {"filename": "expr_ternary_postfix_in_ternary.c", "exit_code": 9},
+    {"filename": "expr_ternary_prefix_in_ternary.c", "exit_code": 2},
+    {"filename": "expr_ternary_rh_assignment.c", "exit_code": 1},
+    {"filename": "expr_ternary_ternary_middle_assignment.c", "exit_code": 2},
+    {"filename": "expr_ternary_ternary_middle_binop.c", "exit_code": 1},
+    {"filename": "expr_ternary_ternary_precedence.c", "exit_code": 20},
+    {"filename": "expr_ternary_ternary_rh_binop.c", "exit_code": 1},
+    {"filename": "expr_ternary_ternary_short_circuit_2.c", "exit_code": 2},
+    {"filename": "expr_ternary_ternary_short_circuit.c", "exit_code": 1},
+    {"filename": "expr_ternary_ternary.c", "exit_code": 4}
+]

@@ -1,0 +1,23 @@
+// Copyright 2025 Neil Henderson, Blue Tarp Media.
+//
+//! The `symbol` module defines the `SymbolKind` enum.
+
+use std::fmt;
+
+/// Kinds of symbols
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum SymbolKind {
+    Variable,
+    Function,
+    TypeAlias,
+}
+
+impl fmt::Display for SymbolKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            SymbolKind::Variable => write!(f, "Variable"),
+            SymbolKind::Function => write!(f, "Function"),
+            SymbolKind::TypeAlias => write!(f, "Type alias"),
+        }
+    }
+}

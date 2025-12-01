@@ -1,0 +1,7 @@
+[
+    {"filename": "stmt_expr_incr_expression_statement.c", "exit_code": 1},
+    {"filename": "stmt_expr_non_short_circuit_or.c", "exit_code": 1},
+    {"filename": "stmt_expr_short_circuit_and_fail.c", "exit_code": 0},
+    {"filename": "stmt_expr_short_circuit_or.c", "exit_code": 0},
+    {"filename": "stmt_expr_unused_exp.c", "exit_code": 0}
+]

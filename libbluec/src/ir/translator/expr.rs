@@ -1,0 +1,290 @@
+// Copyright 2025 Neil Henderson, Blue Tarp Media.
+//
+//! The `epxr` module defines functions to translate AST expressions into the BlueTac IR.
+
+use super::super::{BtConstantValue, BtInstruction, BtValue};
+use super::binary_expr;
+use super::unary_expr;
+use super::{BlueTacTranslator, EvalExpr};
+
+use crate::ICE;
+use crate::parser::{AstExpression, AstFloatLiteralKind, AstFullExpression, AstIntegerLiteralKind, AstType};
+use crate::sema::type_conversion;
+
+pub fn translate_full_expression(
+    translator: &mut BlueTacTranslator,
+    full_expr: &AstFullExpression,
+    instructions: &mut Vec<BtInstruction>,
+) -> BtValue {
+    translate_expression_to_value(translator, &full_expr.expr, instructions)
+}
+
+pub fn translate_full_expression_without_result(
+    translator: &mut BlueTacTranslator,
+    full_expr: &AstFullExpression,
+    instructions: &mut Vec<BtInstruction>,
+) {
+    _ = translate_expression(translator, &full_expr.expr, instructions);
+}
+
+pub fn translate_expression(
+    translator: &mut BlueTacTranslator,
+    expr: &AstExpression,
+    instructions: &mut Vec<BtInstruction>,
+) -> EvalExpr {
+    match expr {
+        AstExpression::IntegerLiteral { value, kind, .. } => {
+            // There are no warnings emitted here; if these are a narrowing conversion then the parser/sema has already
+            // warned about them.
+            //
+            let val = match kind {
+                AstIntegerLiteralKind::Int => {
+                    BtValue::Constant(BtConstantValue::Int32(type_conversion::convert_u64_to_i32(*value)))
+                }
+                AstIntegerLiteralKind::Long | AstIntegerLiteralKind::LongLong => {
+                    BtValue::Constant(BtConstantValue::Int64(type_conversion::convert_u64_to_i64(*value)))
+                }
+                AstIntegerLiteralKind::UnsignedInt => {
+                    BtValue::Constant(BtConstantValue::UInt32(type_conversion::convert_u64_to_u32(*value)))
+                }
+                AstIntegerLiteralKind::UnsignedLong | AstIntegerLiteralKind::UnsignedLongLong => {
+                    BtValue::Constant(BtConstantValue::UInt64(*value))
+                }
+            };
+
+            EvalExpr::Value(val)
+        }
+
+        AstExpression::FloatLiteral { value, kind, .. } => {
+            let val = match kind {
+                AstFloatLiteralKind::Float => BtValue::Constant(BtConstantValue::Float32(*value as f32)),
+                AstFloatLiteralKind::Double | AstFloatLiteralKind::LongDouble => {
+                    BtValue::Constant(BtConstantValue::Float64(*value))
+                }
+            };
+
+            EvalExpr::Value(val)
+        }
+
+        AstExpression::Variable { unique_name, .. } => EvalExpr::Value(BtValue::Variable(unique_name.to_string())),
+
+        AstExpression::Cast { target_type, expr, .. } => {
+            let expr_value = translate_expression_to_value(translator, expr, instructions);
+            let expr_data_type = translator.get_expression_type(expr);
+
+            let dst_type = target_type.resolved_type.as_ref().unwrap();
+
+            // No need to cast if the expression's type matches the cast-to type.
+            if expr_data_type == dst_type {
+                return EvalExpr::Value(expr_value);
+            }
+
+            let src_type = expr_data_type.clone();
+            let casted = add_cast_to_temp_var(translator, expr_value, &src_type, dst_type, instructions);
+            EvalExpr::Value(casted)
+        }
+
+        AstExpression::Deref { expr, .. } => {
+            let expr_value = translate_expression_to_value(translator, expr, instructions);
+            EvalExpr::Dereferenced(expr_value)
+        }
+
+        AstExpression::AddressOf { node_id, expr } => {
+            let expr_result = translate_expression(translator, expr, instructions);
+
+            match expr_result {
+                EvalExpr::Value(value) => {
+                    let dst_data_type = translator.get_ast_type_from_node(node_id);
+                    debug_assert!(dst_data_type.is_pointer());
+
+                    let dst = translator.make_temp_variable(dst_data_type.clone());
+                    instructions.push(BtInstruction::GetAddress { src: value, dst: dst.clone() });
+                    EvalExpr::Value(dst)
+                }
+                EvalExpr::Dereferenced(object) => EvalExpr::Value(object),
+            }
+        }
+
+        AstExpression::Assignment { lhs, rhs, .. } => {
+            let lhs = translate_expression(translator, lhs, instructions);
+            let rhs = translate_expression_to_value(translator, rhs, instructions);
+
+            match lhs {
+                EvalExpr::Value(lhs_value) => {
+                    instructions.push(BtInstruction::Copy { src: rhs, dst: lhs_value.clone() });
+                    EvalExpr::Value(lhs_value)
+                }
+                EvalExpr::Dereferenced(lhs_obj) => {
+                    instructions.push(BtInstruction::Store { src: rhs, dst_ptr: lhs_obj.clone() });
+                    EvalExpr::Value(lhs_obj)
+                }
+            }
+        }
+
+        AstExpression::UnaryOperation { .. } => unary_expr::translate_unary_operation(translator, expr, instructions),
+
+        AstExpression::BinaryOperation { .. } => {
+            binary_expr::translate_binary_operation(translator, expr, instructions)
+        }
+
+        AstExpression::Conditional { expr, consequent, alternative, .. } => {
+            let dst_data_type = translator.get_expression_type(consequent); // Consequent and alternatives have same type
+            let dst = translator.make_temp_variable(dst_data_type.clone());
+
+            let alternative_label = translator.label_maker.make_unique_label("ternary_alt");
+            let end_label = translator.label_maker.make_unique_label("ternary_end");
+
+            // Condition
+            let condition_value = translate_expression_to_value(translator, expr, instructions);
+
+            instructions
+                .push(BtInstruction::JumpIfZero { condition: condition_value, target: alternative_label.clone() });
+
+            // Consequent
+            let consequent_value = translate_expression_to_value(translator, consequent, instructions);
+
+            instructions.push(BtInstruction::Copy { src: consequent_value, dst: dst.clone() });
+
+            instructions.push(BtInstruction::Jump { target: end_label.clone() });
+
+            // Alternative label
+            instructions.push(BtInstruction::Label { id: alternative_label });
+
+            // Alternative
+            let alternative_value = translate_expression_to_value(translator, alternative, instructions);
+
+            instructions.push(BtInstruction::Copy { src: alternative_value, dst: dst.clone() });
+
+            // End label
+            instructions.push(BtInstruction::Label { id: end_label });
+
+            EvalExpr::Value(dst)
+        }
+
+        AstExpression::FunctionCall { node_id, fn_name, args } => {
+            let dst_data_type = translator.get_ast_type_from_node(node_id);
+            let dst = translator.make_temp_variable(dst_data_type.clone());
+
+            // Evaluate arguments
+            let values =
+                args.iter().map(|arg_expr| translate_expression_to_value(translator, arg_expr, instructions)).collect();
+
+            let identifier = fn_name.to_string();
+            instructions.push(BtInstruction::FunctionCall { identifier, args: values, dst: dst.clone() });
+
+            EvalExpr::Value(dst)
+        }
+    }
+}
+
+/// Translates an expression and, if necessary, performs lvalue-to-rvalue conversion to convert an lvalue expression
+/// that identifies an object to its value.
+pub fn translate_expression_to_value(
+    translator: &mut BlueTacTranslator,
+    expr: &AstExpression,
+    instructions: &mut Vec<BtInstruction>,
+) -> BtValue {
+    let expr_result = translate_expression(translator, expr, instructions);
+
+    match expr_result {
+        EvalExpr::Value(value) => value,
+
+        EvalExpr::Dereferenced(object) => {
+            let rvalue_type = translator.get_ast_type_from_node(&expr.node_id());
+            let rvalue = translator.make_temp_variable(rvalue_type.clone());
+            instructions.push(BtInstruction::Load { src_ptr: object, dst: rvalue.clone() });
+            rvalue
+        }
+    }
+}
+
+pub fn add_cast_to_temp_var(
+    translator: &mut BlueTacTranslator,
+    src: BtValue,
+    src_type: &AstType,
+    dst_type: &AstType,
+    instructions: &mut Vec<BtInstruction>,
+) -> BtValue {
+    let dst = translator.make_temp_variable(dst_type.clone());
+
+    copy_value_with_optional_cast(src, dst.clone(), src_type, dst_type, instructions);
+
+    dst
+}
+
+pub fn copy_value_with_optional_cast(
+    src: BtValue,
+    dst: BtValue,
+    src_type: &AstType,
+    dst_type: &AstType,
+    instructions: &mut Vec<BtInstruction>,
+) {
+    let same_types = src_type == dst_type;
+    let same_bit_count = src_type.bits() == dst_type.bits();
+
+    // Either or both 'src' and 'dst' are pointers
+    //
+    if src_type.is_pointer() || dst_type.is_pointer() {
+        if same_types || same_bit_count {
+            instructions.push(BtInstruction::Copy { src, dst });
+        } else if src_type.is_integer() {
+            instructions.push(BtInstruction::SignExtend { src, dst });
+        } else if dst_type.is_integer() {
+            instructions.push(BtInstruction::Truncate { src, dst });
+        } else {
+            ICE!("Unexpected types '{src_type}' and '{dst_type}' in cast");
+        }
+
+        return;
+    }
+
+    // Floating-point -> Floating-point
+    //
+    if src_type.is_floating_point() && dst_type.is_floating_point() {
+        // 'long double' is an alias for 'double' so they are different AstTypes but have the same bit count.
+        let instr = if same_types || same_bit_count {
+            BtInstruction::Copy { src, dst }
+        } else {
+            BtInstruction::ConvertFp { src, dst }
+        };
+
+        instructions.push(instr);
+    }
+    // Floating-point -> Signed/Unsigned Integer
+    //
+    else if src_type.is_floating_point() {
+        let instr = match dst_type {
+            dt if dt.is_signed_integer() => BtInstruction::FpToSignedInteger { src, dst },
+            dt if dt.is_unsigned_integer() => BtInstruction::FpToUnsignedInteger { src, dst },
+            _ => ICE!("Unhandled conversion '{src_type}' -> '{dst_type}'"),
+        };
+
+        instructions.push(instr);
+    }
+    // Signed/Unsigned Integer -> Floating-point
+    //
+    else if dst_type.is_floating_point() {
+        let instr = match src_type {
+            st if st.is_signed_integer() => BtInstruction::SignedIntegerToFp { src, dst },
+            st if st.is_unsigned_integer() => BtInstruction::UnsignedIntegerToFp { src, dst },
+            _ => ICE!("Unhandled conversion '{src_type}' -> '{dst_type}'"),
+        };
+
+        instructions.push(instr);
+    }
+    // Integer -> Integer
+    //
+    else {
+        debug_assert!(src_type.is_integer() && dst_type.is_integer());
+
+        let instr = match (src_type, dst_type) {
+            (_, _) if same_types || same_bit_count => BtInstruction::Copy { src, dst },
+            (s, d) if d.bits() < s.bits() => BtInstruction::Truncate { src, dst },
+            (s, _) if s.is_signed_integer() => BtInstruction::SignExtend { src, dst },
+            (s, _) if s.is_unsigned_integer() => BtInstruction::ZeroExtend { src, dst },
+            _ => ICE!("Unhandled conversion '{src_type}' -> '{dst_type}'"),
+        };
+
+        instructions.push(instr);
+    }
+}

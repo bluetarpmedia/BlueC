@@ -1,0 +1,8 @@
+[
+    {
+        "filename": "float_double.c",
+        "dependencies": [
+            "dependencies/math.c"
+        ]
+    }
+]

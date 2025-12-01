@@ -1,0 +1,67 @@
+name: Build BlueC
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          components: clippy
+      - name: cargo clippy
+        run: cargo clippy --workspace -- -D warnings
+  
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        # The above action adds '-D warnings' to rustc to treat warnings as errors, but we'll disable that for now.
+        with:
+          rustflags: ""
+      
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Rust version
+        run: rustc --version
+
+      - name: Build
+        run: cargo build --verbose
+
+      - name: Run tests
+        run: |
+          cargo install cargo2junit --locked
+          RUSTC_BOOTSTRAP=1 cargo test -- -Z unstable-options --format json --report-time | tee results.json
+          cat results.json | cargo2junit > test-results.xml
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: test-results.xml
+          retention-days: 7
+          
+      - name: Publish test badge JSON to Gist
+        uses: gaelgirodon/ci-badges-action@v1
+        with:
+          gist-id: ${{ secrets.TEST_BADGE_GIST_ID }}
+          token: ${{ secrets.GIST_TOKEN }}
+          prefix: bluec

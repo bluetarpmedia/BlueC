@@ -1,0 +1,15 @@
+warning: Integer literal is interpreted as unsigned because it is too large for a signed
+         integer type
+   |
+   |     long a = 9323372036854775707;
+   |              ^^^^^^^^^^^^^^^^^^^
+   |
+
+warning: Implicit conversion from 'unsigned long' to 'long' changes signedness and value
+         from 9323372036854775707 to -9123372036854775909
+   |
+   |     long a = 9323372036854775707;
+   |              ^^^^^^^^^^^^^^^^^^^
+   |
+
+2 warnings generated

@@ -1,0 +1,7 @@
+warning: Type mismatch in conditional expression ('int*' and 'int')
+   |
+   |     int *b = (10 > 1) ? a : 10;
+   |                       ^ ~   ~~
+   |
+
+1 warning generated

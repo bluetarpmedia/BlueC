@@ -1,0 +1,20 @@
+[
+    {
+        "filename": "nan.c",
+        "dependencies": [
+            "dependencies/nan.c"
+        ]
+    },
+    {
+        "filename": "nan_compound_assign.c",
+        "dependencies": [
+            "dependencies/nan.c"
+        ]
+    },
+    {
+        "filename": "nan_incr_and_decr.c",
+        "dependencies": [
+            "dependencies/nan.c"
+        ]
+    }
+]
