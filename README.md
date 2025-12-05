@@ -168,7 +168,7 @@ The BlueC compiler pipeline is as follows.
   * ✅ `float`, `double` and `long double` <br>
   `long double` is effectively an alias for `double`; this is Standard-conforming but in future we may support 80-bit and/or 128-bit long doubles for certain targets
   * ✅ Pointers
-  * Function pointers
+  * ✅ Function pointers
   * Arrays
   * `_Bool`, `char`, `void`
   * Structs
