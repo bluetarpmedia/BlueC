@@ -23,30 +23,34 @@ pub fn promote_integer_literals(ast_root: &mut parser::AstRoot, metadata: &mut p
     // Visit all the full expressions in the AST.
     //
     visitor::visit_full_expressions(ast_root, &mut |full_expr: &mut AstFullExpression| {
-        // For each full expression, visit all the sub-expressions.
+        // Visit each sub-expression in the full expression.
         //
         visitor::visit_expressions_in_full_expression(full_expr, &mut |expr: &mut AstExpression| {
-            // Find Cast expressions containing an inner expression of an Integer Literal.
-            //
-            if let AstExpression::Cast { target_type, expr: inner_expr, .. } = expr
-                && matches!(inner_expr.as_ref(), AstExpression::IntegerLiteral { .. })
-            {
-                let cast_to_type = target_type.resolved_type.as_ref().expect("Sema typechecking should resolve type");
-
-                // If we can promote the integer literal to the desired type, then replace the Cast expression
-                // with the new promoted expression.
-                if let Some(promoted) = try_promote_integer_literal(metadata, inner_expr.as_mut(), cast_to_type) {
-                    *expr = promoted;
-                }
-            }
+            promote_integer_literals_in_expr(expr, metadata);
         });
     });
 }
 
+/// Find cast expressions containing an inner expression of an integer literal, and then try and replace the cast
+/// with a promoted literal.
+pub(super) fn promote_integer_literals_in_expr(expr: &mut AstExpression, metadata: &mut parser::AstMetadata) {
+    if let AstExpression::Cast { target_type, expr: inner_expr, .. } = expr
+        && matches!(inner_expr.as_ref(), AstExpression::IntegerLiteral { .. })
+    {
+        let cast_to_type = target_type.resolved_type.as_ref().expect("Sema typechecking should resolve type");
+
+        // If we can promote the integer literal to the desired type, then replace the cast expression
+        // with the new promoted expression.
+        if let Some(promoted) = try_promote_integer_literal(inner_expr.as_mut(), cast_to_type, metadata) {
+            *expr = promoted;
+        }
+    }
+}
+
 fn try_promote_integer_literal(
-    metadata: &mut parser::AstMetadata,
     expr: &mut AstExpression,
     promote_to_type: &AstType,
+    metadata: &mut parser::AstMetadata,
 ) -> Option<AstExpression> {
     let AstExpression::IntegerLiteral { node_id, literal, literal_base, value, kind } = expr else {
         ICE!("Expected an integer literal expression");
