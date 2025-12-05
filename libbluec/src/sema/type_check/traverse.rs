@@ -226,23 +226,6 @@ fn typecheck_full_expression_for_result_type(
     chk: &mut TypeChecker,
     driver: &mut Driver,
 ) -> TypeCheckResult<AstType> {
-    let full_expr_node_id = full_expr.node_id;
-
-    // TODO: Remove integer literal promotions and apply them as a separate pass after type checking
-
-    // If the inner expression is an integer literal of a type that fits into the result type then instead of a cast,
-    // just promote the literal to the result type.
-    //
-    //      E.g. `long x = 1`         --->     `long x = 1L`
-    //           `long long y = 2`    --->     `long long y = 2LL`
-    //
-    if full_expr.expr.is_integer_literal()
-        && let Some(promoted) = try_promote_integer_literal(chk, &mut full_expr.expr, result_type)
-    {
-        *full_expr = AstFullExpression { node_id: full_expr_node_id, expr: promoted };
-        return Ok(result_type.clone());
-    }
-
     let expr_type = typecheck_full_expression(full_expr, chk, driver)?;
 
     // If the full expression's type doesn't match the given result type then add a cast.
@@ -458,11 +441,7 @@ fn typecheck_binary_operation(
         ICE!("Expected binary operation");
     };
 
-    let lhs_parent_ctx = if op.is_compound_assignment() {
-        Some(ParentExprCtx::SuppressDecay)
-    } else {
-        None
-    };
+    let lhs_parent_ctx = if op.is_compound_assignment() { Some(ParentExprCtx::SuppressDecay) } else { None };
 
     let left_type = typecheck_expression(left, lhs_parent_ctx, chk, driver)?;
     let right_type = typecheck_expression(right, None, chk, driver)?;
@@ -531,8 +510,8 @@ fn typecheck_binary_operation(
     }
 
     // Take ownership of the left and right expressions (by replacing them with a 'null' value, which will never be used).
-    let mut left = take_boxed_expression(left);
-    let mut right = take_boxed_expression(right);
+    let left = take_boxed_expression(left);
+    let right = take_boxed_expression(right);
 
     // For arithmetic operators, relational operators, and bitwise and/or/xor we have to cast both operands to their
     // common type.
@@ -583,27 +562,6 @@ fn typecheck_binary_operation(
     } else {
         left_type.promote_if_rank_lower_than_int()
     };
-
-    // If the either lhs/rhs expression is an integer literal of a type that fits into the target type then instead
-    // of a cast, just promote the literal to the target type. E.g.
-    //
-    //      long x = 0;  // This case is handled by `typecheck_full_expression_for_result_type`
-    //      x = x + 1;   // This case is handled here; promote `1` to `1L`.
-    //      if (2 == x)  // Another example handled here; `2` becomes `2L`.
-    //
-    if left.is_integer_literal()
-        && let Some(promoted_left) = try_promote_integer_literal(chk, &mut left, &operand_data_type)
-    {
-        left = Box::new(promoted_left);
-        chk.set_data_type(&left.node_id(), &operand_data_type);
-    }
-
-    if right.is_integer_literal()
-        && let Some(promoted_right) = try_promote_integer_literal(chk, &mut right, &operand_data_type)
-    {
-        right = Box::new(promoted_right);
-        chk.set_data_type(&right.node_id(), &operand_data_type);
-    }
 
     // If necessary, cast both operands to the binary operation's data type.
     //      Above, we picked either their common type or the lhs type based on the operator.
@@ -965,22 +923,6 @@ fn convert_expression_type(
     chk: &mut TypeChecker,
     driver: &mut Driver,
 ) -> TypeCheckResult<AstExpression> {
-    // If the expression is an integer literal of a type that fits into the target type then instead of a cast,
-    // we can promote the literal to the desired type. E.g.
-    //
-    //      long x = 0;  // This case is handled by `typecheck_full_expression_for_result_type`
-    //      x = 1;       // This case is handled here; promote `1` to `1L`.
-    //
-    if expr.is_integer_literal()
-        && target_type.is_arithmetic()
-        && let Some(promoted) = try_promote_integer_literal(chk, expr, target_type)
-    {
-        *expr = promoted;
-
-        // typecheck the new expression we created
-        _ = typecheck_expression(expr, None, chk, driver)?;
-    }
-
     let expr_type = chk.get_data_type(&expr.node_id());
 
     if *target_type == expr_type {
@@ -1136,55 +1078,6 @@ fn take_expression(expr: &mut AstExpression) -> AstExpression {
             kind: parser::AstIntegerLiteralKind::Int,
         },
     )
-}
-
-fn try_promote_integer_literal(
-    chk: &mut TypeChecker,
-    expr: &mut AstExpression,
-    promote_to_type: &AstType,
-) -> Option<AstExpression> {
-    let AstExpression::IntegerLiteral { node_id, literal, literal_base, value, kind } = expr else {
-        ICE!("Expected an integer literal expression");
-    };
-
-    let data_type = kind.data_type();
-    if data_type == *promote_to_type {
-        return None;
-    }
-
-    if promote_to_type.is_integer()
-        && promote_to_type.bits() >= data_type.bits()
-        && promote_to_type.can_hold_value(*value)
-    {
-        let literal = literal.clone();
-        let literal_base = *literal_base;
-        let value = *value;
-
-        chk.set_data_type(node_id, promote_to_type);
-
-        Some(AstExpression::IntegerLiteral {
-            node_id: *node_id,
-            literal,
-            literal_base,
-            value,
-            kind: promote_to_type.into(),
-        })
-    } else if promote_to_type.is_floating_point() && promote_to_type.can_hold_value(*value) {
-        let literal = literal.clone();
-        let value = *value as f64;
-
-        chk.set_data_type(node_id, promote_to_type);
-
-        Some(AstExpression::FloatLiteral {
-            node_id: *node_id,
-            literal,
-            literal_base: 10,
-            value,
-            kind: parser::AstFloatLiteralKind::from(promote_to_type),
-        })
-    } else {
-        None
-    }
 }
 
 /// Is the given unary operator incompatible with pointer operands?

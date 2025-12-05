@@ -13,12 +13,12 @@ use crate::parser::{
 
 /// Emit warnings about expressions with mixed logical or bitwise operators and missing parentheses.
 pub fn warn_about_expressions_with_mixed_operators(
-    ast_root: &parser::AstRoot,
+    ast_root: &mut parser::AstRoot,
     driver: &mut compiler_driver::Driver,
     metadata: &mut parser::AstMetadata,
 ) {
-    visitor::visit_full_expressions(ast_root, &mut |full_expr: &AstFullExpression| {
-        visitor::visit_expressions_in_full_expression(full_expr, &mut |expr: &AstExpression| {
+    visitor::visit_full_expressions(ast_root, &mut |full_expr: &mut AstFullExpression| {
+        visitor::visit_expressions_in_full_expression(full_expr, &mut |expr: &mut AstExpression| {
             if let AstExpression::BinaryOperation { node_id, op, left, right } = expr {
                 match op {
                     // Mixed logical || and &&
@@ -53,13 +53,13 @@ pub fn warn_about_expressions_with_mixed_operators(
 
 /// Emit warnings about conditions using the result of an assignment without parentheses
 pub fn warn_about_assignment_in_condition_missing_parens(
-    ast_root: &parser::AstRoot,
+    ast_root: &mut parser::AstRoot,
     driver: &mut compiler_driver::Driver,
     metadata: &mut parser::AstMetadata,
 ) {
-    visitor::visit_functions(ast_root, &mut |func: &AstFunction| {
-        let block = func.body.as_ref().unwrap();
-        visitor::visit_statements_in_block(block, &mut |stmt: &AstStatement| match stmt {
+    visitor::visit_functions(ast_root, &mut |func: &mut AstFunction| {
+        let block = func.body.as_mut().unwrap();
+        visitor::visit_statements_in_block(block, &mut |stmt: &mut AstStatement| match stmt {
             AstStatement::If { controlling_expr, .. } if is_assignment_without_parens(controlling_expr, metadata) => {
                 emit_assignment_used_in_condition_without_parens_warning(
                     &controlling_expr.node_id,

@@ -16,7 +16,7 @@ use std::collections::HashMap;
 /// Validates that label names are unique within the function, and that all `goto <label>` targets
 /// have been declared.
 pub fn validate_labels(
-    ast_root: &parser::AstRoot,
+    ast_root: &mut parser::AstRoot,
     driver: &mut compiler_driver::Driver,
     metadata: &parser::AstMetadata,
 ) {
@@ -27,13 +27,13 @@ pub fn validate_labels(
     //      after recording all of the label names, since it's possible to goto a label that is not
     //      declared until afterwards.
     //
-    visitor::visit_functions(ast_root, &mut |func: &AstFunction| {
+    visitor::visit_functions(ast_root, &mut |func: &mut AstFunction| {
         let mut declared_labels: HashMap<String, AstNodeId> = HashMap::new();
         let mut goto_labels: HashMap<String, AstNodeId> = HashMap::new();
 
-        let block = func.body.as_ref().unwrap();
+        let block = func.body.as_mut().unwrap();
 
-        visitor::visit_statements_in_block(block, &mut |stmt: &AstStatement| {
+        visitor::visit_statements_in_block(block, &mut |stmt: &mut AstStatement| {
             record_statement_labels(driver, metadata, stmt, &mut declared_labels, &mut goto_labels);
         });
 

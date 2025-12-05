@@ -16,17 +16,17 @@ use crate::parser::{AstConstantValue, AstFunction, AstStatement};
 /// 
 /// Cases in a switch statement must have constant expressions that evaluate to unique integer values.
 pub fn validate_switch_statements(
-    ast_root: &parser::AstRoot,
+    ast_root: &mut parser::AstRoot,
     metadata: &mut parser::AstMetadata,
     driver: &mut compiler_driver::Driver,
 ) {
     // Visit each function definition, and for each one, visit each switch statement and verify that its cases have
     // unique constant values.
     //
-    visitor::visit_functions(ast_root, &mut |func: &AstFunction| {
-        let block = func.body.as_ref().unwrap();
+    visitor::visit_functions(ast_root, &mut |func: &mut AstFunction| {
+        let block = func.body.as_mut().unwrap();
 
-        visitor::visit_statements_in_block(block, &mut |stmt: &AstStatement| {
+        visitor::visit_statements_in_block(block, &mut |stmt: &mut AstStatement| {
             if let AstStatement::Switch { node_id: enclosing_switch_node_id, controlling_expr, body } = stmt {
                 // Get the type of the switch statement's controlling expression.
                 //      All case values must be of this type or cast to it.
@@ -36,7 +36,7 @@ pub fn validate_switch_statements(
                 // Visit all the 'case' statements inside the switch body.
                 //      Remember this will find 'case' statements in nested switches too.
                 //
-                visitor::visit_statement(body, &mut |stmt: &AstStatement| {
+                visitor::visit_statement(body, &mut |stmt: &mut AstStatement| {
                     if let AstStatement::Case { switch_node_id, constant_expr, .. } = stmt {
                         // We only want to examine 'case' statements immediately in our own switch body, not nested
                         // switch statement cases.

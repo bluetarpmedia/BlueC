@@ -2,8 +2,8 @@
 //
 //! The `printer` module is used by the parent parser module to print a tree of the C AST to stdout.
 
-use crate::parser::*;
 use crate::parser::meta::AstMetadata;
+use crate::parser::*;
 
 /// Prints the AST with indentation
 pub fn print(ast_root: &AstRoot, metadata: Option<&AstMetadata>) {
@@ -632,13 +632,24 @@ fn print_expression(expr: &AstExpression, metadata: Option<&AstMetadata>, level:
 
         AstExpression::IntegerLiteral { node_id, literal, literal_base, value, kind } => {
             print!("{indent}");
-            if *literal_base == 10 {
-                print!("IntegerLiteral({kind} = {literal})");
+
+            // If we've performed typechecking then we don't need to print its kind, since we can print its
+            // resolved AstType instead.
+            if metadata.is_some() {
+                print!("IntegerLiteral({literal}");
+                if *literal_base != 10 {
+                    print!(" [{value}]");
+                }
+                print!(")");
+                print_node_type(node_id, metadata);
+                println!();
             } else {
-                print!("IntegerLiteral({kind} = {literal} [{value}])");
+                print!("IntegerLiteral({kind} = {literal}");
+                if *literal_base != 10 {
+                    print!(" [{value}]");
+                }
+                println!(")");
             }
-            print_node_type(node_id, metadata);
-            println!();
         }
 
         AstExpression::FloatLiteral { node_id, literal, literal_base, kind, value } => {
@@ -661,7 +672,9 @@ fn print_resolved_type(declared_type: &AstDeclaredType) {
 }
 
 fn print_node_type(node_id: &AstNodeId, metadata: Option<&AstMetadata>) {
-    if let Some(metadata) = metadata && let Some(node_type) = metadata.get_node_type(node_id) {
+    if let Some(metadata) = metadata
+        && let Some(node_type) = metadata.get_node_type(node_id)
+    {
         print!(" [Type = '{node_type}']")
     }
 }

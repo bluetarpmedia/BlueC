@@ -3,8 +3,11 @@
 //! The `sema` module is responsible for semantic analysis of the AST produced by the Parser.
 //!
 //! The main part of semantic analysis is type checking (see the `type_check` module). After that there are additional
-//! analyses for unused symbols, label validation, switch statements, integer promotion, and warning about ambiguous
-//! (to the reader) expressions that are missing parentheses.
+//! analyses for unused symbols, label validation, switch statements, and warning about ambiguous (to the reader)
+//! expressions that are missing parentheses.
+//!
+//! Sema also performs integer literal promotion, where a Cast expression containing an IntegerLiteral expression is
+//! replaced with a new IntegerLiteral expression of the desired type (where possible).
 
 pub mod symbol_table;
 pub mod type_conversion;
@@ -13,6 +16,7 @@ pub mod type_resolution;
 mod constant_eval;
 mod expr;
 mod labels;
+mod literal_promotion;
 mod switch_stmt;
 mod type_check;
 mod visitor;
@@ -54,19 +58,22 @@ pub fn semantic_analysis(
     // Validate labels
     //      Verify that label names are unique and goto targets are valid in each function.
     //
-    labels::validate_labels(&ast_root, driver, &metadata);
+    labels::validate_labels(&mut ast_root, driver, &metadata);
 
     // Validate switch statements
     //      Verify that switch cases have unique constant values.
     //
     let mut metadata = metadata;
-    switch_stmt::validate_switch_statements(&ast_root, &mut metadata, driver);
+    switch_stmt::validate_switch_statements(&mut ast_root, &mut metadata, driver);
+
+    // Numeric literal promotion
+    literal_promotion::promote_integer_literals(&mut ast_root, &mut metadata);
 
     // Warn about expressions missing parentheses.
     //
     if driver.options().warnings_enabled {
-        expr::warn_about_expressions_with_mixed_operators(&ast_root, driver, &mut metadata);
-        expr::warn_about_assignment_in_condition_missing_parens(&ast_root, driver, &mut metadata);
+        expr::warn_about_expressions_with_mixed_operators(&mut ast_root, driver, &mut metadata);
+        expr::warn_about_assignment_in_condition_missing_parens(&mut ast_root, driver, &mut metadata);
     }
 
     // Don't proceed to the next stage if we've emitted errors, or if client only wants to run up to this stage.

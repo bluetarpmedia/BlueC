@@ -8,11 +8,11 @@ use crate::parser::{
 };
 
 /// Visits all function definitions in the AST and, for each one, calls the `visitor_func` with the `AstFunction`.
-pub fn visit_functions<F>(ast_root: &AstRoot, visitor_func: &mut F)
+pub fn visit_functions<F>(ast_root: &mut AstRoot, visitor_func: &mut F)
 where
-    F: FnMut(&AstFunction),
+    F: FnMut(&mut AstFunction),
 {
-    for decl in &ast_root.0 {
+    for decl in &mut ast_root.0 {
         if let AstDeclaration::Function(function) = decl
             && function.body.is_some()
         {
@@ -22,11 +22,11 @@ where
 }
 
 /// Visits all statements in the given block and, for each one, calls the `visitor_func` with the `AstStatement`.
-pub fn visit_statements_in_block<F>(block: &AstBlock, visitor_func: &mut F)
+pub fn visit_statements_in_block<F>(block: &mut AstBlock, visitor_func: &mut F)
 where
-    F: FnMut(&AstStatement),
+    F: FnMut(&mut AstStatement),
 {
-    let block_items = &block.0;
+    let block_items = &mut block.0;
     for block_item in block_items {
         if let AstBlockItem::Statement(stmt) = block_item {
             visit_statement(stmt, visitor_func);
@@ -35,32 +35,32 @@ where
 }
 
 /// Visits all full expressions in the AST and, for each one, calls the `visitor_func` with the `AstFullExpression`.
-pub fn visit_full_expressions<F>(ast_root: &AstRoot, visitor_func: &mut F)
+pub fn visit_full_expressions<F>(ast_root: &mut AstRoot, visitor_func: &mut F)
 where
-    F: FnMut(&AstFullExpression),
+    F: FnMut(&mut AstFullExpression),
 {
-    for decl in &ast_root.0 {
+    for decl in &mut ast_root.0 {
         match decl {
             AstDeclaration::Variable(var_decl) => {
-                if let Some(ref full_expr) = var_decl.init_expr {
+                if let Some(ref mut full_expr) = var_decl.init_expr {
                     visitor_func(full_expr);
                 }
             }
 
             AstDeclaration::Function(func) => {
-                if let Some(ref block) = func.body {
-                    let block_items = &block.0;
+                if let Some(ref mut block) = func.body {
+                    let block_items = &mut block.0;
                     for block_item in block_items {
                         match block_item {
                             AstBlockItem::Declaration(decl) => {
                                 if let AstDeclaration::Variable(var_decl) = decl
-                                    && let Some(ref full_expr) = var_decl.init_expr
+                                    && let Some(ref mut full_expr) = var_decl.init_expr
                                 {
                                     visitor_func(full_expr);
                                 }
                             }
 
-                            AstBlockItem::Statement(stmt) => visit_statement(stmt, &mut |stmt: &AstStatement| {
+                            AstBlockItem::Statement(stmt) => visit_statement(stmt, &mut |stmt: &mut AstStatement| {
                                 visit_full_expressions_in_stmt(stmt, visitor_func);
                             }),
                         }
@@ -74,18 +74,18 @@ where
 }
 
 /// Visits each sub-expression recursively in the full expression.
-pub fn visit_expressions_in_full_expression<F>(full_expr: &AstFullExpression, visitor_func: &mut F)
+pub fn visit_expressions_in_full_expression<F>(full_expr: &mut AstFullExpression, visitor_func: &mut F)
 where
-    F: FnMut(&AstExpression),
+    F: FnMut(&mut AstExpression),
 {
-    visitor_func(&full_expr.expr);
+    visitor_func(&mut full_expr.expr);
 
-    visit_expression(&full_expr.expr, visitor_func);
+    visit_expression(&mut full_expr.expr, visitor_func);
 }
 
-fn visit_expression<F>(expr: &AstExpression, visitor_func: &mut F)
+fn visit_expression<F>(expr: &mut AstExpression, visitor_func: &mut F)
 where
-    F: FnMut(&AstExpression),
+    F: FnMut(&mut AstExpression),
 {
     match expr {
         AstExpression::UnaryOperation { expr, .. } => {
@@ -131,20 +131,20 @@ where
 }
 
 /// Visits a statement recursively and, for each one, calls the `visitor_func` with the `AstStatement`.
-pub fn visit_statement<F>(stmt: &AstStatement, visitor_func: &mut F)
+pub fn visit_statement<F>(stmt: &mut AstStatement, visitor_func: &mut F)
 where
-    F: FnMut(&AstStatement),
+    F: FnMut(&mut AstStatement),
 {
+    visitor_func(stmt);
+
     match stmt {
         AstStatement::Labeled { stmt: labeled_stmt, .. } => {
-            visitor_func(stmt);
             visit_statement(labeled_stmt, visitor_func);
         }
 
         AstStatement::Compound(block) => visit_statements_in_block(block, visitor_func),
 
         AstStatement::If { then_stmt, else_stmt, .. } => {
-            visitor_func(stmt);
             visit_statement(then_stmt, visitor_func);
 
             if let Some(else_stmt) = else_stmt {
@@ -153,32 +153,26 @@ where
         }
 
         AstStatement::Switch { body, .. } => {
-            visitor_func(stmt);
             visit_statement(body, visitor_func);
         }
 
         AstStatement::Case { stmt: inner_stmt, .. } => {
-            visitor_func(stmt);
             visit_statement(inner_stmt, visitor_func);
         }
 
         AstStatement::Default { stmt: inner_stmt, .. } => {
-            visitor_func(stmt);
             visit_statement(inner_stmt, visitor_func);
         }
 
         AstStatement::While { body, .. } => {
-            visitor_func(stmt);
             visit_statement(body, visitor_func);
         }
 
         AstStatement::DoWhile { body, .. } => {
-            visitor_func(stmt);
             visit_statement(body, visitor_func);
         }
 
         AstStatement::For { body, .. } => {
-            visitor_func(stmt);
             visit_statement(body, visitor_func);
         }
 
@@ -191,9 +185,9 @@ where
     }
 }
 
-fn visit_full_expressions_in_stmt<F>(stmt: &AstStatement, visitor_func: &mut F)
+fn visit_full_expressions_in_stmt<F>(stmt: &mut AstStatement, visitor_func: &mut F)
 where
-    F: FnMut(&AstFullExpression),
+    F: FnMut(&mut AstFullExpression),
 {
     match stmt {
         AstStatement::Expression(full_expr) => visitor_func(full_expr),
@@ -203,11 +197,11 @@ where
         AstStatement::While { controlling_expr, .. } => visitor_func(controlling_expr),
         AstStatement::DoWhile { controlling_expr, .. } => visitor_func(controlling_expr),
         AstStatement::For { init, controlling_expr, post, .. } => {
-            match init.as_ref() {
+            match init.as_mut() {
                 AstForInitializer::Declaration(declarations) => {
                     for decl in declarations {
                         if let AstDeclaration::Variable(var_decl) = decl
-                            && let Some(ref full_expr) = var_decl.init_expr
+                            && let Some(ref mut full_expr) = var_decl.init_expr
                         {
                             visitor_func(full_expr);
                         }
