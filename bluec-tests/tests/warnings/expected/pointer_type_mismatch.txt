@@ -1,4 +1,4 @@
-warning: Pointer type mismatch ('int*' and 'float*')
+warning: Pointer type mismatch ('int *' and 'float *')
    |
    |     void *c = (10 > 1) ? a : b;
    |                        ^ ~   ~

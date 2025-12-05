@@ -35,13 +35,13 @@ fn print_function(function: &BtFunctionDefn, symbols: &SymbolTable) {
         if !first {
             print!(", ");
         }
-        print!("{}: {}", param.1, bt_type_to_string(&param.0));
+        print!("{}: {}", param.1, param.0.to_printer());
         first = false;
     }
     print!(")");
 
     // Return type
-    println!(" -> {} {{", bt_type_to_string(&function.return_type));
+    println!(" -> {} {{", function.return_type.to_printer());
 
     // Instructions
     for instr in &function.instructions {
@@ -59,7 +59,7 @@ fn print_static_storage_variable(variable: &BtStaticStorageVariable) {
         print!("define internal symbol ");
     }
 
-    println!("@{}: {} = {}", variable.name, bt_type_to_string(&variable.data_type), variable.init_value);
+    println!("@{}: {} = {}", variable.name, variable.data_type.to_printer(), variable.init_value);
 }
 
 fn print_instruction(instr: &BtInstruction, symbols: &SymbolTable) {
@@ -76,7 +76,7 @@ fn print_instruction(instr: &BtInstruction, symbols: &SymbolTable) {
         BtInstruction::Unary { op, src, dst } => print_unary_instr(op, src, dst, symbols),
         BtInstruction::Binary { op, src1, src2, dst } => print_binary_instr(op, src1, src2, dst, symbols),
         BtInstruction::Copy { src, dst } => print_src_dst_instr("", src, dst, symbols),
-        BtInstruction::GetAddress { src, dst } => print_getaddress_instr(src, dst, symbols),
+        BtInstruction::StoreAddress { src, dst_ptr } => print_storeaddress_instr(src, dst_ptr, symbols),
         BtInstruction::Load { src_ptr, dst } => print_load_instr(src_ptr, dst, symbols),
         BtInstruction::Store { src, dst_ptr } => print_store_instr(src, dst_ptr, symbols),
         BtInstruction::Jump { target } => print_jump(target),
@@ -86,50 +86,51 @@ fn print_instruction(instr: &BtInstruction, symbols: &SymbolTable) {
         BtInstruction::Switch { controlling_value, cases, default_label, .. } => {
             print_switch(controlling_value, cases, default_label, symbols)
         }
-        BtInstruction::FunctionCall { identifier, args, dst } => print_function_call(identifier, args, dst, symbols),
+        BtInstruction::FunctionCall { designator, args, dst } => print_function_call(designator, args, dst, symbols),
     }
 }
 
 fn print_return(value: &BtValue, symbols: &SymbolTable) {
-    let bt_type = get_ir_type(value, symbols);
+    let bt_type = get_bt_type(value, symbols).to_printer();
     println!("  ret {bt_type} {value}");
 }
 
 fn print_src_dst_instr(instr: &str, src: &BtValue, dst: &BtValue, symbols: &SymbolTable) {
-    let src_type = get_ir_type(src, symbols);
+    let src_type = get_bt_type(src, symbols).to_printer();
+    let dst_type = get_bt_type(dst, symbols).to_printer();
 
     if instr.is_empty() {
         println!("  {dst} = {src_type} {src}");
     } else {
-        println!("  {dst} = {instr} {src_type} {src}");
+        println!("  {dst} = {instr} {dst_type}, {src_type} {src}");
     }
 }
 
 fn print_load_instr(src_ptr: &BtValue, dst: &BtValue, symbols: &SymbolTable) {
-    let src_type = get_ir_type(src_ptr, symbols);
-    let dst_type = get_ir_type(dst, symbols);
+    let src_type = get_bt_type(src_ptr, symbols).to_printer();
+    let dst_type = get_bt_type(dst, symbols).to_printer();
     println!("  {dst} = load {dst_type}, {src_type} {src_ptr}");
 }
 
-fn print_getaddress_instr(src: &BtValue, dst_ptr: &BtValue, symbols: &SymbolTable) {
-    let dst_type = get_ir_type(dst_ptr, symbols);
-    println!("  store address-of {src}, {dst_type} {dst_ptr}");
+fn print_storeaddress_instr(src: &BtValue, dst_ptr: &BtValue, symbols: &SymbolTable) {
+    let dst_type = get_bt_type(dst_ptr, symbols).to_printer();
+    println!("  store address-of @{src}, {dst_type} {dst_ptr}");
 }
 
 fn print_store_instr(src: &BtValue, dst_ptr: &BtValue, symbols: &SymbolTable) {
-    let src_type = get_ir_type(src, symbols);
-    let dst_type = get_ir_type(dst_ptr, symbols);
+    let src_type = get_bt_type(src, symbols).to_printer();
+    let dst_type = get_bt_type(dst_ptr, symbols).to_printer();
     println!("  store {src_type} {src}, {dst_type} {dst_ptr}");
 }
 
 fn print_unary_instr(op: &BtUnaryOp, src: &BtValue, dst: &BtValue, symbols: &SymbolTable) {
-    let src_type = get_ir_type(src, symbols);
+    let src_type = get_bt_type(src, symbols).to_printer();
     println!("  {dst} = {op} {src} {src_type}");
 }
 
 fn print_binary_instr(op: &BtBinaryOp, src1: &BtValue, src2: &BtValue, dst: &BtValue, symbols: &SymbolTable) {
-    let src1_type = get_ir_type(src1, symbols);
-    let src2_type = get_ir_type(src2, symbols);
+    let src1_type = get_bt_type(src1, symbols).to_printer();
+    let src2_type = get_bt_type(src2, symbols).to_printer();
     println!("  {dst} = {op} {src1_type} {src1}, {src2_type} {src2}");
 }
 
@@ -143,7 +144,7 @@ fn print_jump_if_condition(
     target: &BtLabelIdentifier,
     symbols: &SymbolTable,
 ) {
-    let cond_type = get_ir_type(cond, symbols);
+    let cond_type = get_bt_type(cond, symbols).to_printer();
     println!("  if ({cond} {cond_type} == {evaluates_to}) jmp {}", target.0);
 }
 
@@ -157,13 +158,13 @@ fn print_switch(
     default_label: &Option<BtLabelIdentifier>,
     symbols: &SymbolTable,
 ) {
-    let controlling_value_type = get_ir_type(controlling_value, symbols);
+    let controlling_value_type = get_bt_type(controlling_value, symbols).to_printer();
 
     println!("  switch ({controlling_value} {controlling_value_type}) {{");
 
     // Cases
     for case in cases {
-        let case_type = get_ir_type(&case.value, symbols);
+        let case_type = get_bt_type(&case.value, symbols).to_printer();
         println!("    case {} {}: jmp {}", case.value, case_type, case.label.0);
     }
 
@@ -175,15 +176,22 @@ fn print_switch(
     println!("  }}");
 }
 
-fn print_function_call(identifier: &str, args: &Vec<BtValue>, dst: &BtValue, symbols: &SymbolTable) {
-    let dst_type = get_ir_type(dst, symbols);
+fn print_function_call(designator: &BtValue, args: &Vec<BtValue>, dst: &BtValue, symbols: &SymbolTable) {
+    let dst_type = get_bt_type(dst, symbols).to_printer();
+    let designator_type = get_bt_type(designator, symbols);
 
-    print!("  {dst} {dst_type} = call @{identifier} (");
+    if designator_type.is_function() {
+        print!("  {dst} {dst_type} = call @{designator} (");
+    } else if designator_type.is_pointer() {
+        print!("  {dst} {dst_type} = call ptr {designator} (");
+    } else {
+        ICE!("Invalid function designator type '{designator_type}' for '{designator}'");
+    }
 
     // Args
     let mut first = true;
     for arg in args {
-        let arg_type = get_ir_type(arg, symbols);
+        let arg_type = get_bt_type(arg, symbols).to_printer();
         if !first {
             print!(", ");
         }
@@ -194,8 +202,8 @@ fn print_function_call(identifier: &str, args: &Vec<BtValue>, dst: &BtValue, sym
     println!(")");
 }
 
-fn get_ir_type(value: &BtValue, symbols: &SymbolTable) -> String {
-    let bt_type = match value {
+fn get_bt_type(value: &BtValue, symbols: &SymbolTable) -> BtType {
+    match value {
         BtValue::Constant(bt_constant_value) => bt_constant_value.get_bt_type(),
         BtValue::Variable(name) => {
             let Some(symbol) = symbols.get(AstUniqueName::new(name)) else {
@@ -204,22 +212,5 @@ fn get_ir_type(value: &BtValue, symbols: &SymbolTable) -> String {
 
             BtType::from(&symbol.data_type)
         }
-    };
-
-    bt_type_to_string(&bt_type)
-}
-
-fn bt_type_to_string(bt_type: &BtType) -> String {
-    match bt_type {
-        BtType::Void => "()".to_string(),
-        BtType::Int16 => "i16".to_string(),
-        BtType::Int32 => "i32".to_string(),
-        BtType::Int64 => "i64".to_string(),
-        BtType::UInt16 => "u16".to_string(),
-        BtType::UInt32 => "u32".to_string(),
-        BtType::UInt64 => "u64".to_string(),
-        BtType::Float32 => "f32".to_string(),
-        BtType::Float64 => "f64".to_string(),
-        BtType::Pointer => "ptr".to_string(),
     }
 }

@@ -21,6 +21,7 @@ use crate::sema::symbol_table::{Definition, SymbolAttributes, SymbolTable};
 
 use std::collections::HashMap;
 
+#[derive(Debug)]
 enum EvalExpr {
     Value(BtValue),
     Dereferenced(BtValue),

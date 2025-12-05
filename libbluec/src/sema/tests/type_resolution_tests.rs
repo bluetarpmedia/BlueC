@@ -106,11 +106,43 @@ fn functions() {
         "int* get_ptr(float *a);",
         vec![AstType::new_fn(AstType::new_pointer_to(AstType::Int), vec![AstType::new_pointer_to(AstType::Float)])],
     );
+}
 
-    // TODO: Function pointers
+#[test]
+fn function_pointers() {
+    let mut driver = compiler_driver::Driver::for_testing();
+    
+    verify_types(&mut driver, "int (*fn)(void);", vec![AstType::new_pointer_to(AstType::new_fn(AstType::Int, vec![]))]);
 
-    // TODO
-    //verify_types(&mut driver, "float (double, long double);", vec![AstType::new_fn(AstType::Float, vec![AstType::Double, AstType::LongDouble])]);
+    verify_types(
+        &mut driver,
+        "int (*fn)(float, double);",
+        vec![AstType::new_pointer_to(AstType::new_fn(AstType::Int, vec![AstType::Float, AstType::Double]))],
+    );
+
+    verify_types(
+        &mut driver,
+        "int (*fn)(float (*)(void));",
+        vec![AstType::new_pointer_to(AstType::new_fn(
+            AstType::Int,
+            vec![AstType::new_pointer_to(AstType::new_fn(AstType::Float, vec![]))],
+        ))],
+    );
+
+    verify_types(
+        &mut driver,
+        "int (**fn)(void);",
+        vec![AstType::new_pointer_to(AstType::new_pointer_to(AstType::new_fn(AstType::Int, vec![])))],
+    );
+
+    verify_types(
+        &mut driver,
+        "int (***fn)(void);",
+        vec![AstType::new_pointer_to(AstType::new_pointer_to(AstType::new_pointer_to(AstType::new_fn(
+            AstType::Int,
+            vec![],
+        ))))],
+    );
 }
 
 #[test]
@@ -129,6 +161,12 @@ fn type_aliases() {
         &mut driver,
         "typedef int MyInt; MyInt a, b, c;",
         vec![AstType::Int, AstType::Int, AstType::Int, AstType::Int],
+    );
+
+    verify_types(
+        &mut driver,
+        "typedef int (*MyFn)(void);",
+        vec![AstType::new_pointer_to(AstType::new_fn(AstType::Int, vec![]))],
     );
 }
 

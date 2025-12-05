@@ -3,17 +3,17 @@
 //! The `expr` module defines the various parsing functions for expressions.
 
 pub mod binary_ops;
-mod unary_ops;
+pub mod unary_ops;
 
 use super::identifier_resolution::SearchScope;
 use super::meta;
-use super::symbol::SymbolKind;
 use super::recursive_descent::decl::parse_type_and_storage_specifiers;
 use super::recursive_descent::declarator;
 use super::recursive_descent::literal;
 use super::recursive_descent::peek;
 use super::recursive_descent::utils;
-use super::{AstExpression, AstFullExpression, AstNodeId, AstUniqueName, AstDeclaredType};
+use super::symbol::SymbolKind;
+use super::{AstDeclaredType, AstExpression, AstFullExpression, AstNodeId, AstUniqueName};
 use super::{ParseError, ParseResult, Parser};
 use super::{add_error, add_error_at_eof};
 
@@ -253,8 +253,7 @@ pub fn parse_factor(parser: &mut Parser, driver: &mut Driver) -> ParseResult<Ast
                             None
                         };
 
-                        _ = utils::expect_token(lexer::TokenType::CloseParen, parser, driver)
-                            .map_err(|_| ParseError)?;
+                        _ = utils::expect_token(lexer::TokenType::CloseParen, parser, driver)?;
 
                         let cast_expr = parse_factor(parser, driver)?;
 
@@ -262,22 +261,38 @@ pub fn parse_factor(parser: &mut Parser, driver: &mut Driver) -> ParseResult<Ast
                         Ok(AstExpression::Cast { node_id, target_type, expr: Box::new(cast_expr) })
                     }
                     //
-                    // Parenthesised expression
+                    // Parenthesised expression (with possible function call)
                     //
                     else {
                         _ = parser.token_stream.take_token(); // Open Paren
 
                         let inner_expr = parse_expression(parser, driver)?; // Note: precedence == 0, because it's inside parentheses
-                        _ = utils::expect_token(lexer::TokenType::CloseParen, parser, driver)
-                            .map_err(|_| ParseError)?;
+
+                        _ = utils::expect_token(lexer::TokenType::CloseParen, parser, driver)?;
 
                         // Track that the expression was wrapped in parentheses so that later we can warn about
                         // mixing different binary operators without parentheses.
                         parser.metadata.set_expr_has_parens(inner_expr.node_id());
 
+                        // Is this a function call?
+                        if parser.token_stream.next_token_has_type(lexer::TokenType::OpenParen) {
+                            let (args, args_node_id) = parse_function_call_arguments(parser, driver)?;
+
+                            let node_id = AstNodeId::new();
+                            let span = parser.metadata.get_source_span(&inner_expr.node_id()).unwrap();
+                            parser.metadata.add_source_span(node_id, *span);
+
+                            return Ok(AstExpression::FunctionCall {
+                                node_id,
+                                designator: Box::new(inner_expr),
+                                args,
+                                args_node_id,
+                            });
+                        }
+
                         // Peek ahead for a postfix unary operator
                         if unary_ops::is_next_token_a_postfix_unary_operator(parser) {
-                            unary_ops::parse_postfix_unary_operation(inner_expr, parser, driver).map_err(|_| ParseError)
+                            unary_ops::parse_postfix_unary_operation(inner_expr, parser, driver)
                         } else {
                             Ok(inner_expr)
                         }
@@ -311,38 +326,53 @@ fn parse_function_call_expression(parser: &mut Parser, driver: &mut Driver) -> P
 
     let identifier_token_loc = identifier_token.location;
 
-    _ = utils::expect_token(lexer::TokenType::OpenParen, parser, driver).map_err(|_| ParseError)?;
-
-    let args_start_loc = parser.token_stream.peek_next_source_location().ok_or(ParseError)?;
-    let args = parse_function_call_arguments(parser, driver)?;
-    let args_end_loc = parser.token_stream.prev_token_source_location().ok_or(ParseError)?;
-
-    _ = utils::expect_token(lexer::TokenType::CloseParen, parser, driver).map_err(|_| ParseError)?;
+    // Identifier resolution
+    let unique_name = verify_function_identifier(&name, identifier_token_loc, parser, driver)?;
 
     let node_id = AstNodeId::new();
-    parser.metadata.add_source_span(
-        node_id,
-        meta::AstNodeSourceSpanMetadata::from_source_location_pair(&args_start_loc, &args_end_loc),
-    );
+    parser
+        .metadata
+        .add_source_span(node_id, meta::AstNodeSourceSpanMetadata::from_source_location(&identifier_token_loc));
 
-    // Identifier resolution
-    //
-    let fn_name = verify_function_identifier(&name, identifier_token_loc, parser, driver)?;
+    let designator = Box::new(AstExpression::Identifier { node_id, name, unique_name });
 
-    Ok(AstExpression::FunctionCall { node_id, fn_name, args })
+    make_function_call_expression(designator, parser, driver)
 }
 
-fn parse_function_call_arguments(parser: &mut Parser, driver: &mut Driver) -> ParseResult<Vec<AstExpression>> {
-    if parser.token_stream.next_token_has_type(lexer::TokenType::CloseParen) {
-        return Ok(Vec::new());
+fn make_function_call_expression(
+    designator: Box<AstExpression>,
+    parser: &mut Parser,
+    driver: &mut Driver,
+) -> ParseResult<AstExpression> {
+    let (args, args_node_id) = parse_function_call_arguments(parser, driver)?;
+
+    let node_id = AstNodeId::new();
+    let designator_span = parser.metadata.get_source_span(&designator.node_id()).unwrap();
+    parser.metadata.add_source_span(node_id, *designator_span);
+
+    let fn_call = AstExpression::FunctionCall { node_id, designator, args, args_node_id };
+
+    if parser.token_stream.next_token_has_type(lexer::TokenType::OpenParen) {
+        make_function_call_expression(Box::new(fn_call), parser, driver)
+    } else {
+        Ok(fn_call)
     }
+}
+
+fn parse_function_call_arguments(
+    parser: &mut Parser,
+    driver: &mut Driver,
+) -> ParseResult<(Vec<AstExpression>, AstNodeId)> {
+    _ = utils::expect_token(lexer::TokenType::OpenParen, parser, driver)?;
+
+    let args_start_loc = parser.token_stream.peek_next_source_location().ok_or(ParseError)?;
 
     let mut args = Vec::new();
     let mut first_arg = true;
 
     while !parser.token_stream.next_token_has_type(lexer::TokenType::CloseParen) {
         if !first_arg {
-            _ = utils::expect_token(lexer::TokenType::Comma, parser, driver).map_err(|_| ParseError)?;
+            _ = utils::expect_token(lexer::TokenType::Comma, parser, driver)?;
         }
 
         let arg = parse_expression(parser, driver)?;
@@ -351,7 +381,17 @@ fn parse_function_call_arguments(parser: &mut Parser, driver: &mut Driver) -> Pa
         first_arg = false;
     }
 
-    Ok(args)
+    let args_end_loc = parser.token_stream.prev_token_source_location().ok_or(ParseError)?;
+
+    _ = utils::expect_token(lexer::TokenType::CloseParen, parser, driver)?;
+
+    let args_node_id = AstNodeId::new();
+    parser.metadata.add_source_span(
+        args_node_id,
+        meta::AstNodeSourceSpanMetadata::from_source_location_pair(&args_start_loc, &args_end_loc),
+    );
+
+    Ok((args, args_node_id))
 }
 
 fn parse_variable_expression(parser: &mut Parser, driver: &mut Driver) -> ParseResult<AstExpression> {
@@ -375,15 +415,15 @@ fn parse_variable_expression(parser: &mut Parser, driver: &mut Driver) -> ParseR
 
     // Identifier resolution
     //
-    let unique_name = verify_variable_identifier(name, identifier_token.location, parser, driver)?;
+    let unique_name = verify_identifier(name, identifier_token.location, parser, driver)?;
 
-    let variable = AstExpression::Variable { node_id, name: name.clone(), unique_name };
+    let identifier = AstExpression::Identifier { node_id, name: name.clone(), unique_name };
 
     // Peek ahead for a postfix unary operator
     if unary_ops::is_next_token_a_postfix_unary_operator(parser) {
-        unary_ops::parse_postfix_unary_operation(variable, parser, driver).map_err(|_| ParseError)
+        unary_ops::parse_postfix_unary_operation(identifier, parser, driver).map_err(|_| ParseError)
     } else {
-        Ok(variable)
+        Ok(identifier)
     }
 }
 
@@ -393,10 +433,12 @@ fn verify_function_identifier(
     parser: &mut Parser,
     driver: &mut Driver,
 ) -> ParseResult<AstUniqueName> {
-    // Is there a function visible from the current scope for the given identifier?
+    // Is there a function (or variable, if a function pointer) visible from the current scope for the given identifier?
+    //      Sema will typecheck that the variable is a function pointer later.
+    //
     if let Some(decl) = parser.identifiers.resolve_identifier(function_name, SearchScope::All) {
-        if decl.kind == SymbolKind::Function {
-            Ok(AstUniqueName::new(function_name))
+        if decl.kind == SymbolKind::Function || decl.kind == SymbolKind::Variable {
+            Ok(decl.unique.clone())
         } else {
             let err = format!(
                 "Cannot call '{}' because '{}' is not a function in this scope",
@@ -413,15 +455,17 @@ fn verify_function_identifier(
     }
 }
 
-fn verify_variable_identifier(
+fn verify_identifier(
     variable_name: &str,
     variable_name_loc: lexer::SourceLocation,
     parser: &mut Parser,
     driver: &mut Driver,
 ) -> ParseResult<AstUniqueName> {
-    // Is there a variable visible from the current scope for the given identifier?
+    // Is there a function or variable visible from the current scope for the given identifier?
+    //      We may be initializing a function pointer. Sema will perform typechecking later.
+    //
     if let Some(decl) = parser.identifiers.resolve_identifier(variable_name, SearchScope::All) {
-        if decl.kind == SymbolKind::Variable {
+        if decl.kind == SymbolKind::Variable || decl.kind == SymbolKind::Function {
             Ok(decl.unique.clone())
         } else {
             let err = format!("'{}' is not a variable in this scope", variable_name);

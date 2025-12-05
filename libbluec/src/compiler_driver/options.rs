@@ -43,8 +43,11 @@ pub struct DriverOptions {
     /// Run the lexer, parser, sema, IR translation, and assembly codegen and then stop.
     pub codegen: bool,
 
-    /// Prints the parser's output (the abstract syntax tree) and stops after parsing.
+    /// Prints the parsed AST and stops after parsing (before sema).
     pub print_ast: bool,
+
+    /// Prints the type-checked AST and stops after sema.
+    pub print_typechecked_ast: bool,
 
     /// Prints the BlueTac intermediate representation and stops after lowering to IR.
     pub print_ir: bool,

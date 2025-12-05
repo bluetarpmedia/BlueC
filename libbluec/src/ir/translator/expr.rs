@@ -66,7 +66,26 @@ pub fn translate_expression(
             EvalExpr::Value(val)
         }
 
-        AstExpression::Variable { unique_name, .. } => EvalExpr::Value(BtValue::Variable(unique_name.to_string())),
+        AstExpression::Identifier { unique_name, .. } => {
+            let expr_data_type = translator.get_expression_type(expr);
+
+            // If a function designator of function type has decayed (been implicitly cast) to a function pointer
+            // by the typechecker then we need to emit an instruction to take its address.
+            //
+            if expr_data_type.is_function_pointer()
+                && let Some(symbol) = translator.symbols.get(unique_name)
+                && symbol.data_type.is_function()
+            {
+                let src = BtValue::Variable(unique_name.to_string());
+                let dst = translator.make_temp_variable(expr_data_type.clone());
+
+                instructions.push(BtInstruction::StoreAddress { src, dst_ptr: dst.clone() });
+
+                return EvalExpr::Value(dst);
+            }
+
+            EvalExpr::Value(BtValue::Variable(unique_name.to_string()))
+        }
 
         AstExpression::Cast { target_type, expr, .. } => {
             let expr_value = translate_expression_to_value(translator, expr, instructions);
@@ -98,7 +117,7 @@ pub fn translate_expression(
                     debug_assert!(dst_data_type.is_pointer());
 
                     let dst = translator.make_temp_variable(dst_data_type.clone());
-                    instructions.push(BtInstruction::GetAddress { src: value, dst: dst.clone() });
+                    instructions.push(BtInstruction::StoreAddress { src: value, dst_ptr: dst.clone() });
                     EvalExpr::Value(dst)
                 }
                 EvalExpr::Dereferenced(object) => EvalExpr::Value(object),
@@ -161,16 +180,18 @@ pub fn translate_expression(
             EvalExpr::Value(dst)
         }
 
-        AstExpression::FunctionCall { node_id, fn_name, args } => {
+        AstExpression::FunctionCall { node_id, designator, args, .. } => {
             let dst_data_type = translator.get_ast_type_from_node(node_id);
             let dst = translator.make_temp_variable(dst_data_type.clone());
+
+            // Evaluate designator
+            let designator = translate_expression_to_value(translator, designator, instructions);
 
             // Evaluate arguments
             let values =
                 args.iter().map(|arg_expr| translate_expression_to_value(translator, arg_expr, instructions)).collect();
 
-            let identifier = fn_name.to_string();
-            instructions.push(BtInstruction::FunctionCall { identifier, args: values, dst: dst.clone() });
+            instructions.push(BtInstruction::FunctionCall { designator, args: values, dst: dst.clone() });
 
             EvalExpr::Value(dst)
         }
@@ -191,9 +212,15 @@ pub fn translate_expression_to_value(
 
         EvalExpr::Dereferenced(object) => {
             let rvalue_type = translator.get_ast_type_from_node(&expr.node_id());
-            let rvalue = translator.make_temp_variable(rvalue_type.clone());
-            instructions.push(BtInstruction::Load { src_ptr: object, dst: rvalue.clone() });
-            rvalue
+
+            // Dereferencing an object of function type is a no-op.
+            if rvalue_type.is_function() {
+                object
+            } else {
+                let rvalue = translator.make_temp_variable(rvalue_type.clone());
+                instructions.push(BtInstruction::Load { src_ptr: object, dst: rvalue.clone() });
+                rvalue
+            }
         }
     }
 }

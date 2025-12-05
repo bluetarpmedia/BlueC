@@ -93,15 +93,15 @@ pub enum BtInstruction {
         src: BtValue,
         dst: BtValue,
     },
-    GetAddress {
-        src: BtValue,
-        dst: BtValue,
-    },
     Load {
         src_ptr: BtValue,
         dst: BtValue,
     },
     Store {
+        src: BtValue,
+        dst_ptr: BtValue,
+    },
+    StoreAddress {
         src: BtValue,
         dst_ptr: BtValue,
     },
@@ -126,7 +126,7 @@ pub enum BtInstruction {
         break_label: BtLabelIdentifier, // End of the switch statement
     },
     FunctionCall {
-        identifier: String,
+        designator: BtValue,
         args: Vec<BtValue>,
         dst: BtValue,
     },
@@ -216,6 +216,7 @@ pub enum BtType {
     Float32,
     Float64,
     Pointer, // Opaque pointer, effectively a UInt64 address.
+    Function, // Opaque function
 }
 
 impl From<&AstType> for BtType {
@@ -233,7 +234,7 @@ impl From<&AstType> for BtType {
             AstType::Float => BtType::Float32,
             AstType::Double | AstType::LongDouble => BtType::Float64,
             AstType::Pointer(_) => BtType::Pointer,
-            AstType::Function { .. } => ICE!("AstType::Function is not translated to a BtType"),
+            AstType::Function { .. } => BtType::Function,
         }
     }
 }
@@ -257,6 +258,7 @@ impl fmt::Display for BtType {
             BtType::Float32 => write!(f, "Float32"),
             BtType::Float64 => write!(f, "Float64"),
             BtType::Pointer => write!(f, "Pointer"),
+            BtType::Function => write!(f, "Function"),
         }
     }
 }
@@ -275,6 +277,7 @@ impl BtType {
             BtType::Float32 => BtConstantValue::Float32(0.0),
             BtType::Float64 => BtConstantValue::Float64(0.0),
             BtType::Pointer => BtConstantValue::UInt64(0),
+            BtType::Function => ICE!("Cannot get default value for BtType::Function"),
         }
     }
 
@@ -288,6 +291,7 @@ impl BtType {
             BtType::Float32 => 32,
             BtType::Float64 => 64,
             BtType::Pointer => 64,
+            BtType::Function => 0,
         }
     }
 
@@ -309,6 +313,33 @@ impl BtType {
     /// Is this type an unsigned integer?
     pub fn is_unsigned_integer(&self) -> bool {
         matches!(self, BtType::UInt16 | BtType::UInt32 | BtType::UInt64)
+    }
+
+    /// Is this type a pointer type?
+    pub fn is_pointer(&self) -> bool {
+        matches!(self, BtType::Pointer)
+    }
+
+    /// Is this type a function type?
+    pub fn is_function(&self) -> bool {
+        matches!(self, BtType::Function)
+    }
+
+    /// Converts the `BtType` to a string suitable for the IR printer.
+    pub fn to_printer(&self) -> String {
+        match self {
+            BtType::Void => "()".to_string(),
+            BtType::Int16 => "i16".to_string(),
+            BtType::Int32 => "i32".to_string(),
+            BtType::Int64 => "i64".to_string(),
+            BtType::UInt16 => "u16".to_string(),
+            BtType::UInt32 => "u32".to_string(),
+            BtType::UInt64 => "u64".to_string(),
+            BtType::Float32 => "f32".to_string(),
+            BtType::Float64 => "f64".to_string(),
+            BtType::Pointer => "ptr".to_string(),
+            BtType::Function => "fn".to_string(),
+        }
     }
 }
 
@@ -384,6 +415,7 @@ impl BtConstantValue {
             BtType::Float32 => BtConstantValue::Float32(1.0),
             BtType::Float64 => BtConstantValue::Float64(1.0),
             BtType::Pointer => ICE!("Cannot create a value of 1 for a pointer type"),
+            BtType::Function => ICE!("Cannot create a value of 1 for a function type"),
         }
     }
 

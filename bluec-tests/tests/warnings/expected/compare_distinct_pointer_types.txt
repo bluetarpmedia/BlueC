@@ -1,4 +1,4 @@
-warning: Comparison of different pointer types ('int*' and 'unsigned int*')
+warning: Comparison of different pointer types ('int *' and 'unsigned int *')
    |
    |     return x == y;
    |            ~ ^^ ~

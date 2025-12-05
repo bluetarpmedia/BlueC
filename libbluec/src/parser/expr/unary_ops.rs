@@ -122,7 +122,8 @@ pub fn is_next_token_a_postfix_unary_operator(parser: &mut Parser) -> bool {
     matches!(peek_next_token.token_type, lexer::TokenType::Increment | lexer::TokenType::Decrement)
 }
 
-fn is_incr_or_decr_op(op: &AstUnaryOp) -> bool {
+/// Is the unary operator a pre- or post-fix increment/decrement operator?
+pub fn is_incr_or_decr_op(op: &AstUnaryOp) -> bool {
     matches!(
         op,
         AstUnaryOp::PrefixIncrement

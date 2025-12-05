@@ -77,9 +77,9 @@ pub fn semantic_analysis(
         return;
     }
 
-    // If client wants to print the AST then we do so after semantic analysis.
-    if driver.options().print_ast {
-        parser::printer::print(&ast_root);
+    // If client wants to print the typechecked AST then we're done.
+    if driver.options().print_typechecked_ast {
+        parser::printer::print(&ast_root, Some(&metadata));
         return;
     }
 

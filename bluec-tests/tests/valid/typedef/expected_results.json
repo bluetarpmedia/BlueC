@@ -12,6 +12,10 @@
         "exit_code": 10
     },
     {
+        "filename": "typedef_function_pointer1.c",
+        "exit_code": 22
+    },
+    {
         "filename": "typedef_long_int_order.c",
         "exit_code": 7
     },

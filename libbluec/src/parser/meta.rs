@@ -20,7 +20,7 @@ pub struct AstMetadata {
 /// Source span metadata for an AST node.
 ///
 /// The start and end lines and columns are inclusive. `[start, end]`
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct AstNodeSourceSpanMetadata {
     pub start_line: usize,
     pub start_column: usize,

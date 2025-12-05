@@ -353,7 +353,7 @@ fn to_string(expr: &AstExpression) -> String {
             str.push_str(&format!("{}", value));
         }
 
-        AstExpression::Variable { name, .. } => {
+        AstExpression::Identifier { name, .. } => {
             str.push_str(&format!("{}", name));
         }
 

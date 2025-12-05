@@ -107,12 +107,12 @@ pub fn evaluate_constant_expr(expr: &AstExpression, chk: Option<&TypeChecker>) -
 
 fn evaluate_const_expr_recursively(expr: &AstExpression, chk: Option<&TypeChecker>) -> Option<ConstantValue> {
     match expr {
-        AstExpression::Variable { .. } => None, // Future: C23 allows `constexpr` variables.
+        AstExpression::Identifier { .. } => None, // Future: C23 allows `constexpr` variables.
         AstExpression::FunctionCall { .. } => None, // Future: `constexpr` functions.
         AstExpression::Deref { .. } => None,
         AstExpression::AddressOf { node_id, expr } => {
             if let Some(chk) = chk
-                && let AstExpression::Variable { unique_name, .. } = expr.as_ref()
+                && let AstExpression::Identifier { unique_name, .. } = expr.as_ref()
             {
                 let symbol = chk.symbols.get(unique_name).expect("Variable should exist in symbol table");
 

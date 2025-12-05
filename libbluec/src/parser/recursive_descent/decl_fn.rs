@@ -7,7 +7,10 @@ use super::super::meta;
 use super::AstStorageClassSpecifierOption;
 use super::block;
 use super::utils;
-use super::{AstDeclaratorKind, AstDeclaredType, AstFunction, AstIdentifier, AstLinkage, AstNodeId, AstUniqueName};
+use super::{
+    AstDeclaration, AstDeclaratorKind, AstDeclaredType, AstFunction, AstIdentifier, AstLinkage, AstNodeId,
+    AstTypeAliasDeclaration, AstUniqueName,
+};
 use super::{ParseError, ParseResult, Parser, add_error};
 
 use crate::ICE;
@@ -30,7 +33,7 @@ pub fn parse_function(
     allow: Allow,
     parser: &mut Parser,
     driver: &mut Driver,
-) -> ParseResult<AstFunction> {
+) -> ParseResult<AstDeclaration> {
     let Some(fn_declarator) = &declared_type.declarator else {
         ICE!("Function declaration should have a declarator");
     };
@@ -50,12 +53,16 @@ pub fn parse_function(
         _ => ICE!("Expected a function declarator for '{fn_ident}'"),
     };
 
+    let is_declared_typedef = declared_type.storage_class.is_typedef();
     let is_declared_static = declared_type.storage_class.is_static();
-    let linkage = if is_declared_static { AstLinkage::Internal } else { AstLinkage::External };
 
-    // TODO: Handle `storage_class.is_typedef` for function pointer aliases as well as aliases for function types.
-    // E.g. function type: typedef int Calculate(int a, int b);
-    //                     void do_work(Calculate* mathFunc, int x, int y);
+    let linkage = if is_declared_typedef {
+        AstLinkage::None
+    } else if is_declared_static {
+        AstLinkage::Internal
+    } else {
+        AstLinkage::External
+    };
 
     // Is there a definition following the declaration?
     let has_body = parser.token_stream.next_token_has_type(lexer::TokenType::OpenBrace);
@@ -64,6 +71,13 @@ pub fn parse_function(
     if allow == Allow::DeclarationOnly && has_body {
         let loc = utils::get_next_source_location_after_previous_token(parser);
         Error::expect_semicolon_at_end_of_declaration(loc, driver);
+        return Err(ParseError);
+    }
+
+    if is_declared_typedef && has_body {
+        let error = "A function definition cannot be declared with 'typedef'".to_string();
+        let loc = declared_type.storage_class.unwrap().loc;
+        add_error(driver, error, loc);
         return Err(ParseError);
     }
 
@@ -94,21 +108,14 @@ pub fn parse_function(
     }
 
     // Identifier resolution. Add the function identifier in the current scope.
-    //
     //      The function's unique name remains as its declared name.
     //      We do this before parsing the function body in case it makes recursive calls to itself.
     //
-    let unique_name = match parser.identifiers.add_function_declaration(fn_ident, linkage) {
-        Ok(unique_name) => unique_name,
-
-        Err(resolve_err) => match resolve_err {
-            ResolveError::RedefinitionOfExistingIdentifier(kind, loc) => {
-                Error::redefine_as_different_symbol(fn_ident.into(), kind, loc, driver);
-                return Err(ParseError);
-            }
-            _ => ICE!("Unexpected error"),
-        },
-    };
+    let unique_name = if is_declared_typedef {
+        resolve_type_alias(fn_ident, parser, driver)
+    } else {
+        resolve_function(fn_ident, linkage, parser, driver)
+    }?;
 
     // If this is a function definition then we require params to have identifiers.
     if has_body && params.iter().any(|param_decl_type| param_decl_type.get_identifier().is_none()) {
@@ -173,7 +180,7 @@ pub fn parse_function(
 
     let ident = fn_ident.clone();
 
-    Ok(AstFunction {
+    let fn_decl = AstDeclaration::Function(AstFunction {
         node_id,
         declared_type,
         ident,
@@ -181,5 +188,49 @@ pub fn parse_function(
         param_names: unique_param_names,
         body: fn_body,
         linkage,
-    })
+    });
+
+    if is_declared_typedef {
+        let node_id = AstNodeId::new();
+        Ok(AstDeclaration::TypeAlias(AstTypeAliasDeclaration { node_id, decl: Box::new(fn_decl) }))
+    } else {
+        Ok(fn_decl)
+    }
+}
+
+fn resolve_type_alias(ident: &AstIdentifier, parser: &mut Parser, driver: &mut Driver) -> ParseResult<AstUniqueName> {
+    // Add the type alias identifer in the current scope.
+    //
+    match parser.identifiers.add_type_alias_declaration(ident) {
+        Ok(unique_name) => Ok(unique_name),
+
+        Err(resolve_err) => match resolve_err {
+            ResolveError::RedefinitionOfExistingIdentifier(kind, loc) => {
+                Error::redefine_as_different_symbol(ident.into(), kind, loc, driver);
+                Err(ParseError)
+            }
+            _ => ICE!("Unexpected error"),
+        },
+    }
+}
+
+fn resolve_function(
+    ident: &AstIdentifier,
+    linkage: AstLinkage,
+    parser: &mut Parser,
+    driver: &mut Driver,
+) -> ParseResult<AstUniqueName> {
+    // Add the function identifier in the current scope.
+    //
+    match parser.identifiers.add_function_declaration(ident, linkage) {
+        Ok(unique_name) => Ok(unique_name),
+
+        Err(resolve_err) => match resolve_err {
+            ResolveError::RedefinitionOfExistingIdentifier(kind, loc) => {
+                Error::redefine_as_different_symbol(ident.into(), kind, loc, driver);
+                Err(ParseError)
+            }
+            _ => ICE!("Unexpected error"),
+        },
+    }
 }

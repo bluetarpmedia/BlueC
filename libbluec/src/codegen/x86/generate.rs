@@ -374,9 +374,9 @@ fn generate_asm_instructions(
                 asm_instructions.push(AsmInstruction::Mov { asm_type, src, dst });
             }
 
-            ir::BtInstruction::GetAddress { src, dst } => {
+            ir::BtInstruction::StoreAddress { src, dst_ptr } => {
                 let src = generator.translate_bt_value_to_asm_operand(src);
-                let dst = generator.translate_bt_value_to_asm_operand(dst);
+                let dst = generator.translate_bt_value_to_asm_operand(dst_ptr);
                 asm_instructions.push(AsmInstruction::Lea { src, dst });
             }
 
@@ -421,8 +421,8 @@ fn generate_asm_instructions(
                 asm_instructions.push(AsmInstruction::Label { id });
             }
 
-            ir::BtInstruction::FunctionCall { identifier, args, dst } => {
-                functions::generate_function_call(identifier, args, dst, asm_instructions, generator);
+            ir::BtInstruction::FunctionCall { designator, args, dst } => {
+                functions::generate_function_call(designator, args, dst, asm_instructions, generator);
             }
         }
     }
@@ -498,6 +498,10 @@ fn replace_pseudo_registers(function: &mut AsmFunction, symbols: &AsmSymbolTable
                 stack_addr = replace_pseudo_register(stack_addr, operand, symbols, &mut pseudo_stack_map);
             }
 
+            AsmInstruction::Call(operand) => {
+                stack_addr = replace_pseudo_register(stack_addr, operand, symbols, &mut pseudo_stack_map);
+            }
+
             AsmInstruction::Push(operand) => {
                 stack_addr = replace_pseudo_register(stack_addr, operand, symbols, &mut pseudo_stack_map);
             }
@@ -518,6 +522,12 @@ fn replace_pseudo_register(
     let AsmOperand::Pseudo(name) = operand else {
         return stack_addr;
     };
+
+    // If this pseudo register holds a function name then replace it with the appropriate operand
+    if let Some(AsmSymbol::Function { .. }) = symbols.get(name) {
+        *operand = AsmOperand::Function(name.clone());
+        return stack_addr;
+    }
 
     let Some(AsmSymbol::Object { asm_type, is_static, .. }) = symbols.get(name) else {
         ICE!("AsmSymbolTable does not contain entry for '{name}'");

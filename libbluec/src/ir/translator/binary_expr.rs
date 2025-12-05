@@ -73,12 +73,16 @@ fn translate_compound_assignment(
         }
     };
 
-    // We need to perform the underlying operation first with the common type of the lvalue
-    // variable and the rvalue expression, except for shift operations. They always keep their
-    // lvalue type.
+    // We need to perform the underlying operation first with the common type of the lvalue variable and the rvalue
+    // expression, except for two cases. Compound shift assignment operations always evaluate to their lhs lvalue type,
+    // and if the lhs is a pointer type then the common type is the lhs type. (Sema has already validated that the
+    // types are compatible.)
     //
     let is_shift = matches!(op, BtBinaryOp::LeftShift | BtBinaryOp::RightShift);
-    let common_data_type = if is_shift { left_type.clone() } else { AstType::get_common_type(&left_type, &right_type) };
+    let is_ptr = left_type.is_pointer();
+
+    let common_data_type =
+        if is_shift || is_ptr { left_type.clone() } else { AstType::get_common_type(&left_type, &right_type) };
 
     // If necessary, cast the lvalue and/or rvalue into the common type.
     let casted_src1 = if left_type != common_data_type {

@@ -75,10 +75,10 @@ pub fn parse_variable_declaration(
     // Identifier resolution.
     //
     let unique_name = if is_declared_typedef {
-        resolve_type_alias(var_ident, parser, driver)?
+        resolve_type_alias(var_ident, parser, driver)
     } else {
-        resolve_variable(var_ident, is_file_scope, is_declared_extern, linkage, parser, driver)?
-    };
+        resolve_variable(var_ident, is_file_scope, is_declared_extern, linkage, parser, driver)
+    }?;
 
     // Is there an initializer expression following the declaration?
     let has_initializer = parser.token_stream.next_token_has_type(TokenType::Assignment);

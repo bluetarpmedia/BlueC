@@ -109,6 +109,7 @@ impl Driver {
             || self.options().parse
             || self.options().validate
             || self.options().print_ast
+            || self.options().print_typechecked_ast
             || self.options().print_ir
             || self.options().codegen
         {

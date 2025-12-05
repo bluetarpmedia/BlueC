@@ -323,8 +323,8 @@ pub fn verify_function_declaration(
 
 /// Verifies that the arguments are valid for a function's parameters.
 pub fn verify_function_arguments(
-    fn_name: &AstUniqueName,
-    fn_call_node_id: &AstNodeId,
+    fn_unique_name: Option<AstUniqueName>,
+    args_node_id: &AstNodeId,
     params: &[AstType],
     args: &[AstExpression],
     metadata: &AstMetadata,
@@ -337,21 +337,23 @@ pub fn verify_function_arguments(
     if args_count != params_count {
         let err = if args_count > params_count {
             format!(
-                "Too many arguments passed to function '{}' (expected {}, have {})",
-                &fn_name, params_count, args_count
+                "Too many arguments passed to function (expected {}, have {})",
+                params_count, args_count
             )
         } else {
             format!(
-                "Too few arguments passed to function '{}' (expected {}, have {})",
-                &fn_name, params_count, args_count
+                "Too few arguments passed to function (expected {}, have {})",
+                params_count, args_count
             )
         };
 
-        let args_source_span = metadata.get_source_span(fn_call_node_id).expect("Args should have a source span");
+        let args_source_span = metadata.get_source_span(args_node_id).expect("Args should have a source span");
         let mut diag = Diagnostic::error_at_location(err, args_source_span.into());
 
-        let fn_symbol = symbols.get(fn_name).unwrap();
-        diag.add_note(format!("Function '{}' was previously declared here:", fn_name), Some(fn_symbol.location()));
+        if let Some(ref fn_name) = fn_unique_name {
+            let fn_symbol = symbols.get(fn_name).unwrap();
+            diag.add_note(format!("Function '{}' was previously declared here:", fn_name), Some(fn_symbol.location()));
+        }
 
         driver.add_diagnostic(diag);
     }

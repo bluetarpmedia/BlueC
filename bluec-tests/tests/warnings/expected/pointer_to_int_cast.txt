@@ -1,0 +1,17 @@
+warning: Cast to smaller integer type 'int' from pointer 'short (*)(short)'
+   |
+   |     int i = (int)fn;
+   |             ^    ~~
+   |
+note: Change the cast to a 64-bit integer type
+   |
+
+warning: Cast to smaller integer type 'short' from pointer 'int *'
+   |
+   |     int j = (short)ptr;
+   |             ^      ~~~
+   |
+note: Change the cast to a 64-bit integer type
+   |
+
+2 warnings generated

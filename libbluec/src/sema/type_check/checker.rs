@@ -10,8 +10,7 @@ use crate::compiler_driver::Driver;
 use crate::compiler_driver::warnings::Warning;
 use crate::lexer::SourceLocation;
 use crate::parser;
-use crate::parser::symbol::SymbolKind;
-use crate::parser::{AstBasicType, AstDeclaredType, AstExpression, AstNodeId, AstType, AstUnaryOp, AstUniqueName};
+use crate::parser::{AstDeclaredType, AstExpression, AstNodeId, AstType, AstUnaryOp};
 
 use std::collections::HashMap;
 
@@ -56,28 +55,6 @@ impl TypeChecker {
         assert!(!self.scopes.is_empty());
     }
 
-    /// Gets a variable's type.
-    pub fn get_variable_type(&self, unique_name: &AstUniqueName) -> AstType {
-        let Some(variable_symbol) = self.symbols.get(unique_name) else {
-            ICE!("Variable symbol should exist for '{unique_name}'");
-        };
-
-        variable_symbol.data_type.clone()
-    }
-
-    /// Gets a function's type.
-    pub fn get_function_type(&self, unique_name: &AstUniqueName) -> AstType {
-        let Some(function_symbol) = self.symbols.get(unique_name) else {
-            ICE!("Function symbol should exist for '{unique_name}'");
-        };
-
-        if function_symbol.kind() != SymbolKind::Function {
-            ICE!("Expected '{unique_name}' symbol to be SymbolKind::Function");
-        }
-
-        function_symbol.data_type.clone()
-    }
-
     /// Gets a node's data type
     pub fn get_data_type(&self, node_id: &AstNodeId) -> AstType {
         match self.metadata.get_node_type(node_id) {
@@ -113,8 +90,13 @@ impl TypeChecker {
         self.current_func_return_type = None;
     }
 
-    /// Wraps the given boxed `AstExpression` in a new `AstExpression::Cast`.
-    pub fn wrap_in_cast(&mut self, ast_type: &AstType, expr: Box<AstExpression>, driver: &mut Driver) -> AstExpression {
+    /// Wraps the given `AstExpression` in a cast to the given `ast_type`.
+    pub fn wrap_in_cast(
+        &mut self,
+        ast_type: &AstType,
+        expr: Box<AstExpression>,
+        driver: &mut Driver,
+    ) -> AstExpression {
         let node_id = AstNodeId::new();
 
         self.set_data_type(&node_id, ast_type);
@@ -152,18 +134,13 @@ impl TypeChecker {
             emit_implicit_conversion_warning(&old_type, ast_type, *value, false, loc.unwrap(), sign_change, driver);
         }
 
-        let target_type = AstDeclaredType {
-            basic_type: AstBasicType::default(),
-            storage_class: None,
-            declarator: None,
-            resolved_type: Some(ast_type.clone()),
-        };
+        let target_type = AstDeclaredType::resolved(ast_type);
 
         AstExpression::Cast { node_id, target_type, expr }
     }
 
     /// If the given boxed `AstExpression`'s type already matches the `target_type` then the existing expression
-    /// is returned as-is. Otherwise, wraps the given boxed `AstExpression` in a new boxed `AstExpression::Cast`.
+    /// is returned as-is. Otherwise, wraps the expression in a cast to the target type.
     pub fn wrap_in_cast_if_neeeded(
         &mut self,
         target_type: &AstType,

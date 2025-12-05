@@ -47,8 +47,10 @@ Options:
   -fprint-no-source-loc  Print diagnostics without filename/line/column
 
   Developer options
+  --parse                Only run the lexer and parser stages
   --validate             Only run the lexer, parser, and sema stages
-  --print-ast            Print the type-checked AST to stdout (implies --validate)
+  --print-ast            Print the parsed AST to stdout (implies --parse)
+  --print-tast           Print the type-checked AST to stdout (implies --validate)
 
   -h, --help             Print help
   -V, --version          Print version

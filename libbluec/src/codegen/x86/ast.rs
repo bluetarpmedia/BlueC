@@ -3,7 +3,8 @@
 //! The `ast` module defines the x86_64 Assembly AST for the parent codegen module.
 
 use super::registers::HwRegister;
-use crate::internal_error;
+
+use crate::ICE;
 use crate::ir::BtType;
 
 use std::fmt;
@@ -31,12 +32,13 @@ impl From<&BtType> for AsmType {
 impl From<BtType> for AsmType {
     fn from(bt_type: BtType) -> Self {
         match bt_type {
-            BtType::Void => internal_error::ICE("No AsmType for BtType::Void"),
+            BtType::Void => ICE!("No AsmType for BtType::Void"),
             BtType::Int16 | BtType::UInt16 => AsmType::Word,
             BtType::Int32 | BtType::UInt32 => AsmType::DoubleWord,
             BtType::Int64 | BtType::UInt64 | BtType::Pointer => AsmType::QuadWord,
             BtType::Float32 => AsmType::FpSingle,
             BtType::Float64 => AsmType::FpDouble,
+            BtType::Function => ICE!("No AsmType for BtType::Function")
         }
     }
 }
@@ -244,7 +246,7 @@ pub enum AsmInstruction {
     SetCC { cond_code: ConditionalCode, operand: AsmOperand },
     Label { id: AsmLabelName },
     Push(AsmOperand),
-    Call(String),
+    Call(AsmOperand),
     Ret,
 }
 
@@ -288,6 +290,9 @@ pub enum AsmOperand {
 
     /// A global value stored in the Data section.
     Data(String),
+
+    /// A function name
+    Function(String),
 }
 
 impl AsmOperand {
@@ -306,7 +311,7 @@ impl AsmOperand {
                 AsmType::Word => AsmOperand::Reg(HwRegister::AX),
                 AsmType::DoubleWord => AsmOperand::Reg(HwRegister::EAX),
                 AsmType::QuadWord => AsmOperand::Reg(HwRegister::RAX),
-                _ => internal_error::ICE(format!("Invalid asm_type: {asm_type}")),
+                _ => ICE!("Invalid asm_type: '{asm_type}'"),
             },
 
             HwRegister::RBX => match asm_type {
@@ -314,7 +319,7 @@ impl AsmOperand {
                 AsmType::Word => AsmOperand::Reg(HwRegister::BX),
                 AsmType::DoubleWord => AsmOperand::Reg(HwRegister::EBX),
                 AsmType::QuadWord => AsmOperand::Reg(HwRegister::RBX),
-                _ => internal_error::ICE(format!("Invalid asm_type: {asm_type}")),
+                _ => ICE!("Invalid asm_type: '{asm_type}'"),
             },
 
             HwRegister::RCX => match asm_type {
@@ -322,7 +327,7 @@ impl AsmOperand {
                 AsmType::Word => AsmOperand::Reg(HwRegister::CX),
                 AsmType::DoubleWord => AsmOperand::Reg(HwRegister::ECX),
                 AsmType::QuadWord => AsmOperand::Reg(HwRegister::RCX),
-                _ => internal_error::ICE(format!("Invalid asm_type: {asm_type}")),
+                _ => ICE!("Invalid asm_type: '{asm_type}'"),
             },
 
             HwRegister::RDX => match asm_type {
@@ -330,7 +335,7 @@ impl AsmOperand {
                 AsmType::Word => AsmOperand::Reg(HwRegister::DX),
                 AsmType::DoubleWord => AsmOperand::Reg(HwRegister::EDX),
                 AsmType::QuadWord => AsmOperand::Reg(HwRegister::RDX),
-                _ => internal_error::ICE(format!("Invalid asm_type: {asm_type}")),
+                _ => ICE!("Invalid asm_type: '{asm_type}'"),
             },
 
             HwRegister::RSI => match asm_type {
@@ -338,7 +343,7 @@ impl AsmOperand {
                 AsmType::Word => AsmOperand::Reg(HwRegister::SI),
                 AsmType::DoubleWord => AsmOperand::Reg(HwRegister::ESI),
                 AsmType::QuadWord => AsmOperand::Reg(HwRegister::RSI),
-                _ => internal_error::ICE(format!("Invalid asm_type: {asm_type}")),
+                _ => ICE!("Invalid asm_type: '{asm_type}'"),
             },
 
             HwRegister::RDI => match asm_type {
@@ -346,7 +351,7 @@ impl AsmOperand {
                 AsmType::Word => AsmOperand::Reg(HwRegister::DI),
                 AsmType::DoubleWord => AsmOperand::Reg(HwRegister::EDI),
                 AsmType::QuadWord => AsmOperand::Reg(HwRegister::RDI),
-                _ => internal_error::ICE(format!("Invalid asm_type: {asm_type}")),
+                _ => ICE!("Invalid asm_type: '{asm_type}'"),
             },
 
             HwRegister::R8 => match asm_type {
@@ -354,7 +359,7 @@ impl AsmOperand {
                 AsmType::Word => AsmOperand::Reg(HwRegister::R8w),
                 AsmType::DoubleWord => AsmOperand::Reg(HwRegister::R8d),
                 AsmType::QuadWord => AsmOperand::Reg(HwRegister::R8),
-                _ => internal_error::ICE(format!("Invalid asm_type: {asm_type}")),
+                _ => ICE!("Invalid asm_type: '{asm_type}'"),
             },
 
             HwRegister::R9 => match asm_type {
@@ -362,7 +367,7 @@ impl AsmOperand {
                 AsmType::Word => AsmOperand::Reg(HwRegister::R9w),
                 AsmType::DoubleWord => AsmOperand::Reg(HwRegister::R9d),
                 AsmType::QuadWord => AsmOperand::Reg(HwRegister::R9),
-                _ => internal_error::ICE(format!("Invalid asm_type: {asm_type}")),
+                _ => ICE!("Invalid asm_type: '{asm_type}'"),
             },
 
             HwRegister::R10 => match asm_type {
@@ -370,7 +375,7 @@ impl AsmOperand {
                 AsmType::Word => AsmOperand::Reg(HwRegister::R10w),
                 AsmType::DoubleWord => AsmOperand::Reg(HwRegister::R10d),
                 AsmType::QuadWord => AsmOperand::Reg(HwRegister::R10),
-                _ => internal_error::ICE(format!("Invalid asm_type: {asm_type}")),
+                _ => ICE!("Invalid asm_type: '{asm_type}'"),
             },
 
             HwRegister::R11 => match asm_type {
@@ -378,7 +383,7 @@ impl AsmOperand {
                 AsmType::Word => AsmOperand::Reg(HwRegister::R11w),
                 AsmType::DoubleWord => AsmOperand::Reg(HwRegister::R11d),
                 AsmType::QuadWord => AsmOperand::Reg(HwRegister::R11),
-                _ => internal_error::ICE(format!("Invalid asm_type: {asm_type}")),
+                _ => ICE!("Invalid asm_type: '{asm_type}'"),
             },
 
             // XMM registers have no aliases
@@ -399,7 +404,7 @@ impl AsmOperand {
             | HwRegister::XMM14
             | HwRegister::XMM15 => AsmOperand::Reg(reg),
 
-            _ => internal_error::ICE(format!("Must pass a 64-bit register, not '{reg}'")),
+            _ => ICE!("Must pass a 64-bit register, not '{reg}'"),
         }
     }
 
@@ -410,7 +415,7 @@ impl AsmOperand {
 
     /// Is this operand a memory address?
     pub fn is_memory_address(&self) -> bool {
-        matches!(self, AsmOperand::Memory { .. } | AsmOperand::Data(_))
+        matches!(self, AsmOperand::Memory { .. } | AsmOperand::Data(_) | AsmOperand::Function(_))
     }
 
     /// Is this operand a HW (general or XMM) register?

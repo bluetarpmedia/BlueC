@@ -250,30 +250,25 @@ fn resolve_declarator_recursively(
             Ok(fn_derived_type)
         }
 
-        AstDeclaratorKind::Function { decl, params } => {
-            match decl.kind {
-                AstDeclaratorKind::Ident(_) => {
-                    let param_types = resolve_function_param_types(params, symbols, driver)?;
-                    let fn_derived_type = AstType::Function { return_type: Box::new(ast_type), params: param_types };
-                    Ok(fn_derived_type)
-                }
-                AstDeclaratorKind::AbstractPointer | AstDeclaratorKind::Pointer(_) => {
-                    // TODO: Function pointers
-                    if let Some(driver) = driver {
-                        let err = "Function pointer not implemented yet".to_string();
-                        driver.add_diagnostic(Diagnostic::error_at_location(err, decl.loc));
-                    }
-                    Err(ResolutionError::SemanticError)
-                }
-                AstDeclaratorKind::AbstractFunction { .. } | AstDeclaratorKind::Function { .. } => {
-                    if let Some(driver) = driver {
-                        let err = "Function cannot return a function".to_string();
-                        driver.add_diagnostic(Diagnostic::error_at_location(err, decl.loc));
-                    }
-                    Err(ResolutionError::SemanticError)
-                }
+        AstDeclaratorKind::Function { decl, params } => match decl.kind {
+            AstDeclaratorKind::Ident(_) => {
+                let param_types = resolve_function_param_types(params, symbols, driver)?;
+                let fn_derived_type = AstType::Function { return_type: Box::new(ast_type), params: param_types };
+                Ok(fn_derived_type)
             }
-        }
+            AstDeclaratorKind::AbstractPointer | AstDeclaratorKind::Pointer(_) => {
+                let param_types = resolve_function_param_types(params, symbols, driver)?;
+                let fn_type = AstType::Function { return_type: Box::new(ast_type), params: param_types };
+                resolve_declarator_recursively(fn_type, decl, symbols, driver)
+            }
+            AstDeclaratorKind::AbstractFunction { .. } | AstDeclaratorKind::Function { .. } => {
+                if let Some(driver) = driver {
+                    let err = "Function cannot return a function".to_string();
+                    driver.add_diagnostic(Diagnostic::error_at_location(err, decl.loc));
+                }
+                Err(ResolutionError::SemanticError)
+            }
+        },
     }
 }
 
@@ -287,6 +282,13 @@ fn resolve_function_param_types(
 
     params
         .iter()
-        .map(|param_declared_type| resolve_declared_type(param_declared_type, Some(symbols), Some(driver)))
+        .map(|param_declared_type| {
+            let ty = resolve_declared_type(param_declared_type, Some(symbols), Some(driver))?;
+
+            // Function type decays to function pointer
+            let ty = if ty.is_function() { AstType::new_pointer_to(ty) } else { ty };
+
+            Ok(ty)
+        })
         .collect()
 }

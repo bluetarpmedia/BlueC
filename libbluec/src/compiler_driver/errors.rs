@@ -243,9 +243,33 @@ impl Error {
         driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
     }
 
+    /// Emits an error that two function pointer types are incompatible.
+    ///
+    /// -Wincompatible-function_pointer-types
+    pub fn incompatible_fn_pointer_types(a: &AstType, b: &AstType, loc: SourceLocation, driver: &mut Driver) {
+        let err = format!("Incompatible function pointer types ('{a}' and '{b}')");
+        driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
+    }
+
     /// Emits an error that a binary operation has operands with invalid types.
     pub fn invalid_binary_expression_operands(lhs: &AstType, rhs: &AstType, loc: SourceLocation, driver: &mut Driver) {
         let err = format!("Invalid operand types in binary expression ('{lhs}' and '{rhs}')");
+        driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
+    }
+
+    /// Emits an error that an expression cannot be called because it has the wrong type.
+    pub fn invalid_call_type(call_type: &AstType, loc: SourceLocation, driver: &mut Driver) {
+        let err = format!("Cannot call expression of type ('{call_type}'); must be a function or function pointer");
+        driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
+    }
+
+    /// Emits an error that a function type is not assignable
+    pub fn cannot_assign_to_fn_type(
+        fn_type: &AstType,
+        loc: SourceLocation,
+        driver: &mut Driver,
+    ) {
+        let err = format!("Cannot assign a value to an expression of function type '{fn_type}'");
         driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
     }
 
@@ -259,19 +283,16 @@ impl Error {
         let err = format!("Cannot cast an expression to a function type ('{fn_type}')");
         let mut diag = Diagnostic::error_at_location(err, cast_op_loc);
         diag.add_location(expr_loc);
-        diag.add_note("Try casting to a function pointer instead.".to_string(), None);
-        // TODO: Create AstType(fn_type) and print that as the suggestion, after we support function pointers.
+
+        let suggested = format!("({})", AstType::new_pointer_to(fn_type.clone()));
+        diag.add_note_with_suggested_code("Try casting to a function pointer instead.".to_string(), suggested, None);
+
         driver.add_diagnostic(diag);
     }
 
     /// Emits an error that an expression cannot be cast to the given dest type. E.g. pointer type to floating-point,
     /// or vice versa.
-    pub fn invalid_cast(
-        expr_loc: SourceLocation,
-        expr_type: &AstType,
-        dest_type: &AstType,
-        driver: &mut Driver,
-    ) {
+    pub fn invalid_cast(expr_loc: SourceLocation, expr_type: &AstType, dest_type: &AstType, driver: &mut Driver) {
         let err = format!("Cannot cast an expression of type '{expr_type}' to '{dest_type}'");
         driver.add_diagnostic(Diagnostic::error_at_location(err, expr_loc));
     }

@@ -38,7 +38,7 @@ impl AstDeclaration {
         match &self {
             AstDeclaration::Variable(var_decl) => &var_decl.declared_type,
             AstDeclaration::Function(fn_decl) => &fn_decl.declared_type,
-            AstDeclaration::TypeAlias(alias_decl) => alias_decl.decl.get_declared_type()
+            AstDeclaration::TypeAlias(alias_decl) => alias_decl.decl.get_declared_type(),
         }
     }
 }
@@ -211,7 +211,8 @@ pub enum AstExpression {
     },
     FunctionCall {
         node_id: AstNodeId,
-        fn_name: AstUniqueName,
+        designator: Box<AstExpression>,
+        args_node_id: AstNodeId,
         args: Vec<AstExpression>,
     },
     Deref {
@@ -227,7 +228,7 @@ pub enum AstExpression {
         target_type: AstDeclaredType,
         expr: Box<AstExpression>,
     },
-    Variable {
+    Identifier {
         node_id: AstNodeId,
         name: String,
         unique_name: AstUniqueName,
@@ -262,7 +263,7 @@ impl AstExpression {
             AstExpression::Deref { node_id, .. } => *node_id,
             AstExpression::AddressOf { node_id, .. } => *node_id,
             AstExpression::Cast { node_id, .. } => *node_id,
-            AstExpression::Variable { node_id, .. } => *node_id,
+            AstExpression::Identifier { node_id, .. } => *node_id,
             AstExpression::IntegerLiteral { node_id, .. } => *node_id,
             AstExpression::FloatLiteral { node_id, .. } => *node_id,
         }
@@ -270,7 +271,7 @@ impl AstExpression {
 
     /// Is the AST expression an l-value?
     pub fn is_lvalue(&self) -> bool {
-        matches!(self, AstExpression::Variable { .. } | AstExpression::Deref { .. })
+        matches!(self, AstExpression::Identifier { .. } | AstExpression::Deref { .. })
     }
 
     /// Is the AST expression an integer literal?

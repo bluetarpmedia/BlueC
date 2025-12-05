@@ -6,7 +6,7 @@ use super::super::ast::{AsmBinaryOp, AsmInstruction, AsmOperand, AsmType};
 use super::super::registers::HwRegister;
 use super::Generator;
 
-use crate::internal_error;
+use crate::ICE;
 use crate::ir;
 
 /// Copies function parameters from calling-convention HW registers or the stack into pseudo-registers.
@@ -28,7 +28,7 @@ pub fn copy_params_into_pseudo_registers(
 
 /// Generates the instructions for a call to the given function.
 pub fn generate_function_call(
-    identifier: &str,
+    designator: &ir::BtValue,
     args: &[ir::BtValue],
     dst: &ir::BtValue,
     asm: &mut Vec<AsmInstruction>,
@@ -113,8 +113,9 @@ pub fn generate_function_call(
     }
 
     // Call the function
-    asm.push(AsmInstruction::Call(identifier.to_string()));
-
+    let designator_operand = generator.translate_bt_value_to_asm_operand(designator);
+    asm.push(AsmInstruction::Call(designator_operand));
+    
     // Deallocate any stack space we created to restore the stack pointer
     let bytes_to_free = (stack_arg_count * 8) as u64 + stack_padding;
     if bytes_to_free != 0 {
@@ -188,7 +189,7 @@ fn get_integer_parameter_hw_register(arg_index: usize) -> HwRegister {
         3 => HwRegister::RCX,
         4 => HwRegister::R8,
         5 => HwRegister::R9,
-        _ => internal_error::ICE("Invalid function argument index; must be in range [0, 6)."),
+        n => ICE!("Invalid function argument index {n}; must be in range [0, 6)."),
     }
 }
 
@@ -202,6 +203,6 @@ fn get_fp_parameter_hw_register(arg_index: usize) -> HwRegister {
         5 => HwRegister::XMM5,
         6 => HwRegister::XMM6,
         7 => HwRegister::XMM7,
-        _ => internal_error::ICE("Invalid function argument index; must be in range [0, 8)."),
+        n => ICE!("Invalid function argument index {n}; must be in range [0, 8)."),
     }
 }

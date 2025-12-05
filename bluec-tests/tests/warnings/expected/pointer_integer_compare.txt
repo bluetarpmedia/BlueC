@@ -1,4 +1,4 @@
-warning: Comparison between pointer type 'int*' and integer type 'unsigned long'
+warning: Comparison between pointer type 'int *' and integer type 'unsigned long'
    |
    |     return ptr == ul;
    |            ~~~ ^^ ~~

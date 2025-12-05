@@ -257,7 +257,16 @@ impl AsmFileWriter {
 
             AsmInstruction::Label { id } => self.write_local_symbol_label(id),
 
-            AsmInstruction::Call(identifier) => {
+            AsmInstruction::Call(operand) => {
+                if let AsmOperand::Memory { .. } = operand {
+                    self.writeln_with_indent(&format!("callq *{}", self.asm_operand_to_string(operand)))?;
+                    return Ok(());
+                }
+
+                let AsmOperand::Function(identifier) = operand else {
+                    ICE!("Invalid operand for function call");
+                };
+
                 let function_name = if cfg!(target_os = "macos") {
                     // This saves us calling `make_asm_identifier`.
                     format!("_{}", identifier)
@@ -332,6 +341,10 @@ impl AsmFileWriter {
                 } else {
                     format!("{relative}({base})")
                 }
+            }
+
+            AsmOperand::Function(name) => {
+                format!("{}(%rip)", make_asm_identifier(name))
             }
 
             AsmOperand::Data(name) => {

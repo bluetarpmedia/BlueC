@@ -23,10 +23,10 @@ pub use meta::AstMetadata;
 
 use identifier_resolution::{DeclaredIdentifier, SearchScope};
 
+use crate::ICE;
 use crate::compiler_driver;
 use crate::compiler_driver::Driver;
 use crate::compiler_driver::diagnostics::Diagnostic;
-use crate::internal_error;
 use crate::lexer;
 use crate::lexer::SourceLocation;
 use crate::sema;
@@ -207,21 +207,23 @@ pub fn parse(driver: &mut compiler_driver::Driver, tokens: Vec<lexer::Token>) {
     //      out fields without consuming the whole struct.
     let Parser { metadata, .. } = parser;
 
-    // Don't proceed to the next stage if we've emitted errors
-    if driver.has_error_diagnostics() {
-        return;
-    }
-
     if ast_root.is_err() && !driver.has_error_diagnostics() {
-        internal_error::ICE("AST return type is Err, but no error diagnostics emitted");
+        ICE!("AST return type is Err, but no error diagnostics emitted");
     }
 
-    // If user only wants to run the lexer & parser then we're done.
-    if driver.options().parse {
+    // Don't proceed to the next stage if we've emitted errors, or if client only wants to run up to this stage.
+    if driver.has_error_diagnostics() || driver.options().parse {
         return;
     }
 
     let ast = ast_root.unwrap();
+
+    // If client wants to print the parsed AST then we're done.
+    if driver.options().print_ast {
+        printer::print(&ast, None);
+        return;
+    }
+
     sema::semantic_analysis(ast, metadata, driver);
 }
 

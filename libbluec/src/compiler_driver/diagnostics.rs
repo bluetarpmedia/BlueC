@@ -284,6 +284,7 @@ impl<W: Write> Printer<W> {
         let mut running_offset = 0;
 
         locations.sort_by_key(|loc| loc.column);
+        locations.dedup_by_key(|loc| loc.column);
 
         for location in locations {
             let highlight_indent = " ".repeat(location.column - running_offset);

@@ -188,22 +188,46 @@ impl AstType {
         !matches!(self, AstType::Pointer(_) | AstType::Function { .. })
     }
 
-    /// Is the type a pointer type?
+    /// Is this type a pointer type?
     pub fn is_pointer(&self) -> bool {
         matches!(self, AstType::Pointer(_))
     }
 
-    /// Is the type a function type? (Not a function pointer.)
+    /// Is this type a function pointer type?
+    ///
+    /// A function pointer is a pointer whose referent is a function. In other words, there is only one level of
+    /// indirection from the function.
+    /// 
+    /// In C, a function pointer can be called without needing to dereference it first.
+    ///
+    /// ```c
+    /// int get(void);
+    ///
+    /// int (*a)(void) = get;      // `a` is a function pointer.
+    /// int (**b)(void) = &a;      // `b` is _NOT_ a function pointer; it points to the object `a`.
+    /// 
+    /// int v1 = a();              // Can call `a` without dereferencing.
+    /// int v2 = (*a)();           // Or can explicitly dereference.
+    /// ```
+    pub fn is_function_pointer(&self) -> bool {
+        if let AstType::Pointer(referent) = self {
+            matches!(referent.as_ref(), AstType::Function { .. })
+        } else {
+            false
+        }
+    }
+
+    /// Is this type a function type? (Not a function pointer.)
     pub fn is_function(&self) -> bool {
         matches!(self, AstType::Function { .. })
     }
 
-    /// Is the type an arithmetic type (integer, boolean, or floating-point)?
+    /// Is this type an arithmetic type (integer, boolean, or floating-point)?
     pub fn is_arithmetic(&self) -> bool {
         self.is_integer() || self.is_floating_point()
     }
 
-    /// Is the type an integral type?
+    /// Is this type an integral type?
     pub fn is_integer(&self) -> bool {
         matches!(
             self,
@@ -218,12 +242,12 @@ impl AstType {
         )
     }
 
-    /// Is the type a floating-point type?
+    /// Is this type a floating-point type?
     pub fn is_floating_point(&self) -> bool {
         matches!(self, AstType::Float | AstType::Double | AstType::LongDouble)
     }
 
-    /// The size of the type in bits.
+    /// The size of this type in bits.
     pub fn bits(&self) -> usize {
         match self {
             AstType::Void => 0,
@@ -453,23 +477,56 @@ impl fmt::Display for AstType {
             AstType::Double => write!(f, "double"),
             AstType::LongDouble => write!(f, "long double"),
 
-            AstType::Pointer(referenced) => {
-                write!(f, "{}*", referenced)
-            }
+            AstType::Pointer(_) => print_ptr(f, self, 0),
 
             AstType::Function { return_type, params } => {
-                write!(f, "{}(", return_type)?;
-                let mut first = true;
-                for param in params {
-                    if !first {
-                        write!(f, ", ")?;
-                    }
-                    write!(f, "{}", param)?;
-                    first = false;
-                }
-                write!(f, ")")?;
-                Ok(())
+                write!(f, "{return_type} ")?;
+                print_fn_params(f, params)
             }
         }
     }
+}
+
+fn print_ptr(f: &mut fmt::Formatter<'_>, ty: &AstType, indirection_count: usize) -> fmt::Result {
+    if indirection_count == 0 {
+        debug_assert!(ty.is_pointer());
+    }
+
+    if let AstType::Pointer(referent) = ty {
+        return print_ptr(f, referent, indirection_count + 1);
+    }
+
+    let ptr_chars = "*".repeat(indirection_count);
+
+    if ty.is_basic_type() {
+        write!(f, "{ty} {ptr_chars}")?;
+        return Ok(());
+    }
+
+    if let AstType::Function { return_type, params } = ty {
+        write!(f, "{return_type} ({ptr_chars})")?;
+        print_fn_params(f, params)?;
+    }
+
+    Ok(())
+}
+
+fn print_fn_params(f: &mut fmt::Formatter<'_>, params: &[AstType]) -> fmt::Result {
+    if params.is_empty() {
+        write!(f, "(void)")?;
+        return Ok(());
+    }
+
+    write!(f, "(")?;
+    let mut first = true;
+    for param in params {
+        if !first {
+            write!(f, ", ")?;
+        }
+        write!(f, "{}", param)?;
+        first = false;
+    }
+    write!(f, ")")?;
+
+    Ok(())
 }

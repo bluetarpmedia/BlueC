@@ -66,7 +66,7 @@ impl Warning {
     }
 
     /// Emits a warning for a duplicate declaration specifier (e.g. duplicate storage class or 'signed'/'unsigned').
-    /// 
+    ///
     /// -Wduplicate-decl-specifier
     pub fn duplicate_decl_specifier(specifier: SourceIdentifier, driver: &mut Driver) {
         // TODO: Enable this warning even without '-Wall'.
@@ -202,7 +202,7 @@ impl Warning {
     }
 
     /// Emits a warning that two different pointer types are being compared.
-    /// 
+    ///
     /// -Wcompare-distinct-pointer-types
     pub fn compare_different_pointer_types(
         a: &AstType,
@@ -221,7 +221,7 @@ impl Warning {
     }
 
     /// Emits a warning that a pointer and an integer are being compared.
-    /// 
+    ///
     /// -Wpointer-integer-compare
     pub fn compare_pointer_and_integer(
         ptr_type: &AstType,
@@ -239,8 +239,29 @@ impl Warning {
         driver.add_diagnostic(diag);
     }
 
+    /// Emits a warning that a pointer is casted to an integer type smaller than pointer type.
+    ///
+    /// -Wpointer-to-int-cast
+    pub fn pointer_to_smaller_int_cast(
+        ptr_type: &AstType,
+        int_type: &AstType,
+        cmp_loc: SourceLocation,
+        int_loc: SourceLocation,
+        driver: &mut Driver,
+    ) {
+        // TODO: Enable this warning even without '-Wall'.
+        let warning = format!("Cast to smaller integer type '{int_type}' from pointer '{ptr_type}'");
+        let mut diag = Diagnostic::warning_at_location(warning, cmp_loc);
+        diag.add_location(int_loc);
+
+        let ptr_bits = ptr_type.bits();
+        diag.add_note(format!("Change the cast to a {ptr_bits}-bit integer type"), None);
+
+        driver.add_diagnostic(diag);
+    }
+
     /// Emits a warning that an expression evaluated to zero and is interpreted as a null pointer constant.
-    /// 
+    ///
     /// -Wnon-literal-null-conversion
     pub fn expression_interpreted_as_null_ptr_constant(loc: SourceLocation, ptr_type: &AstType, driver: &mut Driver) {
         // TODO: Enable this warning even without '-Wall'.

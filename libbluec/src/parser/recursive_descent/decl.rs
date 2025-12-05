@@ -89,11 +89,15 @@ pub fn parse_declaration(parser: &mut Parser, driver: &mut Driver) -> ParseResul
                 };
 
                 let declared_type = AstDeclaredType::unresolved(basic_type, storage_class, Some(declarator));
-                let fn_decl = decl_fn::parse_function(declared_type, allow, parser, driver)?;
-                if fn_decl.body.is_some() {
+                let declaration = decl_fn::parse_function(declared_type, allow, parser, driver)?;
+
+                if let AstDeclaration::Function(ref fn_decl) = declaration
+                    && fn_decl.body.is_some()
+                {
                     parse_fn_with_body = true;
                 }
-                AstDeclaration::Function(fn_decl)
+
+                declaration
             }
 
             AstDeclaratorKind::AbstractFunction { .. } => ICE!("AbstractFunction should have been detected"),

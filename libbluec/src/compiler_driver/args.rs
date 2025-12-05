@@ -150,6 +150,7 @@ impl Parser {
         let validate = is_flag_set("validate");
         let codegen = is_flag_set("codegen");
         let print_ast = is_flag_set("print-ast");
+        let print_typechecked_ast = is_flag_set("print-tast");
         let print_ir = is_flag_set("print-ir");
 
         DriverOptions {
@@ -166,6 +167,7 @@ impl Parser {
             validate,
             codegen,
             print_ast,
+            print_typechecked_ast,
             print_ir,
             flags: self.f_flags,
         }
@@ -309,7 +311,8 @@ static OPTIONS: &[&str] = &[
     "--parse",               "Only run the lexer and parser",
     "--validate",            "Only run the lexer, parser, and sema stages",
     "--codegen",             "Only run the lexer, parser, sema, and codegen stages",
-    "--print-ast",           "Print the AST to stdout (--validate is implied)",
+    "--print-ast",           "Print the parsed AST to stdout (--parse is implied)",
+    "--print-tast",          "Print the typechecked AST to stdout (--validate is implied)",
     "--print-ir",            "Print the IR to stdout (and stops after lowering to IR)",
     "","",
     "-h, --help",            "Print help",
