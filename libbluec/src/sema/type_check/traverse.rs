@@ -619,34 +619,9 @@ fn typecheck_assignment(
             return Ok(lhs_type);
         }
 
-        // Work out the common type for the compound computation (e.g. `lhs + rhs` if the op is `+=`).
-        let computation_type = match get_common_type_for_expressions(lhs, rhs, chk, driver) {
-            Ok(common_type) => common_type,
-            Err(e) => match e {
-                // TODO: change warn/error to assignment versions
-                CommonTypeError::WarnDifferentPointerTypes { a_type, b_type } => {
-                    warn_compare_different_pointer_types(node_id, lhs, rhs, &a_type, &b_type, chk, driver);
-                    AstType::Pointer(Box::new(AstType::Void))
-                }
-
-                CommonTypeError::WarnPointerAndInteger { a_type, b_type } => {
-                    warn_compare_pointer_and_integer(node_id, lhs, rhs, &a_type, &b_type, chk, driver);
-                    if a_type.is_pointer() { a_type } else { b_type }
-                }
-
-                CommonTypeError::NoCommonType { a_type, b_type } => {
-                    let loc = chk.metadata.get_source_span_as_loc(node_id).unwrap();
-                    let a_loc = chk.metadata.get_source_span_as_loc(&lhs.node_id()).unwrap();
-                    let b_loc = chk.metadata.get_source_span_as_loc(&rhs.node_id()).unwrap();
-                    Error::incompatible_types(&a_type, &b_type, loc, a_loc, b_loc, driver);
-
-                    a_type
-                }
-            },
-        };
-
-        // Verify that the conversion is valid (but don't apply the conversion; see above, we do that in translation)
-        check_conversion(lhs, &rhs_type, &computation_type, chk, driver)?;
+        // Work out the common type for the compound computation (e.g. the type of `lhs + rhs` if the op is `+=`).
+        //      The IR lowering stage will use this type when translating the compound operation to IR.
+        let computation_type = get_common_type_for_expressions(lhs, rhs, chk, driver).map_err(|_| TypeCheckError)?;
 
         chk.set_data_type(node_id, &lhs_type);
         chk.set_data_type(computation_node_id, &computation_type);
