@@ -2,13 +2,15 @@
 //
 //! The `epxr` module defines functions to translate AST expressions into the BlueTac IR.
 
-use super::super::{BtConstantValue, BtInstruction, BtValue};
+use super::super::{BtBinaryOp, BtConstantValue, BtInstruction, BtValue};
 use super::binary_expr;
 use super::unary_expr;
 use super::{BlueTacTranslator, EvalExpr};
 
 use crate::ICE;
-use crate::parser::{AstExpression, AstFloatLiteralKind, AstFullExpression, AstIntegerLiteralKind, AstType};
+use crate::parser::{
+    AstAssignmentOp, AstExpression, AstFloatLiteralKind, AstFullExpression, AstIntegerLiteralKind, AstType,
+};
 use crate::sema::type_conversion;
 
 pub fn translate_full_expression(
@@ -124,21 +126,7 @@ pub fn translate_expression(
             }
         }
 
-        AstExpression::Assignment { lhs, rhs, .. } => {
-            let lhs = translate_expression(translator, lhs, instructions);
-            let rhs = translate_expression_to_value(translator, rhs, instructions);
-
-            match lhs {
-                EvalExpr::Value(lhs_value) => {
-                    instructions.push(BtInstruction::Copy { src: rhs, dst: lhs_value.clone() });
-                    EvalExpr::Value(lhs_value)
-                }
-                EvalExpr::Dereferenced(lhs_obj) => {
-                    instructions.push(BtInstruction::Store { src: rhs, dst_ptr: lhs_obj.clone() });
-                    EvalExpr::Value(lhs_obj)
-                }
-            }
-        }
+        AstExpression::Assignment { .. } => translate_assignment(translator, expr, instructions),
 
         AstExpression::UnaryOperation { .. } => unary_expr::translate_unary_operation(translator, expr, instructions),
 
@@ -220,6 +208,81 @@ pub fn translate_expression_to_value(
                 let rvalue = translator.make_temp_variable(rvalue_type.clone());
                 instructions.push(BtInstruction::Load { src_ptr: object, dst: rvalue.clone() });
                 rvalue
+            }
+        }
+    }
+}
+
+fn translate_assignment(
+    translator: &mut BlueTacTranslator,
+    expr: &AstExpression,
+    instructions: &mut Vec<BtInstruction>,
+) -> EvalExpr {
+    let AstExpression::Assignment { computation_node_id, op, lhs, rhs, .. } = expr else {
+        ICE!("Expected an AstExpression::Assignment");
+    };
+
+    let lhs_type = translator.get_expression_type(lhs).clone();
+    let rhs_type = translator.get_expression_type(rhs).clone();
+
+    let lhs = translate_expression(translator, lhs, instructions);
+    let rhs_value = translate_expression_to_value(translator, rhs, instructions);
+
+    if op.is_compound_assignment() {
+        // lvalue-to-rvalue conversion for `lhs`.
+        let (lhs_value, lhs_object) = match lhs {
+            EvalExpr::Value(value) => (value, None),
+
+            EvalExpr::Dereferenced(object) => {
+                let deref_value = translator.make_temp_variable(lhs_type.clone());
+                instructions.push(BtInstruction::Load { src_ptr: object.clone(), dst: deref_value.clone() });
+                (deref_value, Some(object))
+            }
+        };
+
+        // Get the computation type for the compound binary operation (e.g. common type of `lhs + rhs` for `+=`).
+        let computation_type = translator.get_ast_type_from_node(computation_node_id).clone();
+
+        // If necessary, cast the lhs and/or rhs to the computation type.
+        let casted_src1 = if lhs_type != computation_type {
+            add_cast_to_temp_var(translator, lhs_value.clone(), &lhs_type, &computation_type, instructions)
+        } else {
+            lhs_value.clone()
+        };
+
+        let casted_src2 = if rhs_type != computation_type {
+            add_cast_to_temp_var(translator, rhs_value.clone(), &rhs_type, &computation_type, instructions)
+        } else {
+            rhs_value.clone()
+        };
+
+        // Perform the binary operation
+        let binary_op = translate_ast_compound_assignment_operator_to_ir_binary_op(op);
+        let op_result = translator.make_temp_variable(computation_type.clone());
+        instructions.push(BtInstruction::Binary {
+            op: binary_op,
+            src1: casted_src1,
+            src2: casted_src2,
+            dst: op_result.clone(),
+        });
+
+        // Copy the result back into the lhs variable, with a cast if necessary.
+        copy_value_with_optional_cast(op_result, lhs_value.clone(), &computation_type, &lhs_type, instructions);
+
+        if let Some(lhs_object) = lhs_object {
+            instructions.push(BtInstruction::Store { src: lhs_value.clone(), dst_ptr: lhs_object });
+        }
+
+        EvalExpr::Value(lhs_value)
+    } else {
+        match lhs {
+            EvalExpr::Value(lhs_value) => {
+                instructions.push(BtInstruction::Copy { src: rhs_value, dst: lhs_value.clone() });
+                EvalExpr::Value(lhs_value)
+            }
+            EvalExpr::Dereferenced(lhs_obj) => {
+                instructions.push(BtInstruction::Store { src: rhs_value, dst_ptr: lhs_obj.clone() });
+                EvalExpr::Value(lhs_obj)
             }
         }
     }
@@ -313,5 +376,23 @@ pub fn copy_value_with_optional_cast(
         };
 
         instructions.push(instr);
+    }
+}
+
+#[rustfmt::skip]
+fn translate_ast_compound_assignment_operator_to_ir_binary_op(op: &AstAssignmentOp) -> BtBinaryOp {
+    match op {
+        AstAssignmentOp::Addition    => BtBinaryOp::Add,
+        AstAssignmentOp::Subtraction => BtBinaryOp::Subtract,
+        AstAssignmentOp::Multiply    => BtBinaryOp::Multiply,
+        AstAssignmentOp::Divide      => BtBinaryOp::Divide,
+        AstAssignmentOp::Remainder   => BtBinaryOp::Remainder,
+        AstAssignmentOp::BitwiseAnd  => BtBinaryOp::BitwiseAnd,
+        AstAssignmentOp::BitwiseOr   => BtBinaryOp::BitwiseOr,
+        AstAssignmentOp::BitwiseXor  => BtBinaryOp::BitwiseXor,
+        AstAssignmentOp::LeftShift   => BtBinaryOp::LeftShift,
+        AstAssignmentOp::RightShift  => BtBinaryOp::RightShift,
+
+        _ => ICE!("Unexpected AstAssignmentOp '{op}'"),
     }
 }

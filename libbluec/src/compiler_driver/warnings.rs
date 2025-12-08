@@ -6,7 +6,7 @@ use crate::compiler_driver::Driver;
 use crate::compiler_driver::diagnostics::{Diagnostic, SourceIdentifier};
 use crate::internal_error;
 use crate::lexer::{SourceLocation, TokenType};
-use crate::parser::expr::binary_ops;
+use crate::parser::expr::ops;
 use crate::parser::symbol::SymbolKind;
 use crate::parser::{AstBinaryOp, AstType};
 
@@ -134,8 +134,8 @@ impl Warning {
             add_note_about_parent_op = false;
             format!("'{child_op_str}' used within '{parent_op_str}' without parentheses")
         } else {
-            let child_prec = binary_ops::binary_operator_precedence(&child_expr_op.into());
-            let parent_prec = binary_ops::binary_operator_precedence(&parent_expr_op.into());
+            let child_prec = ops::operator_precedence(&child_expr_op.into());
+            let parent_prec = ops::operator_precedence(&parent_expr_op.into());
 
             add_note_about_parent_op = true;
 

@@ -14,8 +14,8 @@ use crate::compiler_driver::errors::Error;
 use crate::compiler_driver::warnings::Warning;
 use crate::parser::{self, AstUnaryOp};
 use crate::parser::{
-    AstBinaryOp, AstBlock, AstBlockItem, AstConstantValue, AstDeclaration, AstExpression, AstForInitializer,
-    AstFullExpression, AstNodeId, AstStatement, AstStorageDuration, AstType, AstUniqueName,
+    AstAssignmentOp, AstBinaryOp, AstBlock, AstBlockItem, AstConstantValue, AstDeclaration, AstExpression,
+    AstForInitializer, AstFullExpression, AstNodeId, AstStatement, AstStorageDuration, AstType, AstUniqueName,
 };
 
 /// Traverses the AST and performs type checking.
@@ -441,12 +441,10 @@ fn typecheck_binary_operation(
         ICE!("Expected binary operation");
     };
 
-    let lhs_parent_ctx = if op.is_compound_assignment() { Some(ParentExprCtx::SuppressDecay) } else { None };
-
-    let left_type = typecheck_expression(left, lhs_parent_ctx, chk, driver)?;
+    let left_type = typecheck_expression(left, None, chk, driver)?;
     let right_type = typecheck_expression(right, None, chk, driver)?;
 
-    // Logical && and || evaluate to value of type 'int' and we don't need to cast the operands.
+    // LogicalAnd `&&` and LogicalOr `||` evaluate to a value of type 'int' so we don't need to cast the operands.
     if *op == AstBinaryOp::LogicalAnd || *op == AstBinaryOp::LogicalOr {
         chk.set_data_type(node_id, &AstType::Int);
         return Ok(AstType::Int);
@@ -470,51 +468,15 @@ fn typecheck_binary_operation(
         Error::invalid_binary_expression_operands(&left_type, &right_type, loc, driver);
     }
 
-    // Compound assignment evaluates to the type of the lvalue (variable). Don't cast the rvalue because this will
-    // be incorrect in some cases. E.g.
-    //
-    //      int a = 1;
-    //      long b = 2;
-    //      a += b;      <---- this must be evaluated as:  a = (int)((long)a + b);
-    //
-    // We apply the appropriate casts in the translation phase.
-    //
-    if op.is_compound_assignment() {
-        // The lhs must be an lvalue.
-        if !left.is_lvalue() {
-            let loc = chk.metadata.get_source_span_as_loc(node_id).unwrap();
-            Error::expression_is_not_assignable(loc, driver);
-        }
-
-        // Cannot assign to function type
-        if left_type.is_function() {
-            let loc = chk.metadata.get_source_span_as_loc(node_id).unwrap();
-            Error::cannot_assign_to_fn_type(&left_type, loc, driver);
-            return Err(TypeCheckError);
-        }
-
-        // A function pointer can be the lhs and an integer can be rhs with `+=` or `-=`.
-        if left_type.is_function_pointer()
-            && right_type.is_integer()
-            && matches!(op, AstBinaryOp::AdditionAssignment | AstBinaryOp::SubtractionAssignment)
-        {
-            chk.set_data_type(node_id, &left_type);
-            return Ok(left_type);
-        }
-
-        // Check the conversion (but don't apply the conversion; see above, we do that in translation)
-        check_conversion(left, &right_type, &left_type, chk, driver)?;
-
-        chk.set_data_type(node_id, &left_type);
-        return Ok(left_type);
-    }
-
     // Take ownership of the left and right expressions (by replacing them with a 'null' value, which will never be used).
     let left = take_boxed_expression(left);
     let right = take_boxed_expression(right);
 
     // For arithmetic operators, relational operators, and bitwise and/or/xor we have to cast both operands to their
     // common type.
+    //
+    // LogicalAnd `&&` and LogicalOr `||` are handled above. That leaves LeftShift and RightShift which evaluate
+    // to their left expression's type, except we also promote the type to 'int' if it's a smaller integer type.
     //
     let cast_both_to_common_type = matches!(
         op,
@@ -583,33 +545,114 @@ fn typecheck_binary_operation(
     Ok(binary_op_data_type)
 }
 
-/// Type checks the left and right expressions in the assignment operation, wraps the rhs expression with a cast
-/// to the lhs type, and returns the lhs type.
+/// Type checks the left and right expressions in the assignment (including compound assignment) operation, wraps the
+/// rhs expression with a cast to the lhs type, and returns the lhs type.
 fn typecheck_assignment(
     expr: &mut AstExpression,
     chk: &mut TypeChecker,
     driver: &mut Driver,
 ) -> TypeCheckResult<AstType> {
-    let AstExpression::Assignment { node_id, lhs, rhs } = expr else {
+    let AstExpression::Assignment { node_id, computation_node_id, op, lhs, rhs } = expr else {
         ICE!("Expected assignment expression");
     };
 
-    // The lhs must be an lvalue.
-    if !lhs.is_lvalue() {
+    let lhs_type = typecheck_expression(lhs, Some(ParentExprCtx::SuppressDecay), chk, driver)?;
+    let rhs_type = typecheck_expression(rhs, None, chk, driver)?;
+
+    // The lhs must be a modifiable lvalue.
+    if !is_modifiable_lvalue(lhs, &lhs_type) {
         let loc = chk.metadata.get_source_span_as_loc(node_id).unwrap();
         Error::expression_is_not_assignable(loc, driver);
     }
 
-    let lhs_type = typecheck_expression(lhs, Some(ParentExprCtx::SuppressDecay), chk, driver)?;
+    // Compound assignment evaluates to the type of the lvalue. Depending on the operation we may need to cast the
+    // rhs rvalue to the computation type of the lhs and rhs, but we can't do the cast here because we only have
+    // the compound operation. So we determine the appropriate type for the computation and set it in the metadata
+    // for the IR lowering stage to use later.
+    //
+    //      int a = 1;
+    //      long b = 2;
+    //      a += b;      <---- this must be evaluated as:  a = (int)((long)a + b);
+    //
+    if op.is_compound_assignment() {
+        // Some compound assignment operators cannot have an operand of pointer type, which includes operand of function
+        // type because the function type decays into a function pointer type.
+        //
+        if (lhs_type.is_pointer() || rhs_type.is_pointer() || lhs_type.is_function() || rhs_type.is_function())
+            && assignment_operator_incompatible_with_ptr_operand(*op)
+        {
+            let loc = chk.metadata.get_source_span_as_loc(node_id).unwrap();
+            Error::invalid_binary_expression_operands(&lhs_type, &rhs_type, loc, driver);
+            return Err(TypeCheckError);
+        }
 
-    // Cannot assign to function type
-    if lhs_type.is_function() {
-        let loc = chk.metadata.get_source_span_as_loc(node_id).unwrap();
-        Error::cannot_assign_to_fn_type(&lhs_type, loc, driver);
-        return Err(TypeCheckError);
+        // Some compound assignment operators cannot have floating-point operands
+        let has_fp_operand = lhs_type.is_floating_point() || rhs_type.is_floating_point();
+        if has_fp_operand && assignment_operator_incompatible_with_fp_operand(*op) {
+            let loc = chk.metadata.get_source_span_as_loc(node_id).unwrap();
+            Error::invalid_binary_expression_operands(&lhs_type, &rhs_type, loc, driver);
+        }
+
+        // There are strict rules about types for `+=` and `-=`.
+        if matches!(op, AstAssignmentOp::Addition | AstAssignmentOp::Subtraction) {
+            let valid = (lhs_type.is_arithmetic() && rhs_type.is_arithmetic())
+                || (lhs_type.is_pointer() && rhs_type.is_integer());
+
+            if !valid {
+                let loc = chk.metadata.get_source_span_as_loc(node_id).unwrap();
+                Error::invalid_binary_expression_operands(&lhs_type, &rhs_type, loc, driver);
+            }
+        }
+
+        // Some operations use the lhs type as the computation type, including a function pointer with `+=` or `-=`
+        // and an integer rhs.
+        let is_fn_ptr_incr_decr = lhs_type.is_function_pointer()
+            && rhs_type.is_integer()
+            && matches!(op, AstAssignmentOp::Addition | AstAssignmentOp::Subtraction);
+
+        let is_shift = matches!(op, AstAssignmentOp::LeftShift | AstAssignmentOp::RightShift);
+
+        if is_fn_ptr_incr_decr || is_shift {
+            chk.set_data_type(node_id, &lhs_type);
+            chk.set_data_type(computation_node_id, &lhs_type);
+
+            return Ok(lhs_type);
+        }
+
+        // Work out the common type for the compound computation (e.g. `lhs + rhs` if the op is `+=`).
+        let computation_type = match get_common_type_for_expressions(lhs, rhs, chk, driver) {
+            Ok(common_type) => common_type,
+            Err(e) => match e {
+                // TODO: change warn/error to assignment versions
+                CommonTypeError::WarnDifferentPointerTypes { a_type, b_type } => {
+                    warn_compare_different_pointer_types(node_id, lhs, rhs, &a_type, &b_type, chk, driver);
+                    AstType::Pointer(Box::new(AstType::Void))
+                }
+
+                CommonTypeError::WarnPointerAndInteger { a_type, b_type } => {
+                    warn_compare_pointer_and_integer(node_id, lhs, rhs, &a_type, &b_type, chk, driver);
+                    if a_type.is_pointer() { a_type } else { b_type }
+                }
+
+                CommonTypeError::NoCommonType { a_type, b_type } => {
+                    let loc = chk.metadata.get_source_span_as_loc(node_id).unwrap();
+                    let a_loc = chk.metadata.get_source_span_as_loc(&lhs.node_id()).unwrap();
+                    let b_loc = chk.metadata.get_source_span_as_loc(&rhs.node_id()).unwrap();
+                    Error::incompatible_types(&a_type, &b_type, loc, a_loc, b_loc, driver);
+
+                    a_type
+                }
+            },
+        };
+
+        // Verify that the conversion is valid (but don't apply the conversion; see above, we do that in translation)
+        check_conversion(lhs, &rhs_type, &computation_type, chk, driver)?;
+
+        chk.set_data_type(node_id, &lhs_type);
+        chk.set_data_type(computation_node_id, &computation_type);
+
+        return Ok(lhs_type);
     }
-
-    _ = typecheck_expression(rhs, None, chk, driver)?;
 
     let original_lhs = take_boxed_expression(lhs);
     let converted_rhs = convert_expression_type(rhs, &lhs_type, chk, driver)?;
@@ -618,7 +661,13 @@ fn typecheck_assignment(
     chk.set_data_type(node_id, &lhs_type);
 
     // Re-write the original assignment expression and insert the possibly-casted rhs.
-    *expr = AstExpression::Assignment { node_id: *node_id, lhs: original_lhs, rhs: Box::new(converted_rhs) };
+    *expr = AstExpression::Assignment {
+        node_id: *node_id,
+        computation_node_id: *computation_node_id,
+        op: *op,
+        lhs: original_lhs,
+        rhs: Box::new(converted_rhs),
+    };
 
     Ok(lhs_type)
 }
@@ -810,7 +859,7 @@ fn get_function_designator_type(
         }
 
         AstExpression::UnaryOperation { node_id, op, expr } => {
-            if parser::expr::unary_ops::is_incr_or_decr_op(op) {
+            if parser::expr::ops::is_incr_or_decr_op(op) {
                 let (unique_name, expr_type) = get_function_designator_type(expr, chk, driver)?;
                 Ok((unique_name, expr_type))
             } else {
@@ -822,13 +871,7 @@ fn get_function_designator_type(
         }
 
         AstExpression::BinaryOperation { node_id, op, left, .. } => {
-            if matches!(
-                op,
-                AstBinaryOp::Add
-                    | AstBinaryOp::Subtract
-                    | AstBinaryOp::AdditionAssignment
-                    | AstBinaryOp::SubtractionAssignment
-            ) {
+            if matches!(op, AstBinaryOp::Add | AstBinaryOp::Subtract) {
                 let (unique_name, expr_type) = get_function_designator_type(left, chk, driver)?;
                 Ok((unique_name, expr_type))
             } else {
@@ -839,10 +882,16 @@ fn get_function_designator_type(
             }
         }
 
-        AstExpression::Assignment { lhs, .. } => {
-            let (unique_name, expr_type) = get_function_designator_type(lhs, chk, driver)?;
-
-            Ok((unique_name, expr_type))
+        AstExpression::Assignment { node_id, op, lhs, .. } => {
+            if matches!(op, AstAssignmentOp::Assignment | AstAssignmentOp::Addition | AstAssignmentOp::Subtraction) {
+                let (unique_name, expr_type) = get_function_designator_type(lhs, chk, driver)?;
+                Ok((unique_name, expr_type))
+            } else {
+                let call_type = chk.get_data_type(node_id);
+                let loc = chk.metadata.get_source_span_as_loc(node_id).unwrap();
+                Error::invalid_call_type(&call_type, loc, driver);
+                Err(TypeCheckError)
+            }
         }
 
         AstExpression::FunctionCall { .. } => {
@@ -1111,14 +1160,21 @@ fn binary_operator_incompatible_with_ptr_operand(op: AstBinaryOp) -> bool {
             | AstBinaryOp::BitwiseXor
             | AstBinaryOp::LeftShift
             | AstBinaryOp::RightShift
-            | AstBinaryOp::MultiplyAssignment
-            | AstBinaryOp::DivideAssignment
-            | AstBinaryOp::RemainderAssignment
-            | AstBinaryOp::BitwiseAndAssignment
-            | AstBinaryOp::BitwiseOrAssignment
-            | AstBinaryOp::BitwiseXorAssignment
-            | AstBinaryOp::LeftShiftAssignment
-            | AstBinaryOp::RightShiftAssignment
+    )
+}
+
+/// Is the given assignment operator incompatible with a pointer operand?
+fn assignment_operator_incompatible_with_ptr_operand(op: AstAssignmentOp) -> bool {
+    matches!(
+        op,
+        AstAssignmentOp::Multiply
+            | AstAssignmentOp::Divide
+            | AstAssignmentOp::Remainder
+            | AstAssignmentOp::BitwiseAnd
+            | AstAssignmentOp::BitwiseOr
+            | AstAssignmentOp::BitwiseXor
+            | AstAssignmentOp::LeftShift
+            | AstAssignmentOp::RightShift
     )
 }
 
@@ -1132,12 +1188,19 @@ fn binary_operator_incompatible_with_fp_operand(op: AstBinaryOp) -> bool {
             | AstBinaryOp::LeftShift
             | AstBinaryOp::RightShift
             | AstBinaryOp::Remainder
-            | AstBinaryOp::BitwiseAndAssignment
-            | AstBinaryOp::BitwiseOrAssignment
-            | AstBinaryOp::BitwiseXorAssignment
-            | AstBinaryOp::LeftShiftAssignment
-            | AstBinaryOp::RightShiftAssignment
-            | AstBinaryOp::RemainderAssignment
+    )
+}
+
+/// Is the given assignment operator incompatible with floating-point operands?
+fn assignment_operator_incompatible_with_fp_operand(op: AstAssignmentOp) -> bool {
+    matches!(
+        op,
+        AstAssignmentOp::BitwiseAnd
+            | AstAssignmentOp::BitwiseOr
+            | AstAssignmentOp::BitwiseXor
+            | AstAssignmentOp::LeftShift
+            | AstAssignmentOp::RightShift
+            | AstAssignmentOp::Remainder
     )
 }
 
@@ -1214,4 +1277,9 @@ fn extract_fn_return_and_param_types(fn_type: &AstType) -> (&AstType, &Vec<AstTy
     };
 
     (return_type, params)
+}
+
+fn is_modifiable_lvalue(expr: &AstExpression, expr_type: &AstType) -> bool {
+    // To be modifiable, the lvalue must designate an object (not a function), and the object cannot be const (future).
+    expr.is_lvalue() && !expr_type.is_function()
 }

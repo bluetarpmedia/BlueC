@@ -462,8 +462,6 @@ impl ConstantValue {
                 AstBinaryOp::LessThanOrEqualTo => Some(Self::make_int((lhs <= rhs) as i32)),
                 AstBinaryOp::GreaterThan => Some(Self::make_int((lhs > rhs) as i32)),
                 AstBinaryOp::GreaterThanOrEqualTo => Some(Self::make_int((lhs >= rhs) as i32)),
-
-                _ => None,
             }
         } else if let ConstantValue::Float { value: lhs, size: lhs_size } = self {
             if other.is_pointer() {
@@ -504,8 +502,6 @@ impl ConstantValue {
                 AstBinaryOp::LessThanOrEqualTo => Some(Self::make_int((lhs <= rhs) as i32)),
                 AstBinaryOp::GreaterThan => Some(Self::make_int((lhs > rhs) as i32)),
                 AstBinaryOp::GreaterThanOrEqualTo => Some(Self::make_int((lhs >= rhs) as i32)),
-
-                _ => None,
             }
         } else if let ConstantValue::Pointer(..) = self {
             // TODO

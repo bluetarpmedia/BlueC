@@ -2,8 +2,7 @@
 //
 //! The `expr` module defines the various parsing functions for expressions.
 
-pub mod binary_ops;
-pub mod unary_ops;
+pub mod ops;
 
 use super::identifier_resolution::SearchScope;
 use super::meta;
@@ -17,11 +16,11 @@ use super::{AstDeclaredType, AstExpression, AstFullExpression, AstNodeId, AstUni
 use super::{ParseError, ParseResult, Parser};
 use super::{add_error, add_error_at_eof};
 
+use crate::ICE;
 use crate::compiler_driver::Driver;
 use crate::compiler_driver::diagnostics::Diagnostic;
 use crate::compiler_driver::diagnostics::SourceIdentifier;
 use crate::compiler_driver::errors::Error;
-use crate::internal_error;
 use crate::lexer;
 
 /// Parses a full expression.
@@ -69,8 +68,7 @@ pub fn parse_expression(parser: &mut Parser, driver: &mut Driver) -> ParseResult
     parse_expression_with_precedence(parser, driver, 0)
 }
 
-/// Expressions are parsed with precedence climbing (either left- or right-associative depending
-/// on the operator).
+/// Expressions are parsed with precedence climbing (either left- or right-associative depending on the operator).
 ///
 /// Assignment requires right-associative precedence climbing:  a = b = c    --->   a = (b = c)
 /// Remember compound assignment too:                           a += b /= c  --->   a += (b /= c)
@@ -88,30 +86,33 @@ fn parse_expression_with_precedence(
     let mut left = parse_factor(parser, driver)?;
 
     while let Some(peek_next_token) = parser.token_stream.peek_next_token()
-        && binary_ops::is_binary_operator(&peek_next_token.token_type)
-        && binary_ops::binary_operator_precedence(&peek_next_token.token_type) >= min_precedence
+        && (ops::is_binary_operator(&peek_next_token.token_type)
+            || ops::is_assignment_operator(&peek_next_token.token_type))
+        && ops::operator_precedence(&peek_next_token.token_type) >= min_precedence
     {
         let Some(next_token) = parser.token_stream.take_token() else {
-            internal_error::ICE("Parser: Expected binary operator token");
+            ICE!("Expected token");
         };
 
         // Extend the `left` expression's source location to include everything we've parsed for it.
         left_loc.set_span_up_to_location(&next_token.location);
 
-        let binary_op_precedence = binary_ops::binary_operator_precedence(&next_token.token_type);
+        let operator_precedence = ops::operator_precedence(&next_token.token_type);
 
-        // Left-associative means we exclude the next binary operator's precedence level
-        let left_associative_precedence = binary_op_precedence + 1;
+        // Left-associative means we exclude the next operator's precedence level
+        let left_associative_precedence = operator_precedence + 1;
 
-        // Right-associative means we include the next binary operator's precedence level
-        let right_associative_precedence = binary_op_precedence;
+        // Right-associative means we include the next operator's precedence level
+        let right_associative_precedence = operator_precedence;
 
         let next_token_type = next_token.token_type.clone();
 
         match next_token_type {
-            // Single assignment
-            lexer::TokenType::Assignment => {
+            // Assignment (including compound assignment)
+            //
+            token_type if ops::is_assignment_operator(&token_type) => {
                 let node_id = AstNodeId::new();
+                let computation_node_id = AstNodeId::new();
 
                 // For an assignment we set the source span to be the `lhs` expression, since that's the object
                 // being assigned to.
@@ -121,7 +122,15 @@ fn parse_expression_with_precedence(
 
                 let right = parse_expression_with_precedence(parser, driver, right_associative_precedence)?;
 
-                left = AstExpression::Assignment { node_id, lhs: Box::new(left), rhs: Box::new(right) };
+                let op = ops::parse_assignment_operator(&token_type);
+
+                left = AstExpression::Assignment {
+                    node_id,
+                    computation_node_id,
+                    op,
+                    lhs: Box::new(left),
+                    rhs: Box::new(right),
+                };
             }
 
             // Ternary/conditional expression
@@ -163,9 +172,9 @@ fn parse_expression_with_precedence(
                 };
             }
 
-            // Binary operators including compound assignment like +=
+            // Binary operators
             _ => {
-                let op = binary_ops::parse_binary_operator(&next_token_type);
+                let op = ops::parse_binary_operator(&next_token_type);
 
                 let node_id = AstNodeId::new();
                 parser.metadata.add_source_span(
@@ -173,13 +182,7 @@ fn parse_expression_with_precedence(
                     meta::AstNodeSourceSpanMetadata::from_source_location(&next_token.location),
                 );
 
-                let precedence = if next_token.has_assignment_type() {
-                    right_associative_precedence
-                } else {
-                    left_associative_precedence
-                };
-
-                let right = parse_expression_with_precedence(parser, driver, precedence)?;
+                let right = parse_expression_with_precedence(parser, driver, left_associative_precedence)?;
 
                 left = AstExpression::BinaryOperation { node_id, op, left: Box::new(left), right: Box::new(right) };
             }
@@ -217,8 +220,8 @@ pub fn parse_factor(parser: &mut Parser, driver: &mut Driver) -> ParseResult<Ast
                 lexer::TokenType::Identifier(_) => parse_variable_expression(parser, driver),
 
                 // Prefix unary operation
-                op if unary_ops::is_prefix_unary_operator(op) => {
-                    unary_ops::parse_prefix_unary_operation(parser, driver).map_err(|_| ParseError)
+                op if ops::is_prefix_unary_operator(op) => {
+                    ops::parse_prefix_unary_operation(parser, driver).map_err(|_| ParseError)
                 }
 
                 lexer::TokenType::OpenParen => {
@@ -291,8 +294,8 @@ pub fn parse_factor(parser: &mut Parser, driver: &mut Driver) -> ParseResult<Ast
                         }
 
                         // Peek ahead for a postfix unary operator
-                        if unary_ops::is_next_token_a_postfix_unary_operator(parser) {
-                            unary_ops::parse_postfix_unary_operation(inner_expr, parser, driver)
+                        if ops::is_next_token_a_postfix_unary_operator(parser) {
+                            ops::parse_postfix_unary_operation(inner_expr, parser, driver)
                         } else {
                             Ok(inner_expr)
                         }
@@ -319,7 +322,7 @@ fn parse_function_call_expression(parser: &mut Parser, driver: &mut Driver) -> P
     let name = identifier_token
         .get_identifier()
         .or_else(|| {
-            internal_error::ICE("Parser: Expected identifier token");
+            ICE!("Expected identifier token");
         })
         .unwrap()
         .clone();
@@ -398,7 +401,7 @@ fn parse_variable_expression(parser: &mut Parser, driver: &mut Driver) -> ParseR
     let identifier_token = parser.token_stream.take_token().cloned().ok_or(ParseError)?;
 
     let name = identifier_token.get_identifier().unwrap_or_else(|| {
-        internal_error::ICE("Parser: Expected identifier token");
+        ICE!("Expected identifier token");
     });
 
     if utils::is_reserved_keyword(name) {
@@ -420,8 +423,8 @@ fn parse_variable_expression(parser: &mut Parser, driver: &mut Driver) -> ParseR
     let identifier = AstExpression::Identifier { node_id, name: name.clone(), unique_name };
 
     // Peek ahead for a postfix unary operator
-    if unary_ops::is_next_token_a_postfix_unary_operator(parser) {
-        unary_ops::parse_postfix_unary_operation(identifier, parser, driver).map_err(|_| ParseError)
+    if ops::is_next_token_a_postfix_unary_operator(parser) {
+        ops::parse_postfix_unary_operation(identifier, parser, driver).map_err(|_| ParseError)
     } else {
         Ok(identifier)
     }

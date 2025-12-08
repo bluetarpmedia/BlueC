@@ -277,7 +277,7 @@ impl Token {
     }
 
     /// Does the token have one of the assignment token types?
-    pub fn has_assignment_type(&self) -> bool {
+    pub fn is_assignment(&self) -> bool {
         matches!(
             self.token_type,
             TokenType::Assignment

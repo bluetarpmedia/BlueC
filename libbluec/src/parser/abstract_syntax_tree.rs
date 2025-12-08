@@ -200,6 +200,8 @@ pub enum AstExpression {
     },
     Assignment {
         node_id: AstNodeId,
+        computation_node_id: AstNodeId,
+        op: AstAssignmentOp,
         lhs: Box<AstExpression>,
         rhs: Box<AstExpression>,
     },

@@ -42,27 +42,31 @@ pub enum AstBinaryOp {
     GreaterThan,
     LessThanOrEqualTo,
     GreaterThanOrEqualTo,
-    AdditionAssignment,
-    SubtractionAssignment,
-    MultiplyAssignment,
-    DivideAssignment,
-    RemainderAssignment,
-    BitwiseAndAssignment,
-    BitwiseOrAssignment,
-    BitwiseXorAssignment,
-    LeftShiftAssignment,
-    RightShiftAssignment,
 }
 
-/// Families or groups of operators.
+/// Assignment operators.
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum AstAssignmentOp {
+    Assignment,
+    Addition,
+    Subtraction,
+    Multiply,
+    Divide,
+    Remainder,
+    BitwiseAnd,
+    BitwiseOr,
+    BitwiseXor,
+    LeftShift,
+    RightShift,
+}
+
+/// Families or groups of binary operators.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum AstBinaryOpFamily {
     Arithmetic,
     Bitwise,
     Logical,
     Relational,
-    CompoundArithmeticAssignment,
-    CompoundBitwiseAssignment,
 }
 
 impl fmt::Display for AstUnaryOp {
@@ -105,19 +109,25 @@ impl fmt::Display for AstBinaryOp {
             AstBinaryOp::GreaterThan            => write!(f, "GreaterThan"),
             AstBinaryOp::LessThanOrEqualTo      => write!(f, "LessThanOrEqualTo"),
             AstBinaryOp::GreaterThanOrEqualTo   => write!(f, "GreaterThanOrEqualTo"),
-            AstBinaryOp::AdditionAssignment     => write!(f, "AdditionAssignment"),
-            AstBinaryOp::SubtractionAssignment  => write!(f, "SubtractionAssignment"),
-            AstBinaryOp::MultiplyAssignment     => write!(f, "MultiplyAssignment"),
-            AstBinaryOp::DivideAssignment       => write!(f, "DivideAssignment"),
-            AstBinaryOp::RemainderAssignment    => write!(f, "RemainderAssignment"),
-            AstBinaryOp::BitwiseAndAssignment   => write!(f, "BitwiseAndAssignment"),
-            AstBinaryOp::BitwiseOrAssignment    => write!(f, "BitwiseOrAssignment"),
-            AstBinaryOp::BitwiseXorAssignment   => write!(f, "BitwiseXorAssignment"),
-            AstBinaryOp::LeftShiftAssignment    => write!(f, "LeftShiftAssignment"),
-            AstBinaryOp::RightShiftAssignment   => write!(f, "RightShiftAssignment"),
+        }
+    }
+}
 
-            #[allow(unreachable_patterns)]
-            _ => write!(f, "(Unknown)"),
+impl fmt::Display for AstAssignmentOp {
+    #[rustfmt::skip]
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            AstAssignmentOp::Assignment         => write!(f, "Assignment"),
+            AstAssignmentOp::Addition           => write!(f, "AdditionAssignment"),
+            AstAssignmentOp::Subtraction        => write!(f, "SubtractionAssignment"),
+            AstAssignmentOp::Multiply           => write!(f, "MultiplyAssignment"),
+            AstAssignmentOp::Divide             => write!(f, "DivideAssignment"),
+            AstAssignmentOp::Remainder          => write!(f, "RemainderAssignment"),
+            AstAssignmentOp::BitwiseAnd         => write!(f, "BitwiseAndAssignment"),
+            AstAssignmentOp::BitwiseOr          => write!(f, "BitwiseOrAssignment"),
+            AstAssignmentOp::BitwiseXor         => write!(f, "BitwiseXorAssignment"),
+            AstAssignmentOp::LeftShift          => write!(f, "LeftShiftAssignment"),
+            AstAssignmentOp::RightShift         => write!(f, "RightShiftAssignment"),
         }
     }
 }
@@ -143,49 +153,32 @@ impl From<AstBinaryOp> for lexer::TokenType {
             AstBinaryOp::GreaterThan => lexer::TokenType::GreaterThan,
             AstBinaryOp::LessThanOrEqualTo => lexer::TokenType::LessThanOrEqualTo,
             AstBinaryOp::GreaterThanOrEqualTo => lexer::TokenType::GreaterThanOrEqualTo,
-            AstBinaryOp::AdditionAssignment => lexer::TokenType::AdditionAssignment,
-            AstBinaryOp::SubtractionAssignment => lexer::TokenType::SubtractionAssignment,
-            AstBinaryOp::MultiplyAssignment => lexer::TokenType::MultiplyAssignment,
-            AstBinaryOp::DivideAssignment => lexer::TokenType::DivideAssignment,
-            AstBinaryOp::RemainderAssignment => lexer::TokenType::RemainderAssignment,
-            AstBinaryOp::BitwiseAndAssignment => lexer::TokenType::BitwiseAndAssignment,
-            AstBinaryOp::BitwiseOrAssignment => lexer::TokenType::BitwiseOrAssignment,
-            AstBinaryOp::BitwiseXorAssignment => lexer::TokenType::BitwiseXorAssignment,
-            AstBinaryOp::LeftShiftAssignment => lexer::TokenType::LeftShiftAssignment,
-            AstBinaryOp::RightShiftAssignment => lexer::TokenType::RightShiftAssignment,
+        }
+    }
+}
+
+impl From<AstAssignmentOp> for lexer::TokenType {
+    fn from(op: AstAssignmentOp) -> Self {
+        match op {
+            AstAssignmentOp::Assignment => lexer::TokenType::Assignment,
+            AstAssignmentOp::Addition => lexer::TokenType::AdditionAssignment,
+            AstAssignmentOp::Subtraction => lexer::TokenType::SubtractionAssignment,
+            AstAssignmentOp::Multiply => lexer::TokenType::MultiplyAssignment,
+            AstAssignmentOp::Divide => lexer::TokenType::DivideAssignment,
+            AstAssignmentOp::Remainder => lexer::TokenType::RemainderAssignment,
+            AstAssignmentOp::BitwiseAnd => lexer::TokenType::BitwiseAndAssignment,
+            AstAssignmentOp::BitwiseOr => lexer::TokenType::BitwiseOrAssignment,
+            AstAssignmentOp::BitwiseXor => lexer::TokenType::BitwiseXorAssignment,
+            AstAssignmentOp::LeftShift => lexer::TokenType::LeftShiftAssignment,
+            AstAssignmentOp::RightShift => lexer::TokenType::RightShiftAssignment,
         }
     }
 }
 
 impl AstBinaryOp {
-    /// Is the binary operator a compound assignment operator?
-    pub fn is_compound_assignment(&self) -> bool {
-        matches!(
-            self,
-            AstBinaryOp::AdditionAssignment
-                | AstBinaryOp::SubtractionAssignment
-                | AstBinaryOp::MultiplyAssignment
-                | AstBinaryOp::DivideAssignment
-                | AstBinaryOp::RemainderAssignment
-                | AstBinaryOp::BitwiseAndAssignment
-                | AstBinaryOp::BitwiseOrAssignment
-                | AstBinaryOp::BitwiseXorAssignment
-                | AstBinaryOp::LeftShiftAssignment
-                | AstBinaryOp::RightShiftAssignment
-        )
-    }
-
-    /// Is the binary operator a relational operator?
+    /// Is the operator a relational operator?
     pub fn is_relational(&self) -> bool {
-        matches!(
-            self,
-            AstBinaryOp::EqualTo
-                | AstBinaryOp::NotEqualTo
-                | AstBinaryOp::LessThan
-                | AstBinaryOp::GreaterThan
-                | AstBinaryOp::LessThanOrEqualTo
-                | AstBinaryOp::GreaterThanOrEqualTo
-        )
+        self.family() == AstBinaryOpFamily::Relational
     }
 
     /// The family or group that the operator belongs to.
@@ -208,16 +201,13 @@ impl AstBinaryOp {
             | AstBinaryOp::GreaterThan
             | AstBinaryOp::LessThanOrEqualTo
             | AstBinaryOp::GreaterThanOrEqualTo => AstBinaryOpFamily::Relational,
-            AstBinaryOp::AdditionAssignment
-            | AstBinaryOp::SubtractionAssignment
-            | AstBinaryOp::MultiplyAssignment
-            | AstBinaryOp::DivideAssignment
-            | AstBinaryOp::RemainderAssignment => AstBinaryOpFamily::CompoundArithmeticAssignment,
-            AstBinaryOp::BitwiseAndAssignment
-            | AstBinaryOp::BitwiseOrAssignment
-            | AstBinaryOp::BitwiseXorAssignment
-            | AstBinaryOp::LeftShiftAssignment
-            | AstBinaryOp::RightShiftAssignment => AstBinaryOpFamily::CompoundBitwiseAssignment,
         }
+    }
+}
+
+impl AstAssignmentOp {
+    /// Is the operator a compound assignment operator?
+    pub fn is_compound_assignment(&self) -> bool {
+        !matches!(self, AstAssignmentOp::Assignment)
     }
 }

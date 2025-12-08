@@ -341,6 +341,16 @@ fn to_string(expr: &AstExpression) -> String {
             str.push(')');
         }
 
+        AstExpression::Assignment { op, lhs, rhs, .. } => {
+            str.push_str(&format!("{}(", op));
+
+            str.push_str(to_string(lhs).as_ref());
+            str.push(',');
+            str.push_str(to_string(rhs).as_ref());
+
+            str.push(')');
+        }
+
         AstExpression::UnaryOperation { op, expr, .. } => {
             str.push_str(&format!("{}(", op));
 

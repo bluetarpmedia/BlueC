@@ -548,8 +548,23 @@ fn print_expression(expr: &AstExpression, metadata: Option<&AstMetadata>, level:
             println!("{}|", make_close_indent(level + 1));
         }
 
-        AstExpression::Assignment { node_id, lhs, rhs } => {
-            print!("{indent}Assignment");
+        AstExpression::Assignment { node_id, computation_node_id, op, lhs, rhs } => {
+            if *op == AstAssignmentOp::Assignment {
+                print!("{indent}Assignment");
+            } else {
+                let token_type = lexer::TokenType::from(*op);
+
+                print!("{indent}CompoundAssignment ('{token_type}'");
+
+                if let Some(metadata) = metadata
+                    && let Some(comp_node_type) = metadata.get_node_type(computation_node_id)
+                {
+                    print!(" [Computation Type = '{comp_node_type}']")
+                }
+
+                print!(")");
+            }
+
             print_node_type(node_id, metadata);
             println!();
 
