@@ -54,7 +54,7 @@ impl ConstantTable {
     /// Adds a new `f32` constant to the table and returns its index, or if the constant already exists then
     /// returns the existing index that represents the constant value.
     pub fn add_f32(&mut self, constant_value: f32, required_alignment: usize) -> usize {
-        assert!(required_alignment >= 4 && required_alignment % 4 == 0);
+        assert!(required_alignment >= 4 && required_alignment.is_multiple_of(4));
 
         let key = constant_value.to_bits();
 
@@ -86,7 +86,7 @@ impl ConstantTable {
     /// Adds a new `f64` constant to the table and returns its index, or if the constant already exists then
     /// returns the existing index that represents the constant value.
     pub fn add_f64(&mut self, constant_value: f64, required_alignment: usize) -> usize {
-        assert!(required_alignment >= 8 && required_alignment % 8 == 0);
+        assert!(required_alignment >= 8 && required_alignment.is_multiple_of(8));
 
         let key = constant_value.to_bits();
 
