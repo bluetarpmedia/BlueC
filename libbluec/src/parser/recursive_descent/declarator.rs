@@ -3,11 +3,13 @@
 //! The `declarator` module provides functionality for parsing declarators in declarations.
 
 use super::decl::parse_type_and_storage_specifiers;
+use super::literal;
 use super::peek;
 use super::utils;
-use super::{AstDeclarator, AstDeclaratorKind, AstDeclaredType, AstIdentifier};
+use super::{AstDeclarator, AstDeclaratorKind, AstDeclaredType, AstExpression, AstIdentifier};
 use super::{ParseError, ParseResult, Parser, add_error};
 
+use crate::ICE;
 use crate::compiler_driver::Driver;
 use crate::compiler_driver::diagnostics::SourceIdentifier;
 use crate::compiler_driver::errors::Error;
@@ -33,7 +35,8 @@ pub enum ParseOption {
 ///
 /// ```markdown
 /// <declarator>        ::= "*" [ <declarator> | <direct-declarator> ]
-/// <direct-declarator> ::= <simple-declarator> [ <param-list> ]
+/// <direct-declarator> ::= <simple-declarator> [ <declarator-suffix> ]
+/// <declarator-suffix> ::= <param-list> | { "[" <int> "]" }+
 /// <simple-declarator> ::= <identifier> | "(" <declarator> ")"
 /// <param-list>        ::= "(" "void" ")" | "(" <param> { "," <param> }+ ")"
 /// <param>             ::= { <type-specifier> }+ <declarator>
@@ -91,6 +94,11 @@ fn parse_declarator_recursively(
             }
         }
 
+        Some(tok) if tok.has_type(TokenType::OpenSqBracket) => {
+            let size = parse_array_size(parser, driver)?;
+            AstDeclaratorKind::AbstractArray { size }
+        }
+
         Some(tok) if tok.has_type(TokenType::OpenParen) => {
             _ = parser.token_stream.take_token();
 
@@ -125,7 +133,20 @@ fn parse_declarator_recursively(
     let end_decl_loc = parser.token_stream.prev_token_source_location().unwrap();
     let loc = start_decl_loc.merge_with(end_decl_loc);
 
-    let declarator = AstDeclarator::new(kind, loc);
+    let mut declarator = AstDeclarator::new(kind, loc);
+
+    // Are there any array suffixes?
+    //
+    while parser.token_stream.next_token_has_type(TokenType::OpenSqBracket) {
+        let size = parse_array_size(parser, driver)?;
+
+        let end_decl_loc = parser.token_stream.prev_token_source_location().unwrap();
+        let loc = start_decl_loc.merge_with(end_decl_loc);
+
+        let kind = AstDeclaratorKind::Array { decl: Box::new(declarator), size };
+
+        declarator = AstDeclarator::new(kind, loc);
+    }
 
     // Is there a parameter list after the declarator?
     //      This is different to the parameter list case above in an abstract declarator. In this case we have
@@ -194,4 +215,27 @@ fn parse_function_parameters(parser: &mut Parser, driver: &mut Driver) -> ParseR
     }
 
     Ok(params)
+}
+
+fn parse_array_size(parser: &mut Parser, driver: &mut Driver) -> ParseResult<usize> {
+    _ = utils::expect_token(TokenType::OpenSqBracket, parser, driver)?;
+
+    // We allow zero-length arrays (with the zero constant omitted) so check if the next token is the
+    // closing square bracket before trying to parse an integer literal, i.e. we're parsing '[]'.
+    //
+    let size = if parser.token_stream.next_token_has_type(TokenType::CloseSqBracket) {
+        0
+    } else {
+        let literal = literal::parse_integer_literal(parser, driver)?;
+
+        let AstExpression::IntegerLiteral { value, .. } = literal else {
+            ICE!("Should have parsed an IntegerLiteral");
+        };
+
+        value as usize
+    };
+
+    _ = utils::expect_token(TokenType::CloseSqBracket, parser, driver)?;
+
+    Ok(size)
 }

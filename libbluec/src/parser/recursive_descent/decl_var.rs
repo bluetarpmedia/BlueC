@@ -9,7 +9,7 @@ use super::expr;
 use super::utils;
 use super::{
     AstDeclaration, AstDeclaredType, AstIdentifier, AstLinkage, AstNodeId, AstStorageDuration, AstTypeAliasDeclaration,
-    AstUniqueName, AstVariableDeclaration,
+    AstUniqueName, AstVariableDeclaration, AstVariableInitializer,
 };
 use super::{ParseError, ParseResult, Parser, add_error};
 use crate::parser::AstStorageClassSpecifierOption;
@@ -89,14 +89,14 @@ pub fn parse_variable_declaration(
         add_error(driver, error, loc);
     }
 
-    // Optional initializer expression for the variable.
+    // Optional scalar/aggregate initializer for the variable.
     //      Parse this after identifier resolution, because it's valid to use the variable in its initializer.
     //
-    let init_expr = if has_initializer {
+    let initializer = if has_initializer {
         _ = utils::expect_token(TokenType::Assignment, parser, driver)?;
 
-        let full_expr = expr::parse_full_expression(parser, driver)?;
-        Some(full_expr)
+        let init = parse_initializer(parser, driver)?;
+        Some(init)
     } else {
         if !is_declared_typedef {
             Warning::uninitialized_variable(var_ident.into(), driver);
@@ -112,7 +112,7 @@ pub fn parse_variable_declaration(
         meta::AstNodeSourceSpanMetadata::from_source_location_pair(&var_ident.loc, &end_decl_loc),
     );
 
-    let is_declaration_only = is_declared_extern && init_expr.is_none();
+    let is_declaration_only = is_declared_extern && initializer.is_none();
     let ident = var_ident.clone();
 
     let var_decl = AstDeclaration::Variable(AstVariableDeclaration {
@@ -122,8 +122,8 @@ pub fn parse_variable_declaration(
         declared_type,
         ident,
         unique_name,
-        init_expr,
-        init_constant_value: None,
+        initializer,
+        init_constant_eval: Vec::new(),
         linkage,
         storage,
     });
@@ -136,11 +136,7 @@ pub fn parse_variable_declaration(
     }
 }
 
-fn resolve_type_alias(
-    ident: &AstIdentifier,
-    parser: &mut Parser,
-    driver: &mut Driver,
-) -> ParseResult<AstUniqueName> {
+fn resolve_type_alias(ident: &AstIdentifier, parser: &mut Parser, driver: &mut Driver) -> ParseResult<AstUniqueName> {
     // Add the type alias identifer in the current scope.
     //
     let unique_name = match parser.identifiers.add_type_alias_declaration(ident) {
@@ -266,4 +262,39 @@ fn is_static_variable_redeclared_as_extern(
     }
 
     false
+}
+
+fn parse_initializer(parser: &mut Parser, driver: &mut Driver) -> ParseResult<AstVariableInitializer> {
+    if parser.token_stream.next_token_has_type(TokenType::OpenBrace) {
+        let aggregate = parse_aggregate_initializer(parser, driver)?;
+        Ok(aggregate)
+    } else {
+        let full_expr = expr::parse_full_expression(parser, driver)?;
+        Ok(AstVariableInitializer::Scalar(full_expr))
+    }
+}
+
+fn parse_aggregate_initializer(parser: &mut Parser, driver: &mut Driver) -> ParseResult<AstVariableInitializer> {
+    let start_loc = utils::expect_token(TokenType::OpenBrace, parser, driver)?;
+
+    let mut aggregate_items = Vec::new();
+
+    while !parser.token_stream.next_token_has_type(TokenType::CloseBrace) {
+        let initializer = parse_initializer(parser, driver)?;
+        aggregate_items.push(initializer);
+
+        if parser.token_stream.next_token_has_type(TokenType::Comma) {
+            _ = parser.token_stream.take_token();
+        }
+    }
+
+    let end_loc = utils::expect_token(TokenType::CloseBrace, parser, driver)?;
+
+    let node_id = AstNodeId::new();
+    parser.metadata.add_source_span(
+        node_id,
+        meta::AstNodeSourceSpanMetadata::from_source_location_pair(&start_loc, &end_loc),
+    );
+
+    Ok(AstVariableInitializer::Aggregate { node_id, init: aggregate_items })
 }

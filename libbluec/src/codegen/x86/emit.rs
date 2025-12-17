@@ -71,7 +71,7 @@ fn emit_asm_static_variable(writer: &mut AsmFileWriter, static_var: &AsmStaticSt
     }
 
     // Section is either .bss or .data depending on whether the static variable's value is zero.
-    let bss = static_var.init_value.is_zero();
+    let bss = static_var.init_value.len() == 1 && static_var.init_value[0].is_zero();
     if bss {
         writer.write_section_directive(AsmSectionDirective::Bss)?;
     } else {
@@ -79,30 +79,36 @@ fn emit_asm_static_variable(writer: &mut AsmFileWriter, static_var: &AsmStaticSt
     }
 
     // Alignment
-    writer.write_byte_alignment_directive(static_var.init_value.alignment_bytes())?;
+    writer.write_byte_alignment_directive(static_var.alignment)?;
 
     // Name
     writer.write_symbol_label(variable_name)?;
 
     // Value
     if bss {
-        let byte_count = static_var.init_value.size_bytes();
+        let byte_count = static_var.init_value[0].size_bytes();
         writer.write_storage_directive(AsmStorageReservationDirective::Zero { byte_count })?;
     } else {
-        match static_var.init_value {
-            AsmConstantInitializer::Imm16 { value, signed, .. } => {
-                writer.write_data_definition_directive(AsmDataDefinitionDirective::Word(value), signed)?
+        for ini in &static_var.init_value {
+            match ini {
+                AsmConstantInitializer::ZeroBytes(size) => {
+                    writer.write_storage_directive(AsmStorageReservationDirective::Zero { byte_count: *size })?;
+                }
+                AsmConstantInitializer::Imm16 { value, signed, .. } => {
+                    writer.write_data_definition_directive(AsmDataDefinitionDirective::Word(*value), *signed)?
+                }
+                AsmConstantInitializer::Imm32 { value, signed, .. } => {
+                    writer.write_data_definition_directive(AsmDataDefinitionDirective::DoubleWord(*value), *signed)?
+                }
+                AsmConstantInitializer::Imm64 { value, signed, .. } => {
+                    writer.write_data_definition_directive(AsmDataDefinitionDirective::QuadWord(*value), *signed)?
+                }
+                AsmConstantInitializer::AddressConstant { object } => writer.write_data_definition_directive(
+                    AsmDataDefinitionDirective::AddressConstant { object: object.clone() },
+                    false,
+                )?,
             }
-            AsmConstantInitializer::Imm32 { value, signed, .. } => {
-                writer.write_data_definition_directive(AsmDataDefinitionDirective::DoubleWord(value), signed)?
-            }
-            AsmConstantInitializer::Imm64 { value, signed, .. } => {
-                writer.write_data_definition_directive(AsmDataDefinitionDirective::QuadWord(value), signed)?
-            }
-            AsmConstantInitializer::AddressConstant { ref object } => {
-                writer.write_data_definition_directive(AsmDataDefinitionDirective::AddressConstant { object: object.clone() }, false)?
-            }
-        };
+        }
     }
 
     writer.write_blank_line()?;
@@ -111,18 +117,11 @@ fn emit_asm_static_variable(writer: &mut AsmFileWriter, static_var: &AsmStaticSt
 }
 
 fn emit_asm_constant(writer: &mut AsmFileWriter, constant: &AsmConstant) -> Result<()> {
-    let align = match constant.value {
-        AsmConstantInitializer::Imm16 { align, .. } => align,
-        AsmConstantInitializer::Imm32 { align, .. } => align,
-        AsmConstantInitializer::Imm64 { align, .. } => align,
-        AsmConstantInitializer::AddressConstant { .. } => ICE!("AddressConstant used for AsmConstant")
-    };
-
     // Readonly data section (e.g. `.rodata` or `.literal8/16` on macOS)
-    writer.write_section_directive(AsmSectionDirective::ReadOnlyData { align })?;
+    writer.write_section_directive(AsmSectionDirective::ReadOnlyData { align: constant.alignment })?;
 
     // Alignment
-    writer.write_byte_alignment_directive(align)?;
+    writer.write_byte_alignment_directive(constant.alignment)?;
 
     // Label
     writer.write_local_symbol_label(&constant.label)?;
@@ -142,13 +141,14 @@ fn emit_asm_constant(writer: &mut AsmFileWriter, constant: &AsmConstant) -> Resu
             value_byte_size = 8;
             writer.write_data_definition_directive(AsmDataDefinitionDirective::QuadWord(value), signed)?
         }
-        AsmConstantInitializer::AddressConstant { .. } => ICE!("AddressConstant used for AsmConstant")
+        AsmConstantInitializer::AddressConstant { .. } => ICE!("AddressConstant used for AsmConstant"),
+        AsmConstantInitializer::ZeroBytes { .. } => ICE!("ZeroBytes used for AsmConstant"),
     }
 
     // Padding on macOS
     //      E.g. If we have a `.literal16` section but only write an 8-byte value, we need to pad out the remainder.
-    if cfg!(target_os = "macos") && value_byte_size < align {
-        let padding = align - value_byte_size;
+    if cfg!(target_os = "macos") && value_byte_size < constant.alignment {
+        let padding = constant.alignment - value_byte_size;
         match padding {
             8 => writer.write_data_definition_directive(AsmDataDefinitionDirective::QuadWord(0), false)?,
             n if n % 4 == 0 => {

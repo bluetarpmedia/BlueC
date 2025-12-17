@@ -25,6 +25,9 @@ fn invalid_decl_syntax() {
         "int *& a;",
         "int *_* a;",
         "int *a*;",
+        "int a = {,};",
+        "int a = {{,};",
+        "int a = {,,,};",
     ];
 
     let mut driver = compiler_driver::Driver::for_testing();
@@ -54,6 +57,8 @@ fn valid_decl_syntax() {
         "double x = 1.0, y = 2.0;",
         "extern int a;",
         "static int a;",
+        "int a = {};",
+        "int a = {1};",
         "int*a;",
         "int *a;",
         "int **a;",
@@ -66,6 +71,12 @@ fn valid_decl_syntax() {
         "int **a = 0;",
         "int *(a) = 0;",
         "int *a = 10 - 10;",
+        "int arr[3] = {};",
+        "int arr[3] = {0};",
+        "int arr[3] = {1, 2};",
+        "int arr[3] = {1, 2, 3};",
+        "int arr[3][2] = {{1, 11}, {2, 22}, {3, 33}};",
+        "int arr[3][2] = {1, 11, 2, 22, 3, 33};",
     ];
 
     let mut driver = compiler_driver::Driver::for_testing();
@@ -104,8 +115,8 @@ fn multiple_declarators_file_scope() {
 
         verify_basic_type(&decl, "int");
         assert_eq!(decl.is_declaration_only, false);
-        assert!(decl.init_expr.is_none());
-        assert!(decl.init_constant_value.is_none());
+        assert!(decl.initializer.is_none());
+        assert!(decl.init_constant_eval.is_empty());
         assert_eq!(decl.linkage, AstLinkage::External);
         assert_eq!(decl.storage, AstStorageDuration::Static);
     }
@@ -136,17 +147,17 @@ fn multiple_declarators_file_scope_with_initializers() {
     let decl3 = expect_var_decl(&decls[2]).unwrap();
     let decl4 = expect_var_decl(&decls[3]).unwrap();
 
-    assert!(decl1.init_expr.is_some());
-    assert!(decl1.init_constant_value.is_none());
+    assert!(decl1.initializer.is_some());
+    assert!(decl1.init_constant_eval.is_empty());
 
-    assert!(decl2.init_expr.is_none());
-    assert!(decl2.init_constant_value.is_none());
+    assert!(decl2.initializer.is_none());
+    assert!(decl2.init_constant_eval.is_empty());
 
-    assert!(decl3.init_expr.is_some());
-    assert!(decl3.init_constant_value.is_none());
+    assert!(decl3.initializer.is_some());
+    assert!(decl3.init_constant_eval.is_empty());
 
-    assert!(decl4.init_expr.is_none());
-    assert!(decl4.init_constant_value.is_none());
+    assert!(decl4.initializer.is_none());
+    assert!(decl4.init_constant_eval.is_empty());
 }
 
 #[test]
@@ -180,8 +191,8 @@ fn multiple_declarators_block_scope() {
 
         verify_basic_type(&decl, "int");
         assert_eq!(decl.is_declaration_only, false);
-        assert!(decl.init_expr.is_none());
-        assert!(decl.init_constant_value.is_none());
+        assert!(decl.initializer.is_none());
+        assert!(decl.init_constant_eval.is_empty());
         assert!(decl.declared_type.storage_class.is_none());
         assert_eq!(decl.linkage, AstLinkage::None);
         assert_eq!(decl.storage, AstStorageDuration::Automatic);

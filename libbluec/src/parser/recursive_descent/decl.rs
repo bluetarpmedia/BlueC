@@ -73,6 +73,14 @@ pub fn parse_declaration(parser: &mut Parser, driver: &mut Driver) -> ParseResul
 
         // A declaration requires an identifier. (We handled the case above for valid but useless `int;`).
         if declarator.get_identifier().is_none() {
+            // Check for invalid declaration where user tries to declare an array without an identifier,
+            // or return an array type from a function like: `int[3] func(void);`
+            if declarator.is_abstract_array() {
+                let err = "Square brackets not allowed here; put the brackets after an identifier to declare an array";
+                driver.add_diagnostic(Diagnostic::error_at_location(err.into(), declarator.loc));
+                return Err(ParseError);
+            }
+            
             Error::expect_identifier(declarator.loc, driver);
             return Err(ParseError);
         }

@@ -4,7 +4,7 @@
 
 use crate::parser::{
     AstBlock, AstBlockItem, AstDeclaration, AstExpression, AstForInitializer, AstFullExpression, AstFunction, AstRoot,
-    AstStatement,
+    AstStatement, AstVariableInitializer,
 };
 
 /// Visits all function definitions in the AST and, for each one, calls the `visitor_func` with the `AstFunction`.
@@ -42,8 +42,8 @@ where
     for decl in &mut ast_root.0 {
         match decl {
             AstDeclaration::Variable(var_decl) => {
-                if let Some(ref mut full_expr) = var_decl.init_expr {
-                    visitor_func(full_expr);
+                if let Some(ref mut initializer) = var_decl.initializer {
+                    visit_full_expressions_in_variable_initializer(initializer, visitor_func);
                 }
             }
 
@@ -54,9 +54,9 @@ where
                         match block_item {
                             AstBlockItem::Declaration(decl) => {
                                 if let AstDeclaration::Variable(var_decl) = decl
-                                    && let Some(ref mut full_expr) = var_decl.init_expr
+                                    && let Some(ref mut initializer) = var_decl.initializer
                                 {
-                                    visitor_func(full_expr);
+                                    visit_full_expressions_in_variable_initializer(initializer, visitor_func);
                                 }
                             }
 
@@ -201,9 +201,9 @@ where
                 AstForInitializer::Declaration(declarations) => {
                     for decl in declarations {
                         if let AstDeclaration::Variable(var_decl) = decl
-                            && let Some(ref mut full_expr) = var_decl.init_expr
+                            && let Some(ref mut initializer) = var_decl.initializer
                         {
-                            visitor_func(full_expr);
+                            visit_full_expressions_in_variable_initializer(initializer, visitor_func);
                         }
                     }
                 }
@@ -225,5 +225,20 @@ where
         }
         AstStatement::Return(full_expr) => visitor_func(full_expr),
         _ => (),
+    }
+}
+
+fn visit_full_expressions_in_variable_initializer<F>(initializer: &mut AstVariableInitializer, visitor_func: &mut F)
+where
+    F: FnMut(&mut AstFullExpression),
+{
+    match initializer {
+        AstVariableInitializer::Scalar(full_expr) => visitor_func(full_expr),
+
+        AstVariableInitializer::Aggregate { init, .. } => {
+            for initializer in init {
+                visit_full_expressions_in_variable_initializer(initializer, visitor_func);
+            }
+        }
     }
 }

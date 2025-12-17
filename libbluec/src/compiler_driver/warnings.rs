@@ -2,9 +2,9 @@
 //
 //! The `warnings` module defines all the warning diagnostics.
 
+use crate::ICE;
 use crate::compiler_driver::Driver;
 use crate::compiler_driver::diagnostics::{Diagnostic, SourceIdentifier};
-use crate::internal_error;
 use crate::lexer::{SourceLocation, TokenType};
 use crate::parser::expr::ops;
 use crate::parser::symbol::SymbolKind;
@@ -13,8 +13,8 @@ use crate::parser::{AstBinaryOp, AstType};
 pub struct Warning;
 
 impl Warning {
-    /// Emits an implicit conversion warning, optionally with a change in signedness.
-    pub fn implicit_conversion(
+    /// Emits an implicit conversion warning for a numeric literal, optionally with a change in signedness.
+    pub fn implicit_literal_conversion(
         old_type: &AstType,
         new_type: &AstType,
         old_value: &str,
@@ -36,6 +36,35 @@ impl Warning {
         };
 
         driver.add_diagnostic(Diagnostic::warning_at_location(message, loc));
+    }
+
+    /// Emits an implicit conversion warning for an arithmetic type, where the conversion either changes signedness
+    /// or results in precision loss.
+    ///
+    /// -Wimplicit-int-conversion
+    /// -Wimplicit-float-conversion
+    /// -Wsign-conversion
+    pub fn implicit_arithmetic_conversion(
+        old_type: &AstType,
+        new_type: &AstType,
+        loc: SourceLocation,
+        driver: &mut Driver,
+    ) {
+        let precision_loss = new_type.bits() < old_type.bits();
+        let sign_change = (old_type.is_signed_integer() && new_type.is_unsigned_integer())
+            || (new_type.is_signed_integer() && old_type.is_unsigned_integer());
+
+        let warning = if sign_change && precision_loss {
+            format!("Implicit conversion from '{old_type}' to '{new_type}' loses precision and changes signedness")
+        } else if sign_change {
+            format!("Implicit conversion from '{old_type}' to '{new_type}' changes signedness")
+        } else if precision_loss {
+            format!("Implicit conversion from '{old_type}' to '{new_type}' loses precision")
+        } else {
+            ICE!("Did not handle narrowing warning for '{old_type}' to '{new_type}'");
+        };
+
+        driver.add_diagnostic(Diagnostic::warning_at_location(warning, loc));
     }
 
     /// Emits an implicit conversion warning for a switch statement case value.
@@ -146,9 +175,7 @@ impl Warning {
                     '{child_op_str}' expression is evaluated first."
                 )
             } else {
-                internal_error::ICE(format!(
-                    "mixed_operators_missing_parens did not handle {child_op_str} <= {parent_op_str}"
-                ));
+                ICE!("mixed_operators_missing_parens did not handle {child_op_str} <= {parent_op_str}");
             }
         };
 
@@ -183,6 +210,8 @@ impl Warning {
             let note = "Add parentheses around the assignment expression to silence this warning.";
 
             let indent = " ".repeat(assignment_expr_loc.column - 1);
+
+            debug_assert!(assignment_expr_loc.length >= 3); // An assignment expression must be at least 3 chars
             let space = " ".repeat(assignment_expr_loc.length - 2);
             let suggested = format!("{indent}({space})");
 
@@ -306,6 +335,47 @@ impl Warning {
         let mut diag = Diagnostic::warning_at_location(warning, expr_loc);
         diag.add_location(a_loc);
         diag.add_location(b_loc);
+        driver.add_diagnostic(diag);
+    }
+
+    /// Emits a warning that there are too many elements in the initializer list for the given `variable_type`.
+    /// 
+    /// -Wexcess-initializers
+    pub fn too_many_elements_for_initializer(variable_type: &AstType, loc: SourceLocation, driver: &mut Driver) {
+        let type_description = if variable_type.is_scalar() {
+            "scalar type"
+        } else if variable_type.is_array() {
+            "array type"
+        } else {
+            "aggregate type"
+        };
+
+        let warning = format!("Too many elements in initializer list for {type_description} '{variable_type}'");
+        let mut diag = Diagnostic::warning_at_location(warning, loc);
+
+        let note = if variable_type.is_scalar() {
+            "The variable is initialized with the first element and the remainder is ignored."
+        } else if variable_type.is_array() {
+            "The array is initialized with the required number of elements and the remainder is ignored."
+        } else {
+            "The variable is initialized with the required number of elements and the remainder is ignored."
+        };
+
+        diag.add_note(note.into(), None);
+        driver.add_diagnostic(diag);
+    }
+
+    /// Emits a warning that there are too many braces around an initializer list for a scalar type.
+    /// 
+    /// -Wmany-braces-around-scalar-init
+    pub fn too_many_braces_for_scalar_initializer(loc: SourceLocation, driver: &mut Driver) {
+        let warning = "Too many braces around scalar initializer".to_string();
+
+        let braces_loc = SourceLocation { column: loc.column + 1, length: loc.length - 1, ..loc };
+        let open_brace_loc = SourceLocation { length: 1, ..loc };
+
+        let mut diag = Diagnostic::warning_at_location(warning, open_brace_loc);
+        diag.add_location(braces_loc);
         driver.add_diagnostic(diag);
     }
 }

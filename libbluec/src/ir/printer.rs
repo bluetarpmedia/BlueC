@@ -59,7 +59,26 @@ fn print_static_storage_variable(variable: &BtStaticStorageVariable) {
         print!("define internal symbol ");
     }
 
-    println!("@{}: {} = {}", variable.name, variable.data_type.to_printer(), variable.init_value);
+    print!("@{}: {} = ", variable.name, variable.data_type.to_printer());
+
+    debug_assert!(!variable.init_value.is_empty());
+
+    if variable.init_value.len() == 1 {
+        println!("{}", variable.init_value[0]);
+    } else {
+        let mut first = true;
+        print!("{{ ");
+        for val in &variable.init_value {
+            if !first {
+                print!(", ");
+            }
+            print!("{val}");
+            first = false;
+        }
+        println!(" }}");
+    }
+
+    println!();
 }
 
 fn print_instruction(instr: &BtInstruction, symbols: &SymbolTable) {
@@ -76,9 +95,13 @@ fn print_instruction(instr: &BtInstruction, symbols: &SymbolTable) {
         BtInstruction::Unary { op, src, dst } => print_unary_instr(op, src, dst, symbols),
         BtInstruction::Binary { op, src1, src2, dst } => print_binary_instr(op, src1, src2, dst, symbols),
         BtInstruction::Copy { src, dst } => print_src_dst_instr("", src, dst, symbols),
-        BtInstruction::StoreAddress { src, dst_ptr } => print_storeaddress_instr(src, dst_ptr, symbols),
         BtInstruction::Load { src_ptr, dst } => print_load_instr(src_ptr, dst, symbols),
         BtInstruction::Store { src, dst_ptr } => print_store_instr(src, dst_ptr, symbols),
+        BtInstruction::StoreAddress { src, dst_ptr } => print_storeaddress_instr(src, dst_ptr, symbols),
+        BtInstruction::StoreAtOffset { src, dst_ptr, dst_offset } => {
+            print_storeatoffset_instr(src, dst_ptr, *dst_offset, symbols)
+        }
+        BtInstruction::AddPtr { src_ptr, index, scale, dst_ptr } => print_addptr_instr(src_ptr, index, *scale, dst_ptr),
         BtInstruction::Jump { target } => print_jump(target),
         BtInstruction::JumpIfZero { condition, target } => print_jump_if_condition(condition, false, target, symbols),
         BtInstruction::JumpIfNotZero { condition, target } => print_jump_if_condition(condition, true, target, symbols),
@@ -112,15 +135,28 @@ fn print_load_instr(src_ptr: &BtValue, dst: &BtValue, symbols: &SymbolTable) {
     println!("  {dst} = load {dst_type}, {src_type} {src_ptr}");
 }
 
-fn print_storeaddress_instr(src: &BtValue, dst_ptr: &BtValue, symbols: &SymbolTable) {
-    let dst_type = get_bt_type(dst_ptr, symbols).to_printer();
-    println!("  store address-of @{src}, {dst_type} {dst_ptr}");
-}
-
 fn print_store_instr(src: &BtValue, dst_ptr: &BtValue, symbols: &SymbolTable) {
     let src_type = get_bt_type(src, symbols).to_printer();
     let dst_type = get_bt_type(dst_ptr, symbols).to_printer();
     println!("  store {src_type} {src}, {dst_type} {dst_ptr}");
+}
+
+fn print_storeaddress_instr(src: &BtValue, dst_ptr: &BtValue, symbols: &SymbolTable) {
+    let src_has_linkage = does_symbol_have_linkage(src, symbols);
+    let dst_type = get_bt_type(dst_ptr, symbols).to_printer();
+    let src_str = if src_has_linkage { format!("@{src}") } else { format!("{src}") };
+    println!("  store address-of {src_str}, {dst_type} {dst_ptr}");
+}
+
+fn print_storeatoffset_instr(src: &BtValue, dst_ptr: &BtValue, dst_offset: usize, symbols: &SymbolTable) {
+    let src_type = get_bt_type(src, symbols).to_printer();
+    let dst_has_linkage = does_symbol_have_linkage(src, symbols);
+    let dst_ptr_str = if dst_has_linkage { format!("@{dst_ptr}") } else { format!("{dst_ptr}") };
+    println!("  store {src_type} {src}, {dst_ptr_str} + {dst_offset}")
+}
+
+fn print_addptr_instr(src_ptr: &BtValue, index: &BtValue, scale: usize, dst_ptr: &BtValue) {
+    println!("  {dst_ptr} = add-ptr {src_ptr}, {index} * {scale}");
 }
 
 fn print_unary_instr(op: &BtUnaryOp, src: &BtValue, dst: &BtValue, symbols: &SymbolTable) {
@@ -138,12 +174,7 @@ fn print_jump(target: &BtLabelIdentifier) {
     println!("  jmp {}", target.0);
 }
 
-fn print_jump_if_condition(
-    cond: &BtValue,
-    evaluates_to: bool,
-    target: &BtLabelIdentifier,
-    symbols: &SymbolTable,
-) {
+fn print_jump_if_condition(cond: &BtValue, evaluates_to: bool, target: &BtLabelIdentifier, symbols: &SymbolTable) {
     let cond_type = get_bt_type(cond, symbols).to_printer();
     println!("  if ({cond} {cond_type} == {evaluates_to}) jmp {}", target.0);
 }
@@ -172,7 +203,7 @@ fn print_switch(
     if let Some(default_label) = default_label {
         println!("    default: jmp {}", default_label.0);
     }
-    
+
     println!("  }}");
 }
 
@@ -200,6 +231,19 @@ fn print_function_call(designator: &BtValue, args: &Vec<BtValue>, dst: &BtValue,
     }
 
     println!(")");
+}
+
+fn does_symbol_have_linkage(value: &BtValue, symbols: &SymbolTable) -> bool {
+    match value {
+        BtValue::Constant(_) => false,
+        BtValue::Variable(name) => {
+            let Some(symbol) = symbols.get(AstUniqueName::new(name)) else {
+                ICE!("Symbol table is missing entry for '{name}'");
+            };
+
+            symbol.has_linkage()
+        }
+    }
 }
 
 fn get_bt_type(value: &BtValue, symbols: &SymbolTable) -> BtType {

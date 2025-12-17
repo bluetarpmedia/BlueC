@@ -1,7 +1,7 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 //
 //! The `literal_promotion` module provides functionality to find cast expressions wrapping numeric literals and
-//! re-write them to new numeric literals without the need for a cast.
+//! rewrite them to new numeric literals without the need for a cast.
 //!
 //! For example:
 //!
@@ -15,9 +15,9 @@ use super::visitor;
 
 use crate::ICE;
 use crate::parser;
-use crate::parser::{AstExpression, AstFullExpression, AstType};
+use crate::parser::{AstExpression, AstFullExpression, AstIntegerLiteralKind, AstType};
 
-/// Re-writes casts of integer literals by promoting the integer literal to the desired type and then removing
+/// Rewrites casts of integer literals by promoting the integer literal to the desired type and then removing
 /// the cast.
 pub fn promote_integer_literals(ast_root: &mut parser::AstRoot, metadata: &mut parser::AstMetadata) {
     // Visit all the full expressions in the AST.
@@ -61,23 +61,25 @@ fn try_promote_integer_literal(
         return None;
     }
 
-    if promote_to_type.is_integer()
-        && promote_to_type.bits() >= data_type.bits()
-        && promote_to_type.can_hold_value(*value)
-    {
-        let literal = literal.clone();
-        let literal_base = *literal_base;
-        let value = *value;
+    if promote_to_type.is_integer() {
+        let value_is_zero = *value == 0;
 
-        metadata.set_node_type(*node_id, promote_to_type.clone());
+        let promotion_type_can_hold_value =
+            promote_to_type.bits() >= data_type.bits() && promote_to_type.can_hold_value(*value);
 
-        Some(AstExpression::IntegerLiteral {
-            node_id: *node_id,
-            literal,
-            literal_base,
-            value,
-            kind: promote_to_type.into(),
-        })
+        if value_is_zero || promotion_type_can_hold_value {
+            let literal = literal.clone();
+            let literal_base = *literal_base;
+            let value = *value;
+
+            metadata.set_node_type(*node_id, promote_to_type.clone());
+
+            let kind = AstIntegerLiteralKind::from(&promote_to_type.clone().promote_if_rank_lower_than_int());
+
+            Some(AstExpression::IntegerLiteral { node_id: *node_id, literal, literal_base, value, kind })
+        } else {
+            None
+        }
     } else if promote_to_type.is_floating_point() && promote_to_type.can_hold_value(*value) {
         let literal = literal.clone();
         let value = *value as f64;

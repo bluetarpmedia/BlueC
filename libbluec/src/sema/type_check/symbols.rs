@@ -4,7 +4,7 @@
 //! Symbol Table.
 
 use super::super::symbol_table::{Definition, SymbolAttributes, SymbolTable};
-use super::checker::{TypeChecker, TypeCheckError};
+use super::checker::{TypeCheckError, TypeChecker};
 use super::type_resolution;
 
 use crate::ICE;
@@ -42,8 +42,7 @@ pub fn verify_type_alias_declaration(
     //      It's valid to repeat the `typedef` declaration in the same scope multiple times, as long as it
     //      remains consistent with the underlying type.
     //
-    if let Some((existing_alias_type, decl_loc)) =
-        chk.current_declaration_scope().type_alias_map.get(&alias_ident.name)
+    if let Some((existing_alias_type, decl_loc)) = chk.current_declaration_scope().type_alias_map.get(&alias_ident.name)
         && resolved_type != *existing_alias_type
     {
         let old_t = existing_alias_type;
@@ -62,16 +61,13 @@ pub fn verify_type_alias_declaration(
     );
 
     // Add the type alias to the current scope.
-    chk
-        .current_declaration_scope()
+    chk.current_declaration_scope()
         .type_alias_map
         .insert(alias_ident.name.clone(), (resolved_type.clone(), alias_ident.loc));
 
     // Set the resolved type on the type alias' inner declaration.
     match inner_decl {
-        AstDeclaration::Variable(var_decl) => {
-            var_decl.declared_type.resolved_type = Some(resolved_type)
-        }
+        AstDeclaration::Variable(var_decl) => var_decl.declared_type.resolved_type = Some(resolved_type),
         AstDeclaration::Function(fn_decl) => fn_decl.declared_type.resolved_type = Some(resolved_type),
         _ => ICE!("Unexpected declaration"),
     };
@@ -91,7 +87,7 @@ pub fn verify_file_scope_variable_declaration(
     let var_type = type_resolution::resolve_declared_type(var_declared_type, Some(symbols), Some(driver))
         .map_err(|_| TypeCheckError)?;
 
-    let has_initializer = var_decl.init_expr.is_some();
+    let has_initializer = var_decl.initializer.is_some();
 
     let is_declared_extern = var_declared_type.storage_class.is_extern();
 
@@ -182,7 +178,7 @@ pub fn verify_local_variable_declaration(
             .map_err(|_| TypeCheckError)?
     };
 
-    let has_initializer = var_decl.init_expr.is_some();
+    let has_initializer = var_decl.initializer.is_some();
 
     let is_declared_extern = var_declared_type.storage_class.is_extern();
 
@@ -251,8 +247,8 @@ pub fn verify_function_parameter_declaration(
         declared_type,
         ident: param_ident.clone(),
         unique_name: param_unique_name.clone(),
-        init_expr: None,
-        init_constant_value: None,
+        initializer: None,
+        init_constant_eval: Vec::new(),
         linkage: AstLinkage::None,
         storage: AstStorageDuration::Automatic,
     };
@@ -269,12 +265,39 @@ pub fn verify_function_declaration(
     let fn_unique_name = &function.unique_name;
     let fn_ident = &function.ident;
     let fn_declared_type = &function.declared_type;
+
+    // Resolve the function type
     let fn_type = type_resolution::resolve_declared_type(fn_declared_type, Some(symbols), Some(driver))
         .map_err(|_| TypeCheckError)?;
+
+    // If any of the parameter types are array types then transform them to a pointer to the array element type.
+    //
+    let AstType::Function { return_type, params } = fn_type else {
+        ICE!("Expected an AstType::Function");
+    };
+
+    let fn_type = if params.iter().any(|param_t| param_t.is_array()) {
+        let new_params = params
+            .into_iter()
+            .map(|param_t| {
+                if let AstType::Array { element_type, .. } = param_t {
+                    AstType::new_pointer_to(*element_type.clone())
+                } else {
+                    param_t
+                }
+            })
+            .collect();
+
+        AstType::Function { return_type, params: new_params }
+    } else {
+        AstType::Function { return_type, params }
+    };
 
     let declared_linkage = function.linkage;
     let has_body = function.body.is_some();
 
+    // If there's an existing symbol for this function's name then make sure the declarations match.
+    //
     if let Some(existing_symbol) = symbols.get(fn_unique_name) {
         let symbol_kind = existing_symbol.kind();
         let symbol_loc = existing_symbol.location();
@@ -336,15 +359,9 @@ pub fn verify_function_arguments(
 
     if args_count != params_count {
         let err = if args_count > params_count {
-            format!(
-                "Too many arguments passed to function (expected {}, have {})",
-                params_count, args_count
-            )
+            format!("Too many arguments passed to function (expected {}, have {})", params_count, args_count)
         } else {
-            format!(
-                "Too few arguments passed to function (expected {}, have {})",
-                params_count, args_count
-            )
+            format!("Too few arguments passed to function (expected {}, have {})", params_count, args_count)
         };
 
         let args_source_span = metadata.get_source_span(args_node_id).expect("Args should have a source span");

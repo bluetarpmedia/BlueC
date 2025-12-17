@@ -1,0 +1,10 @@
+warning: Too many elements in initializer list for array type 'int [3]'
+   |
+   |     int arr[3] = {1, 2, 3, 4};
+   |                  ^^^^^^^^^^^^
+   |
+note: The array is initialized with the required number of elements and the remainder
+      is ignored.
+   |
+
+1 warning generated

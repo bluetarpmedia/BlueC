@@ -22,6 +22,11 @@ fn invalid_declarators() {
 
     assert!(parse("(*my_ptr").is_none());
     assert!(parse("((*my_ptr)").is_none());
+
+    assert!(parse("array[-1]").is_none());
+    assert!(parse("array[2.5f]").is_none());
+    assert!(parse("array[array2]").is_none());
+    assert!(parse("array[(void)]").is_none());
 }
 
 #[test]
@@ -45,6 +50,21 @@ fn variable_pointer_declarators() {
 }
 
 #[test]
+fn array_declarators() {
+    assert!(is_array(parse("arr[]"), 0));
+    assert!(is_array(parse("zero[0]"), 0));
+    assert!(is_array(parse("one[1]"), 1));
+    assert!(is_array(parse("two[2]"), 2));
+    assert!(is_array(parse("(eleven[11])"), 11));
+    assert!(is_array(parse("((fifteen[15]))"), 15));
+
+    assert!(is_2d_array(parse("x[][3]"), 3, 0));
+    assert!(is_2d_array(parse("y[0][4]"), 4, 0));
+    assert!(is_2d_array(parse("coords[3][4]"), 4, 3));
+    assert!(is_3d_array(parse("lots[22][33][44]"), 44, 33, 22));
+}
+
+#[test]
 fn abstract_pointer_declarators() {
     assert!(is_abstract_pointer(parse("*"), 1));
     assert!(is_abstract_pointer(parse("**"), 2));
@@ -54,6 +74,21 @@ fn abstract_pointer_declarators() {
     assert!(is_abstract_pointer(parse("(*)"), 1));
     assert!(is_abstract_pointer(parse("*(*))"), 2));
     assert!(is_abstract_pointer(parse("*(*(*)))"), 3));
+}
+
+#[test]
+fn abstract_array_declarators() {
+    assert!(is_abstract_array(parse("[]"), 0));
+    assert!(is_abstract_array(parse("[0]"), 0));
+    assert!(is_abstract_array(parse("[1]"), 1));
+    assert!(is_abstract_array(parse("[2]"), 2));
+    assert!(is_abstract_array(parse("([11])"), 11));
+    assert!(is_abstract_array(parse("(([15]))"), 15));
+
+    assert!(is_abstract_2d_array(parse("[][3]"), 3, 0));
+    assert!(is_abstract_2d_array(parse("[0][4]"), 4, 0));
+    assert!(is_abstract_2d_array(parse("[5][8]"), 8, 5));
+    assert!(is_abstract_2d_array(parse("[100][200]"), 200, 100));
 }
 
 #[test]
@@ -196,6 +231,62 @@ fn is_abstract_pointer(declarator: Option<AstDeclarator>, expected_count: i32) -
         AstDeclaratorKind::Pointer(referent) => is_abstract_pointer(Some(*referent.clone()), expected_count - 1),
 
         _ => return false,
+    }
+}
+
+fn is_array(declarator: Option<AstDeclarator>, expected_size: usize) -> bool {
+    let declarator = declarator.unwrap();
+
+    match declarator.kind {
+        AstDeclaratorKind::Array { size, .. } => size == expected_size,
+
+        _ => return false,
+    }
+}
+
+fn is_2d_array(declarator: Option<AstDeclarator>, dim1: usize, dim2: usize) -> bool {
+    let declarator = declarator.unwrap();
+
+    if let AstDeclaratorKind::Array { decl, size } = declarator.kind {
+        assert_eq!(size, dim1);
+
+        is_array(Some(*decl), dim2)
+    } else {
+        false
+    }
+}
+
+fn is_3d_array(declarator: Option<AstDeclarator>, dim1: usize, dim2: usize, dim3: usize) -> bool {
+    let declarator = declarator.unwrap();
+
+    if let AstDeclaratorKind::Array { decl, size } = declarator.kind {
+        assert_eq!(size, dim1);
+
+        is_2d_array(Some(*decl), dim2, dim3)
+    } else {
+        false
+    }
+}
+
+fn is_abstract_array(declarator: Option<AstDeclarator>, expected_size: usize) -> bool {
+    let declarator = declarator.unwrap();
+
+    match declarator.kind {
+        AstDeclaratorKind::AbstractArray { size, .. } => size == expected_size,
+
+        _ => return false,
+    }
+}
+
+fn is_abstract_2d_array(declarator: Option<AstDeclarator>, dim1: usize, dim2: usize) -> bool {
+    let declarator = declarator.unwrap();
+
+    if let AstDeclaratorKind::Array { decl, size } = declarator.kind {
+        assert_eq!(size, dim1);
+
+        is_abstract_array(Some(*decl), dim2)
+    } else {
+        false
     }
 }
 

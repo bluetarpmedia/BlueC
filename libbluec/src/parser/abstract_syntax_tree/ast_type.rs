@@ -1,149 +1,10 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 //
-//! The `ast_type` module defines the `AstType` enum and `AstBasicType` type.
+//! The `ast_type` module defines the `AstType` enum.
 
 use std::fmt;
 
-use super::{AstDeclarator, AstIdentifier, AstStorageClassSpecifier, AstUniqueName};
-
 use crate::ICE;
-use crate::lexer::SourceLocation;
-
-/// A basic type, optional storage class specifier, and optional declarator.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AstDeclaredType {
-    /// The basic type of the declaration, from which the optional declarator's derived type is resolved.
-    pub basic_type: AstBasicType,
-
-    /// Optional storage class specifier.
-    pub storage_class: Option<AstStorageClassSpecifier>,
-
-    /// The optional declarator which augments the basic type (e.g. a pointer). The declarator may be ommitted
-    /// in certain contexts, e.g.
-    ///
-    /// ```c
-    /// int calc(int, float, double);   // Declare a function `calc` with parameter types but no names
-    /// (float)                         // A cast expression to `float` type.
-    /// ```
-    pub declarator: Option<AstDeclarator>,
-
-    /// The resolved, canonical `AstType`. The semantic analysis stage fills this out.
-    pub resolved_type: Option<AstType>,
-}
-
-impl fmt::Display for AstDeclaredType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.basic_type)?;
-        if let Some(declarator) = &self.declarator {
-            write!(f, " {declarator}")?;
-        }
-        Ok(())
-    }
-}
-
-impl AstDeclaredType {
-    /// Creates a new, unresolved `AstDeclaredType`.
-    pub fn unresolved(
-        basic_type: AstBasicType,
-        storage_class: Option<AstStorageClassSpecifier>,
-        declarator: Option<AstDeclarator>,
-    ) -> Self {
-        AstDeclaredType { basic_type, storage_class, declarator, resolved_type: None }
-    }
-
-    /// Creates a new, resolved `AstDeclaredType`.
-    pub fn resolved(ty: &AstType) -> Self {
-        AstDeclaredType {
-            basic_type: AstBasicType::default(),
-            storage_class: None,
-            declarator: None,
-            resolved_type: Some(ty.clone()),
-        }
-    }
-
-    /// If the declared type has a declarator, and if that declarator has an identifier, returns that identifier.
-    /// Otherwise returns `None`.
-    pub fn get_identifier(&self) -> Option<&AstIdentifier> {
-        if let Some(declarator) = &self.declarator { declarator.get_identifier() } else { None }
-    }
-
-    /// Has the declared type been resolved?
-    pub fn is_resolved(&self) -> bool {
-        self.resolved_type.is_some()
-    }
-}
-
-/// The basic type of a declaration.
-///
-/// The term 'basic type' is not used in the C Standard, but it is used informally when discussing C parsers. The
-/// basic type is the first type we see in a declaration before any of the declarators.
-///
-/// ```c
-///  unsigned long int *age = 0, calculate(float salary);
-///  ~~~~~~~~~~~~~~~~~
-///
-///  typedef int MyInt;
-///  MyInt a = 0, b = 1, c = 2;
-///  ~~~~~
-/// ```
-///
-/// The subsequent declarators (e.g. `*age`, `calculate(float salary)`, `a`, `b`, `c`) augment the basic type to create
-/// a derived type. The derived type always modifies the basic type. For example, `*age` augments the basic type
-/// `unsigned long int` and creates a derived type of `unsigned long int *`.
-///
-/// See: [Reading C type declarations](http://unixwiz.net/techtips/reading-cdecl.html)
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
-pub struct AstBasicType(pub Vec<AstBasicTypeSpecifier>);
-
-impl fmt::Display for AstBasicType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut first = true;
-        for spec in &self.0 {
-            if first {
-                write!(f, "{}", spec)?;
-            } else {
-                write!(f, " {}", spec)?;
-            }
-            first = false;
-        }
-        Ok(())
-    }
-}
-
-/// A basic type specifier.
-#[derive(Debug, Clone)]
-pub enum AstBasicTypeSpecifier {
-    BuiltinType { specifier: String, loc: SourceLocation },
-    Alias { alias_name: AstUniqueName, loc: SourceLocation },
-}
-
-impl fmt::Display for AstBasicTypeSpecifier {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            AstBasicTypeSpecifier::BuiltinType { specifier, .. } => write!(f, "{specifier}"),
-            AstBasicTypeSpecifier::Alias { alias_name, .. } => write!(f, "{alias_name}"),
-        }
-    }
-}
-
-impl PartialEq for AstBasicTypeSpecifier {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (
-                AstBasicTypeSpecifier::BuiltinType { specifier: sp1, .. },
-                AstBasicTypeSpecifier::BuiltinType { specifier: sp2, .. },
-            ) => sp1 == sp2,
-            (
-                AstBasicTypeSpecifier::Alias { alias_name: a1, .. },
-                AstBasicTypeSpecifier::Alias { alias_name: a2, .. },
-            ) => a1 == a2,
-
-            _ => false,
-        }
-    }
-}
-
-impl Eq for AstBasicTypeSpecifier {}
 
 /// The canonical type of an identifier.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -161,6 +22,7 @@ pub enum AstType {
     Double,
     LongDouble, // 'long double' is an alias for 'double' (which is Standard-conforming)
     Pointer(Box<AstType>),
+    Array { element_type: Box<AstType>, count: usize },
     Function { return_type: Box<AstType>, params: Vec<AstType> },
 }
 
@@ -170,9 +32,20 @@ impl AstType {
         AstType::Pointer(Box::new(ty))
     }
 
+    /// Creates a new array type.
+    pub fn new_array(element_type: AstType, count: usize) -> Self {
+        AstType::Array { element_type: Box::new(element_type), count }
+    }
+
     /// Creates a new function type.
     pub fn new_fn(return_type: AstType, params: Vec<AstType>) -> Self {
         AstType::Function { return_type: Box::new(return_type), params }
+    }
+
+    /// A signed integer type that can hold the value of subtracting one pointer from another.
+    /// The underlying type for `ptrdiff_t`.
+    pub fn __ptrdiff_t() -> Self {
+        AstType::Long
     }
 
     /// Is this type a 'basic type'?
@@ -181,11 +54,26 @@ impl AstType {
     /// basic type is the first type we see in a declaration before any of the declarators.
     ///
     /// ```c
-    ///  unsigned long int *age = 0, calculate(float salary);
+    ///  long double salary = 0.0;
+    ///  ~~~~~~~~~~~
+    ///
+    ///  unsigned long int *age = 0, data[4], calculate(float salary);
     ///  ~~~~~~~~~~~~~~~~~
     /// ```
+    ///
+    /// This function returns true if the `AstType` is not a pointer, array or function type.
     pub fn is_basic_type(&self) -> bool {
-        !matches!(self, AstType::Pointer(_) | AstType::Function { .. })
+        !matches!(self, AstType::Pointer(_) | AstType::Array { .. } | AstType::Function { .. })
+    }
+
+    /// Is this type a scalar type?
+    pub fn is_scalar(&self) -> bool {
+        !self.is_aggregate()
+    }
+
+    /// Is this type an aggregate type?
+    pub fn is_aggregate(&self) -> bool {
+        matches!(self, AstType::Array { .. }) // Future: Struct
     }
 
     /// Is this type a pointer type?
@@ -193,11 +81,16 @@ impl AstType {
         matches!(self, AstType::Pointer(_))
     }
 
+    /// Is this type an array type?
+    pub fn is_array(&self) -> bool {
+        matches!(self, AstType::Array { .. })
+    }
+
     /// Is this type a function pointer type?
     ///
     /// A function pointer is a pointer whose referent is a function. In other words, there is only one level of
     /// indirection from the function.
-    /// 
+    ///
     /// In C, a function pointer can be called without needing to dereference it first.
     ///
     /// ```c
@@ -205,7 +98,7 @@ impl AstType {
     ///
     /// int (*a)(void) = get;      // `a` is a function pointer.
     /// int (**b)(void) = &a;      // `b` is _NOT_ a function pointer; it points to the object `a`.
-    /// 
+    ///
     /// int v1 = a();              // Can call `a` without dereferencing.
     /// int v2 = (*a)();           // Or can explicitly dereference.
     /// ```
@@ -258,6 +151,7 @@ impl AstType {
             AstType::Float => 32,
             AstType::Double | AstType::LongDouble => 64,
             AstType::Pointer(_) => 64, // We only support x86_64 for now, but in future will also support Arm64.
+            AstType::Array { element_type, count } => element_type.bits() * count,
             _ => ICE!("Unexpected AstType"),
         }
     }
@@ -463,70 +357,94 @@ impl AstType {
 
 impl fmt::Display for AstType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            AstType::Void => write!(f, "void"),
-            AstType::Short => write!(f, "short"),
-            AstType::Int => write!(f, "int"),
-            AstType::Long => write!(f, "long"),
-            AstType::LongLong => write!(f, "long long"),
-            AstType::UnsignedShort => write!(f, "unsigned short"),
-            AstType::UnsignedInt => write!(f, "unsigned int"),
-            AstType::UnsignedLong => write!(f, "unsigned long"),
-            AstType::UnsignedLongLong => write!(f, "unsigned long long"),
-            AstType::Float => write!(f, "float"),
-            AstType::Double => write!(f, "double"),
-            AstType::LongDouble => write!(f, "long double"),
-
-            AstType::Pointer(_) => print_ptr(f, self, 0),
-
-            AstType::Function { return_type, params } => {
-                write!(f, "{return_type} ")?;
-                print_fn_params(f, params)
-            }
-        }
+        write!(f, "{}", to_c_declarator(self))
     }
 }
 
-fn print_ptr(f: &mut fmt::Formatter<'_>, ty: &AstType, indirection_count: usize) -> fmt::Result {
-    if indirection_count == 0 {
-        debug_assert!(ty.is_pointer());
-    }
-
-    if let AstType::Pointer(referent) = ty {
-        return print_ptr(f, referent, indirection_count + 1);
-    }
-
-    let ptr_chars = "*".repeat(indirection_count);
-
-    if ty.is_basic_type() {
-        write!(f, "{ty} {ptr_chars}")?;
-        return Ok(());
-    }
-
-    if let AstType::Function { return_type, params } = ty {
-        write!(f, "{return_type} ({ptr_chars})")?;
-        print_fn_params(f, params)?;
-    }
-
-    Ok(())
+/// Creates a C declarator string representation of the given `AstType`.
+#[rustfmt::skip]
+pub fn to_c_declarator(ty: &AstType) -> String {
+    to_c_declarator_recursive(ty, String::new())
 }
 
-fn print_fn_params(f: &mut fmt::Formatter<'_>, params: &[AstType]) -> fmt::Result {
-    if params.is_empty() {
-        write!(f, "(void)")?;
-        return Ok(());
-    }
+#[rustfmt::skip]
+fn to_c_declarator_recursive(ty: &AstType, current: String) -> String {
+    // Is the given declarator string a pointer?
+    let declarator_is_ptr = |decl: &str| -> bool {
+        decl.starts_with('*')
+    };
 
-    write!(f, "(")?;
-    let mut first = true;
-    for param in params {
-        if !first {
-            write!(f, ", ")?;
+    // Prefixes the given non-empty string with a space, or returns an empty string.
+    let prefix_with_space = |s: &str| -> String {
+        if s.is_empty() { String::new() } else { format!(" {}", s) }
+    };
+
+    match ty {
+        // Base cases
+        //      If we have a current declarator buffer then append it to the base case with a space in between.
+        //      `int <current declarator buffer>`
+        //
+        AstType::Void             => format!("void{}",               prefix_with_space(&current)),
+        AstType::Short            => format!("short{}",              prefix_with_space(&current)),
+        AstType::Int              => format!("int{}",                prefix_with_space(&current)),
+        AstType::Long             => format!("long{}",               prefix_with_space(&current)),
+        AstType::LongLong         => format!("long long{}",          prefix_with_space(&current)),
+        AstType::UnsignedShort    => format!("unsigned short{}",     prefix_with_space(&current)),
+        AstType::UnsignedInt      => format!("unsigned int{}",       prefix_with_space(&current)),
+        AstType::UnsignedLong     => format!("unsigned long{}",      prefix_with_space(&current)),
+        AstType::UnsignedLongLong => format!("unsigned long long{}", prefix_with_space(&current)),
+        AstType::Float            => format!("float{}",              prefix_with_space(&current)),
+        AstType::Double           => format!("double{}",             prefix_with_space(&current)),
+        AstType::LongDouble       => format!("long double{}",        prefix_with_space(&current)),
+
+        // Pointer: insert a '*' to the left of the current declarator buffer
+        AstType::Pointer(referent) => {
+            let new_declarator = format!("*{}", current);
+            to_c_declarator_recursive(referent, new_declarator)
         }
-        write!(f, "{}", param)?;
-        first = false;
-    }
-    write!(f, ")")?;
 
-    Ok(())
+        // Array: append '[N]' to the right of the current declarator buffer
+        AstType::Array { element_type, count } => {
+            let array_dim = format!("[{}]", count);
+            
+            // Remember: '[]' has a higher precedence than pointer '*'.
+            //      If the current declarator is a pointer (buffer starts with '*') then wrap the buffer
+            //      in parens before appending '[]'.
+            //      `int *x[5]`   : x is an array of five pointers to int
+            //      `int (*x)[5]` : x is a pointer to an array of five ints
+            //
+            let new_declarator = if declarator_is_ptr(&current) {
+                format!("({}){}", current, array_dim)
+            } else {
+                format!("{}{}", current, array_dim)
+            };
+
+            to_c_declarator_recursive(element_type, new_declarator)
+        }
+
+        // Function: append '(params)'
+        AstType::Function { return_type, params } => {
+            let param_list = if params.is_empty() {
+                "(void)".to_string()
+            } else {
+                let param_list = params.iter()
+                    .map(|p| to_c_declarator_recursive(p, String::new()))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("({param_list})")
+            };
+
+            // Remember: A function call '()' has a higher precedence than pointer '*'.
+            //      If the current declarator is a pointer (buffer starts with '*') then wrap the buffer
+            //      in parens before appending the params: `(*fn)(params)`
+            //
+            let new_declarator = if declarator_is_ptr(&current) {
+                format!("({current}){param_list}")
+            } else {
+                format!("{current}{param_list}")
+            };
+
+            to_c_declarator_recursive(return_type, new_declarator)
+        }
+    }
 }

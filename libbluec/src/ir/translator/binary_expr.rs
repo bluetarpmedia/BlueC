@@ -2,7 +2,7 @@
 //
 //! The `binary_epxr` module defines functions to translate AST binary expressions into the BlueTac IR.
 
-use super::super::{BtBinaryOp, BtConstantValue, BtInstruction, BtValue};
+use super::super::{BtBinaryOp, BtConstantValue, BtInstruction, BtUnaryOp, BtValue};
 use super::expr;
 use super::{BlueTacTranslator, EvalExpr};
 
@@ -18,6 +18,22 @@ pub fn translate_binary_operation(
     let AstExpression::BinaryOperation { node_id, op: ast_op, left: left_expr, right: right_expr } = expr else {
         ICE!("Expected an AstExpression::BinaryOperation");
     };
+
+    // Translate pointer arithmetic separately from other binary operations
+    {
+        let expr_type = translator.get_expression_type(expr);
+        let left_type = translator.get_expression_type(left_expr);
+        let right_type = translator.get_expression_type(right_expr);
+
+        let is_ptr_subtract = left_type.is_pointer() && left_type == right_type && *ast_op == AstBinaryOp::Subtract;
+        let is_ptr_int_arith = expr_type.is_pointer() && matches!(ast_op, AstBinaryOp::Add | AstBinaryOp::Subtract);
+
+        if is_ptr_subtract {
+            return translate_pointer_subtraction(translator, left_type.clone(), expr, instructions);
+        } else if is_ptr_int_arith {
+            return translate_pointer_integer_arithmetic(translator, expr, instructions);
+        }
+    }
 
     match ast_op {
         AstBinaryOp::LogicalAnd => translate_logical_and(translator, left_expr, right_expr, instructions),
@@ -101,6 +117,88 @@ fn translate_logical_or(
     instructions.push(BtInstruction::Label { id: end_label });
 
     EvalExpr::Value(dst)
+}
+
+fn translate_pointer_subtraction(
+    translator: &mut BlueTacTranslator,
+    ptr_type: AstType,
+    expr: &AstExpression,
+    instructions: &mut Vec<BtInstruction>,
+) -> EvalExpr {
+    let AstExpression::BinaryOperation { node_id, op, left, right } = expr else {
+        ICE!("Expected an AstExpression::BinaryOperation");
+    };
+
+    debug_assert!(*op == AstBinaryOp::Subtract);
+    debug_assert!(translator.get_expression_type(left).is_pointer());
+    debug_assert!(translator.get_expression_type(right).is_pointer());
+
+    let lhs_value = expr::translate_expression_to_value(translator, left, instructions);
+    let rhs_value = expr::translate_expression_to_value(translator, right, instructions);
+
+    let dst_data_type = translator.get_ast_type_from_node(node_id).clone();
+    let ptr_diff = translator.make_temp_variable(dst_data_type.clone());
+    let dst = translator.make_temp_variable(dst_data_type);
+
+    let op = BtBinaryOp::Subtract;
+    instructions.push(BtInstruction::Binary { op, src1: lhs_value, src2: rhs_value, dst: ptr_diff.clone() });
+
+    let AstType::Pointer(referent) = ptr_type else {
+        ICE!("Expected AstType::Pointer");
+    };
+    let element_size = BtValue::Constant(BtConstantValue::Int64(referent.bits() as i64 / 8));
+
+    let op = BtBinaryOp::Divide;
+    instructions.push(BtInstruction::Binary { op, src1: ptr_diff, src2: element_size, dst: dst.clone() });
+
+    EvalExpr::Value(dst)
+}
+
+fn translate_pointer_integer_arithmetic(
+    translator: &mut BlueTacTranslator,
+    expr: &AstExpression,
+    instructions: &mut Vec<BtInstruction>,
+) -> EvalExpr {
+    let AstExpression::BinaryOperation { op, left, right, .. } = expr else {
+        ICE!("Expected an AstExpression::BinaryOperation");
+    };
+
+    let expr_type = translator.get_expression_type(expr).clone();
+
+    let scale = if expr_type.is_function_pointer() {
+        8
+    } else {
+        let AstType::Pointer(referent) = &expr_type else {
+            ICE!("Expected an AstType::Pointer");
+        };
+
+        referent.bits() / 8
+    };
+
+    let left_type = translator.get_expression_type(left);
+    let right_type = translator.get_expression_type(right);
+
+    debug_assert!(
+        left_type.is_pointer() && right_type.is_integer() || right_type.is_pointer() && left_type.is_integer()
+    );
+
+    let (ptr_expr, int_expr) = if left_type.is_pointer() { (left, right) } else { (right, left) };
+    let int_type = if left_type.is_integer() { left_type.clone() } else { right_type.clone() };
+
+    let dst_ptr = translator.make_temp_variable(expr_type);
+
+    let src_ptr = expr::translate_expression_to_value(translator, ptr_expr, instructions);
+    let index = expr::translate_expression_to_value(translator, int_expr, instructions);
+
+    if *op == AstBinaryOp::Subtract {
+        let negated = translator.make_temp_variable(int_type);
+        instructions.push(BtInstruction::Unary { op: BtUnaryOp::Negate, src: index, dst: negated.clone() });
+        instructions.push(BtInstruction::AddPtr { src_ptr, index: negated, scale, dst_ptr: dst_ptr.clone() });
+    } else {
+        instructions.push(BtInstruction::AddPtr { src_ptr, index, scale, dst_ptr: dst_ptr.clone() });
+    }
+
+    EvalExpr::Value(dst_ptr)
 }
 
 #[rustfmt::skip]

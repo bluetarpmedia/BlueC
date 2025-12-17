@@ -1,0 +1,19 @@
+warning: Too many braces around scalar initializer
+   |
+   |     int a = {{}};
+   |             ^~~~
+   |
+
+warning: Too many braces around scalar initializer
+   |
+   |     int b = {{{1}}};
+   |              ^~~~~
+   |
+
+warning: Too many braces around scalar initializer
+   |
+   |     int b = {{{1}}};
+   |             ^~~~~~~
+   |
+
+3 warnings generated

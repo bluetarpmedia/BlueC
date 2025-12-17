@@ -110,18 +110,21 @@ fn evaluate_const_expr_recursively(expr: &AstExpression, chk: Option<&TypeChecke
         AstExpression::Identifier { .. } => None, // Future: C23 allows `constexpr` variables.
         AstExpression::FunctionCall { .. } => None, // Future: `constexpr` functions.
         AstExpression::Deref { .. } => None,
+        AstExpression::Subscript { .. } => None,
         AstExpression::AddressOf { node_id, expr } => {
             if let Some(chk) = chk
                 && let AstExpression::Identifier { unique_name, .. } = expr.as_ref()
             {
-                let symbol = chk.symbols.get(unique_name).expect("Variable should exist in symbol table");
+                let symbol = chk.symbols.get(unique_name).expect("Symbol should exist");
 
-                if symbol.storage_duration() == AstStorageDuration::Static {
+                // Compile-time initializer can take address of a static storage variable, or a function.
+                let valid_symbol =
+                    symbol.storage_duration() == AstStorageDuration::Static || symbol.data_type.is_function();
+
+                if valid_symbol {
                     let ptr_type = chk.get_data_type(node_id);
 
-                    let init = AstConstantPtrInitializer::AddressConstant {
-                        symbol: unique_name.clone(),
-                    };
+                    let init = AstConstantPtrInitializer::AddressConstant { symbol: unique_name.clone() };
 
                     Some(ConstantValue::Pointer(ptr_type, init))
                 } else {
@@ -292,7 +295,12 @@ impl ConstantValue {
                     AstType::Float => Some(Self::make_float($value as f32)),
                     AstType::Double => Some(Self::make_double($value as f64)),
                     AstType::Pointer(_) => {
-                        let init = AstConstantPtrInitializer::CastExpression($value as u64);
+                        let init = if $value as u64 == 0 {
+                            AstConstantPtrInitializer::NullPointerConstant
+                        } else {
+                            AstConstantPtrInitializer::CastExpression($value as u64)
+                        };
+
                         Some(ConstantValue::Pointer(data_type.clone(), init))
                     }
                     _ => None,

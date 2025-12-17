@@ -9,6 +9,7 @@ use crate::compiler_driver::Driver;
 use crate::compiler_driver::diagnostics::{Diagnostic, SourceIdentifier};
 use crate::compiler_driver::errors::Error;
 use crate::compiler_driver::warnings::Warning;
+use crate::lexer::SourceLocation;
 use crate::parser::{AstBasicTypeSpecifier, AstDeclarator, AstDeclaratorKind, AstDeclaredType, AstType};
 
 /// An error returned by `resolve_type`. Error diagnostics are emitted to the compiler driver.
@@ -235,40 +236,72 @@ fn resolve_declarator_recursively(
         AstDeclaratorKind::Ident(_) => Ok(ast_type),
 
         AstDeclaratorKind::AbstractPointer => {
-            let derived_type = AstType::Pointer(Box::new(ast_type));
+            let derived_type = AstType::new_pointer_to(ast_type);
+            Ok(derived_type)
+        }
+
+        AstDeclaratorKind::AbstractArray { size } => {
+            if ast_type.is_function() {
+                emit_cannot_declare_array_of_function_error(declarator.loc, &ast_type, driver);
+                return Err(ResolutionError::SemanticError);
+            }
+
+            let derived_type = AstType::new_array(ast_type, *size);
             Ok(derived_type)
         }
 
         AstDeclaratorKind::Pointer(referent) => {
-            let derived_type = AstType::Pointer(Box::new(ast_type));
+            let derived_type = AstType::new_pointer_to(ast_type);
             resolve_declarator_recursively(derived_type, referent, symbols, driver)
+        }
+
+        AstDeclaratorKind::Array { decl, size } => {
+            if ast_type.is_function() {
+                emit_cannot_declare_array_of_function_error(decl.loc, &ast_type, driver);
+                return Err(ResolutionError::SemanticError);
+            }
+
+            let derived_type = AstType::new_array(ast_type, *size);
+            resolve_declarator_recursively(derived_type, decl, symbols, driver)
         }
 
         AstDeclaratorKind::AbstractFunction { params } => {
             let param_types = resolve_function_param_types(params, symbols, driver)?;
-            let fn_derived_type = AstType::Function { return_type: Box::new(ast_type), params: param_types };
+            let fn_derived_type = AstType::new_fn(ast_type, param_types);
             Ok(fn_derived_type)
         }
 
-        AstDeclaratorKind::Function { decl, params } => match decl.kind {
-            AstDeclaratorKind::Ident(_) => {
-                let param_types = resolve_function_param_types(params, symbols, driver)?;
-                let fn_derived_type = AstType::Function { return_type: Box::new(ast_type), params: param_types };
-                Ok(fn_derived_type)
+        AstDeclaratorKind::Function { decl, params } => {
+            if ast_type.is_function() {
+                emit_cannot_return_function_error(decl.loc, driver);
+                return Err(ResolutionError::SemanticError);
             }
-            AstDeclaratorKind::AbstractPointer | AstDeclaratorKind::Pointer(_) => {
-                let param_types = resolve_function_param_types(params, symbols, driver)?;
-                let fn_type = AstType::Function { return_type: Box::new(ast_type), params: param_types };
-                resolve_declarator_recursively(fn_type, decl, symbols, driver)
-            }
-            AstDeclaratorKind::AbstractFunction { .. } | AstDeclaratorKind::Function { .. } => {
-                if let Some(driver) = driver {
-                    let err = "Function cannot return a function".to_string();
-                    driver.add_diagnostic(Diagnostic::error_at_location(err, decl.loc));
+
+            match decl.kind {
+                AstDeclaratorKind::Ident(_) => {
+                    let param_types = resolve_function_param_types(params, symbols, driver)?;
+                    let fn_derived_type = AstType::Function { return_type: Box::new(ast_type), params: param_types };
+                    Ok(fn_derived_type)
                 }
-                Err(ResolutionError::SemanticError)
+
+                AstDeclaratorKind::AbstractPointer
+                | AstDeclaratorKind::Pointer(_)
+                | AstDeclaratorKind::AbstractArray { .. }
+                | AstDeclaratorKind::Array { .. } => {
+                    let param_types = resolve_function_param_types(params, symbols, driver)?;
+                    let fn_type = AstType::Function { return_type: Box::new(ast_type), params: param_types };
+                    resolve_declarator_recursively(fn_type, decl, symbols, driver)
+                }
+
+                AstDeclaratorKind::AbstractFunction { .. } | AstDeclaratorKind::Function { .. } => {
+                    // This case detects ill-formed declaration like this: `int (foo(void))(void);`
+                    // (The `ast_type` at this point is 'int'.)
+
+                    emit_cannot_return_function_error(decl.loc, driver);
+                    Err(ResolutionError::SemanticError)
+                }
             }
-        },
+        }
     }
 }
 
@@ -291,4 +324,24 @@ fn resolve_function_param_types(
             Ok(ty)
         })
         .collect()
+}
+
+fn emit_cannot_return_function_error(loc: SourceLocation, driver: &mut Option<&mut Driver>) {
+    if let Some(driver) = driver {
+        let err = "Function cannot return a function".to_string();
+        driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
+    }
+}
+
+fn emit_cannot_declare_array_of_function_error(
+    loc: SourceLocation,
+    fn_type: &AstType,
+    driver: &mut Option<&mut Driver>,
+) {
+    if let Some(driver) = driver {
+        let err = format!("Cannot declare an array of function type '{fn_type}'");
+        let mut diag = Diagnostic::error_at_location(err, loc);
+        diag.add_note("Did you mean to declare an array of function pointers instead?".to_string(), None);
+        driver.add_diagnostic(diag);
+    }
 }

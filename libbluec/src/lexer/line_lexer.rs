@@ -89,24 +89,27 @@ impl<'a, 'b> LineLexer<'a, 'b> {
                 }
 
                 _ => {
-                    let (idx, ch) = self.cursor.next().unwrap(); // Safe to unwrap since we checked peek above
+                    let (idx, ch) = self.cursor.next().unwrap(); // Safe to unwrap since we peeked ahead above
                     self.col_no = idx + 1;
                     let token_len = 1;
 
                     match ch {
-                        '(' => Ok(Some(self.make_token(TokenType::OpenParen,  token_len))),
-                        ')' => Ok(Some(self.make_token(TokenType::CloseParen, token_len))),
-                        '{' => Ok(Some(self.make_token(TokenType::OpenBrace,  token_len))),
-                        '}' => Ok(Some(self.make_token(TokenType::CloseBrace, token_len))),
-                        ';' => Ok(Some(self.make_token(TokenType::Semicolon,  token_len))),
-                        ':' => Ok(Some(self.make_token(TokenType::Colon,      token_len))),
-                        ',' => Ok(Some(self.make_token(TokenType::Comma,      token_len))),
-                        '~' => Ok(Some(self.make_token(TokenType::BitwiseNot, token_len))),
-                        '?' => Ok(Some(self.make_token(TokenType::Ternary,    token_len))),
+                        '(' => Ok(Some(self.make_token(TokenType::OpenParen,      token_len))),
+                        ')' => Ok(Some(self.make_token(TokenType::CloseParen,     token_len))),
+                        '{' => Ok(Some(self.make_token(TokenType::OpenBrace,      token_len))),
+                        '}' => Ok(Some(self.make_token(TokenType::CloseBrace,     token_len))),
+                        '[' => Ok(Some(self.make_token(TokenType::OpenSqBracket,  token_len))),
+                        ']' => Ok(Some(self.make_token(TokenType::CloseSqBracket, token_len))),
+                        ';' => Ok(Some(self.make_token(TokenType::Semicolon,      token_len))),
+                        ':' => Ok(Some(self.make_token(TokenType::Colon,          token_len))),
+                        ',' => Ok(Some(self.make_token(TokenType::Comma,          token_len))),
+                        '~' => Ok(Some(self.make_token(TokenType::BitwiseNot,     token_len))),
+                        '?' => Ok(Some(self.make_token(TokenType::Ternary,        token_len))),
 
                         _ => {
                             let loc = SourceLocation::new(self.line_no, self.col_no, 1);
-                            self.driver.add_diagnostic(Diagnostic::error_at_location(format!("Unexpected character '{0}'", ch), loc));
+                            let diag = Diagnostic::error_at_location(format!("Unexpected character '{0}'", ch), loc);
+                            self.driver.add_diagnostic(diag);
                             Err(())
                         }
                     }
@@ -155,7 +158,7 @@ impl<'a, 'b> LineLexer<'a, 'b> {
 
         let mut token_len = 1;
 
-        let mut advance = |lexer: &mut LineLexer| {  // Don't capture `self` to avoid borrow issues when we need to call advance more than once
+        let mut advance = |lexer: &mut LineLexer| {
             _ = lexer.cursor.next();
             token_len += 1;
         };

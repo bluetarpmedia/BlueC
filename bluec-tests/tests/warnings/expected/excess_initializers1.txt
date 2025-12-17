@@ -1,0 +1,9 @@
+warning: Too many elements in initializer list for scalar type 'int'
+   |
+   |     int a = {1, 2, 3};
+   |             ^^^^^^^^^
+   |
+note: The variable is initialized with the first element and the remainder is ignored.
+   |
+
+1 warning generated

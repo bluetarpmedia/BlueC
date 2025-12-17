@@ -2,14 +2,14 @@
 //
 //! The `instruction_fixups` module contains the functionality to rewrite instructions based on their semantic
 //! requirements.
-//! R10, R11, XMM14 and XMM15 are used as temp registers for fixups and re-writes.
+//! R10, R11, XMM14 and XMM15 are used as temp registers for fixups and rewrites.
 
 use super::ast::{AsmBinaryOp, AsmFunction, AsmInstruction, AsmOperand, AsmType};
 use super::registers::HwRegister;
 
 use crate::ICE;
 
-/// Re-writes instructions based on their semantic requirements.
+/// Rewrites instructions based on their semantic requirements.
 pub fn rewrite_instructions(function: &mut AsmFunction) {
     // First step is to rewrite specific instructions that have certain operand requirements.
     //
@@ -94,12 +94,17 @@ pub fn rewrite_instructions(function: &mut AsmFunction) {
 
 macro_rules! fixup_movsz_movzx {
     ($movx:ident, $instr:ident) => {{
-        //let instr = $instr;
         let mut out = Vec::with_capacity(3); // At most we'll need 3 instructions
 
         let AsmInstruction::$movx { src_type, dst_type, src, dst } = $instr else {
             ICE!("Expected $movx instruction");
         };
+
+        // Rewrite the MovSx/Zx to a straight Mov if the src and dst have the same types
+        if src_type == dst_type {
+            out.push(AsmInstruction::Mov { asm_type: src_type, src, dst });
+            return out;
+        }
 
         // Safe to use both `R10` and `R11` here because `fixup_instructions_with_two_operand_memory_address` doesn't
         // handle MovSx/MovZx. We use `R10` for the MOV into a temp register.
@@ -139,14 +144,14 @@ fn fixup_movsx(instr: AsmInstruction) -> Vec<AsmInstruction> {
 /// - The src operand cannot be an immediate, and must be a Byte or Word
 /// - The dst operand must be a register
 fn fixup_movzx(instr: AsmInstruction) -> Vec<AsmInstruction> {
-    let AsmInstruction::MovZx { src_type, .. } = &instr else {
+    let AsmInstruction::MovZx { src_type, dst_type, .. } = &instr else {
         ICE!("Expected MovZx instruction");
     };
 
     // `MOVZX` only handles Byte or Word source operands, so if we have a DoubleWord source then we transform
     // the operation into a `MOV`, since that clears out the upper 32-bits of the dest QuadWord for us.
     //
-    if *src_type == AsmType::DoubleWord {
+    if *src_type == AsmType::DoubleWord && dst_type != src_type {
         let mut out = Vec::with_capacity(2); // At most we'll need 2 instructions
 
         let AsmInstruction::MovZx { src_type, dst_type, src, dst } = instr else {

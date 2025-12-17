@@ -15,7 +15,6 @@ mod tests;
 
 use crate::codegen;
 use crate::compiler_driver;
-use crate::ir::translator::BlueTacTranslator;
 use crate::parser;
 use crate::sema::symbol_table::SymbolTable;
 
@@ -32,10 +31,7 @@ pub fn translate(
     metadata: parser::AstMetadata,
     symbols: SymbolTable,
 ) {
-    let mut translator = BlueTacTranslator::new(metadata, symbols);
-    let bt_root = translator::translate_ast_to_ir(&mut translator, ast);
-
-    let BlueTacTranslator { symbols, .. } = translator;
+    let (bt_root, symbols) = translator::translate_ast_to_ir(ast, metadata, symbols);
 
     if driver.options().print_ir {
         printer::print(&bt_root, &symbols);

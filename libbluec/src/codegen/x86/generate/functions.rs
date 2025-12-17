@@ -15,7 +15,7 @@ pub fn copy_params_into_pseudo_registers(
     asm_instructions: &mut Vec<AsmInstruction>,
 ) {
     // Get the source operands where the function parameters are located
-    let src_operands = classify_params_iter(bt_func.params.iter().map(|(bt_type, _)| *bt_type));
+    let src_operands = classify_params_iter(bt_func.params.iter().map(|(bt_type, _)| bt_type.clone()));
 
     // Copy the parameters into pseudo-registers
     //
@@ -176,6 +176,8 @@ where
                         AsmOperand::stack_address(relative_addr as i32)
                     }
                 }
+
+                AsmType::ByteArray { .. } => ICE!("Unexpected AsmType::ByteArray in function params"),
             }
         })
         .collect()

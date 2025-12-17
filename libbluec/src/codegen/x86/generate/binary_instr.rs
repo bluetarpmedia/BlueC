@@ -20,9 +20,12 @@ pub fn generate_instruction(
 ) {
     let src1_bt_type = src1.get_type(&generator.symbols);
     let src2_bt_type = src2.get_type(&generator.symbols);
-    debug_assert!(
-        src1_bt_type == src2_bt_type,
-        "Binary operation '{op}' sources have different types '{src1_bt_type}' and '{src2_bt_type}'"
+
+    assert!(
+        src1_bt_type == src2_bt_type
+            || src1_bt_type.is_pointer() && src2_bt_type.is_integer()
+            || src2_bt_type.is_pointer() && src1_bt_type.is_integer(),
+        "Binary operation '{op}' operands have incompatible types '{src1_bt_type}' and '{src2_bt_type}'"
     );
 
     let is_signed = src1_bt_type.is_signed_integer();

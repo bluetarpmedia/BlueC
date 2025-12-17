@@ -1,0 +1,8 @@
+warning: Implicit conversion from 'unsigned long' to 'int' loses precision and changes
+         signedness
+   |
+   |     int b = a;
+   |             ^
+   |
+
+1 warning generated

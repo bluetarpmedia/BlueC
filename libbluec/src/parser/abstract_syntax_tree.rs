@@ -3,8 +3,10 @@
 //! The `abstract_syntax_tree` module defines the C AST that the parser produces from the lexer's token stream.
 
 mod ast_attributes;
+mod ast_basic_type;
 mod ast_constant_value;
 mod ast_declarator;
+mod ast_declared_type;
 mod ast_identifier;
 mod ast_literals;
 mod ast_operators;
@@ -12,8 +14,10 @@ mod ast_type;
 mod ast_unique_name;
 
 pub use self::ast_attributes::*;
+pub use self::ast_basic_type::*;
 pub use self::ast_constant_value::*;
 pub use self::ast_declarator::*;
+pub use self::ast_declared_type::*;
 pub use self::ast_identifier::*;
 pub use self::ast_literals::*;
 pub use self::ast_operators::*;
@@ -54,6 +58,11 @@ impl AstDeclaration {
 /// allocate any storage for it. For example, `extern int i;` or `struct Foo;`.
 ///
 /// Note that `extern int i = 3;` is a definition and the `extern` is ignored (and a warning is emitted).
+/// 
+/// If the `initializer` expression can be evaluated at compile-time (i.e. it's a constant expression) then the result
+/// of its evaluation is stored in `init_constant_eval`. The sema stage is responsible for this evaluation. The
+/// evaluation is a `Vec` because a static storage variable of array type may have more than one initializer value.
+/// Scalar types will only have one value.
 #[derive(Debug)]
 pub struct AstVariableDeclaration {
     pub node_id: AstNodeId,
@@ -62,10 +71,17 @@ pub struct AstVariableDeclaration {
     pub declared_type: AstDeclaredType,
     pub ident: AstIdentifier,
     pub unique_name: AstUniqueName,
-    pub init_expr: Option<AstFullExpression>,
-    pub init_constant_value: Option<AstConstantValue>, // If `init_expr` can be evaluated at compile-time, this is the evaluated value.
+    pub initializer: Option<AstVariableInitializer>,
+    pub init_constant_eval: Vec<AstConstantValue>,
     pub linkage: AstLinkage,
     pub storage: AstStorageDuration,
+}
+
+/// A variable initializer.
+#[derive(Debug)]
+pub enum AstVariableInitializer {
+    Scalar(AstFullExpression),
+    Aggregate { node_id: AstNodeId, init: Vec<AstVariableInitializer> },
 }
 
 /// A function declaration with optional definition.
@@ -184,6 +200,13 @@ pub struct AstFullExpression {
     pub expr: AstExpression,
 }
 
+impl AstFullExpression {
+    /// Creates a new full expression which takes ownership of the `expr` expression tree.
+    pub fn new(expr: AstExpression) -> Self {
+        AstFullExpression { node_id: AstNodeId::new(), expr }
+    }
+}
+
 /// An expression, which may in fact be a subexpression inside a tree of a larger expression.
 #[derive(Debug)]
 pub enum AstExpression {
@@ -225,6 +248,11 @@ pub enum AstExpression {
         node_id: AstNodeId,
         expr: Box<AstExpression>,
     },
+    Subscript {
+        node_id: AstNodeId,
+        expr1: Box<AstExpression>, // Pointer and Index sub-expressions can be swapped so we name them 1 & 2.
+        expr2: Box<AstExpression>,
+    },
     Cast {
         node_id: AstNodeId,
         target_type: AstDeclaredType,
@@ -254,6 +282,17 @@ pub enum AstExpression {
 }
 
 impl AstExpression {
+    /// Creates a new `AstExpression:IntegerLiteral` with the given value, in base 10.
+    pub fn new_int_literal(value: u64) -> Self {
+        AstExpression::IntegerLiteral {
+            node_id: AstNodeId::new(),
+            literal: value.to_string(),
+            literal_base: 10,
+            value,
+            kind: AstIntegerLiteralKind::Int,
+        }
+    }
+
     /// Gets the node ID for the AST expression.
     pub fn node_id(&self) -> AstNodeId {
         match self {
@@ -264,6 +303,7 @@ impl AstExpression {
             AstExpression::FunctionCall { node_id, .. } => *node_id,
             AstExpression::Deref { node_id, .. } => *node_id,
             AstExpression::AddressOf { node_id, .. } => *node_id,
+            AstExpression::Subscript { node_id, .. } => *node_id,
             AstExpression::Cast { node_id, .. } => *node_id,
             AstExpression::Identifier { node_id, .. } => *node_id,
             AstExpression::IntegerLiteral { node_id, .. } => *node_id,
@@ -273,11 +313,16 @@ impl AstExpression {
 
     /// Is the AST expression an l-value?
     pub fn is_lvalue(&self) -> bool {
-        matches!(self, AstExpression::Identifier { .. } | AstExpression::Deref { .. })
+        matches!(self, AstExpression::Identifier { .. } | AstExpression::Deref { .. } | AstExpression::Subscript { .. })
     }
 
     /// Is the AST expression an integer literal?
     pub fn is_integer_literal(&self) -> bool {
         matches!(self, AstExpression::IntegerLiteral { .. })
+    }
+
+    /// Is the AST expression an arithmetic (integer or floating-point) literal?
+    pub fn is_arithmetic_literal(&self) -> bool {
+        matches!(self, AstExpression::IntegerLiteral { .. } | AstExpression::FloatLiteral { .. })
     }
 }

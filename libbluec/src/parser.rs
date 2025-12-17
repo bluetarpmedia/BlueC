@@ -6,8 +6,9 @@
 //! The parser performs identifier resolution. This allows us to solve the "typedef-name: identifier" ambiguity problem.
 
 pub mod printer;
-pub mod expr;
 pub mod symbol;
+
+pub(super) mod expr;
 pub(super) mod recursive_descent;
 
 mod abstract_syntax_tree;

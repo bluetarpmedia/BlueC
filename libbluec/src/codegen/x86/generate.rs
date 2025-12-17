@@ -2,7 +2,7 @@
 //
 //! The `generate` module provides x86_64 assembly generation functionality to the parent codegen module.
 //!
-//! R10, R11, XMM14 and XMM15 are used for fixups and re-writes.
+//! R10, R11, XMM14 and XMM15 are used for fixups and rewrites.
 //! R8, R9 and XMM1 are used for casts between floating-point and integer types.
 //! XMM0 is used for comparisons with '0.0'.
 
@@ -66,6 +66,7 @@ impl Generator {
                 }
 
                 ir::BtConstantValue::AddressConstant { .. } => ICE!("AddressConstant used as operand"),
+                ir::BtConstantValue::ZeroBytes(_) => ICE!("ZeroBytes used as operand"),
             },
             ir::BtValue::Variable(name) => AsmOperand::Pseudo(name.clone()),
         }
@@ -101,18 +102,17 @@ pub fn generate_asm(bt_root: &ir::BtRoot, symbols: SymbolTable) -> (AsmRoot, Asm
     let constants = generator.constant_table.get_constants();
     asm_definitions.reserve(constants.len());
 
-    for constant in constants {
-        let imm = match constant.value {
-            UnsignedValue::U32(value) => {
-                AsmConstantInitializer::Imm32 { value, align: constant.alignment, signed: false }
-            }
-            UnsignedValue::U64(value) => {
-                AsmConstantInitializer::Imm64 { value, align: constant.alignment, signed: false }
-            }
+    for constant_entry in constants {
+        let imm = match constant_entry.value {
+            UnsignedValue::U32(value) => AsmConstantInitializer::Imm32 { value, signed: false },
+            UnsignedValue::U64(value) => AsmConstantInitializer::Imm64 { value, signed: false },
         };
 
-        let constant =
-            AsmConstant { label: generator.labels.make_constant_label(AsmConstantId(constant.index)), value: imm };
+        let constant = AsmConstant {
+            label: generator.labels.make_constant_label(AsmConstantId(constant_entry.index)),
+            alignment: constant_entry.alignment,
+            value: imm,
+        };
 
         asm_symbols.add_constant(&constant.label.0, constant.value.asm_type());
         asm_definitions.push(AsmDefinition::StaticConstant(constant));
@@ -122,17 +122,17 @@ pub fn generate_asm(bt_root: &ir::BtRoot, symbols: SymbolTable) -> (AsmRoot, Asm
     //
     for defn in &mut asm_definitions {
         if let AsmDefinition::Function(function) = defn {
-            // Replace pseudo registers with stack-allocated variables or, for static storage duration variables,
-            // replace them with Data operands.
+            // Replace pseudo operands with stack-allocated variables or, for static storage duration variables,
+            // replace them with Data operands. Also calculate the total stack space we need to allocate.
             //
-            let stack_space = replace_pseudo_registers(function, &asm_symbols);
+            let stack_space = replace_pseudo_operands(function, &asm_symbols);
 
             // Insert instruction to allocate necessary stack space for the variables.
             if stack_space > 0 {
                 allocate_stack_space(function, stack_space);
             }
 
-            // Re-write instructions in case we generated invalid semantics
+            // Rewrite instructions in case we generated invalid semantics
             //      E.g. most instructions cannot take 2 memory addresses as operands.
             instruction_fixups::rewrite_instructions(function);
         }
@@ -157,36 +157,46 @@ fn generate_asm_function(bt_func: &ir::BtFunctionDefn, generator: &mut Generator
 }
 
 fn generate_asm_static_storage_variable(bt_static_var: &ir::BtStaticStorageVariable) -> AsmStaticStorageVariable {
-    let init_value = match bt_static_var.init_value {
-        ir::BtConstantValue::Int16(value) => {
-            AsmConstantInitializer::Imm16 { value: value as u16, align: 2, signed: true }
-        }
-        ir::BtConstantValue::Int32(value) => {
-            AsmConstantInitializer::Imm32 { value: value as u32, align: 4, signed: true }
-        }
-        ir::BtConstantValue::Int64(value) => {
-            AsmConstantInitializer::Imm64 { value: value as u64, align: 8, signed: true }
-        }
-        ir::BtConstantValue::UInt16(value) => AsmConstantInitializer::Imm16 { value, align: 2, signed: false },
-        ir::BtConstantValue::UInt32(value) => AsmConstantInitializer::Imm32 { value, align: 4, signed: false },
-        ir::BtConstantValue::UInt64(value) => AsmConstantInitializer::Imm64 { value, align: 8, signed: false },
+    let init_value = bt_static_var
+        .init_value
+        .iter()
+        .map(|constant_val| match constant_val {
+            ir::BtConstantValue::ZeroBytes(size) => AsmConstantInitializer::ZeroBytes(*size),
+            ir::BtConstantValue::Int16(value) => AsmConstantInitializer::Imm16 { value: *value as u16, signed: true },
+            ir::BtConstantValue::Int32(value) => AsmConstantInitializer::Imm32 { value: *value as u32, signed: true },
+            ir::BtConstantValue::Int64(value) => AsmConstantInitializer::Imm64 { value: *value as u64, signed: true },
+            ir::BtConstantValue::UInt16(value) => AsmConstantInitializer::Imm16 { value: *value, signed: false },
+            ir::BtConstantValue::UInt32(value) => AsmConstantInitializer::Imm32 { value: *value, signed: false },
+            ir::BtConstantValue::UInt64(value) => AsmConstantInitializer::Imm64 { value: *value, signed: false },
+            ir::BtConstantValue::Float32(value) => {
+                let value = value.to_bits();
+                AsmConstantInitializer::Imm32 { value, signed: false }
+            }
+            ir::BtConstantValue::Float64(value) => {
+                let value = value.to_bits();
+                AsmConstantInitializer::Imm64 { value, signed: false }
+            }
+            ir::BtConstantValue::AddressConstant { symbol } => {
+                AsmConstantInitializer::AddressConstant { object: symbol.clone() }
+            }
+        })
+        .collect();
 
-        ir::BtConstantValue::Float32(value) => {
-            let value = value.to_bits();
-            AsmConstantInitializer::Imm32 { value, align: 4, signed: false }
-        }
-
-        ir::BtConstantValue::Float64(value) => {
-            let value = value.to_bits();
-            AsmConstantInitializer::Imm64 { value, align: 8, signed: false }
-        }
-
-        ir::BtConstantValue::AddressConstant { symbol: ref object } => {
-            AsmConstantInitializer::AddressConstant { object: object.clone() }
-        }
+    // If an array's byte size is >= 16 then its alignment is 16. Otherwise its alignment is its element type size.
+    let alignment = if let ir::BtType::Array { element_type, count } = &bt_static_var.data_type {
+        let element_type_bytes = element_type.bits() / 8;
+        let array_size_bytes = element_type_bytes * count;
+        if array_size_bytes >= 16 { 16 } else { element_type_bytes }
+    } else {
+        bt_static_var.data_type.bits() / 8
     };
 
-    AsmStaticStorageVariable { name: bt_static_var.name.clone(), is_global: bt_static_var.is_global, init_value }
+    AsmStaticStorageVariable {
+        name: bt_static_var.name.clone(),
+        is_global: bt_static_var.is_global,
+        alignment,
+        init_value,
+    }
 }
 
 fn generate_asm_instructions(
@@ -374,12 +384,6 @@ fn generate_asm_instructions(
                 asm_instructions.push(AsmInstruction::Mov { asm_type, src, dst });
             }
 
-            ir::BtInstruction::StoreAddress { src, dst_ptr } => {
-                let src = generator.translate_bt_value_to_asm_operand(src);
-                let dst = generator.translate_bt_value_to_asm_operand(dst_ptr);
-                asm_instructions.push(AsmInstruction::Lea { src, dst });
-            }
-
             ir::BtInstruction::Load { src_ptr, dst } => {
                 let asm_type = dst.get_type(&generator.symbols).into();
                 let src_ptr = generator.translate_bt_value_to_asm_operand(src_ptr);
@@ -416,6 +420,72 @@ fn generate_asm_instructions(
                 });
             }
 
+            ir::BtInstruction::StoreAddress { src, dst_ptr } => {
+                let src = if src.get_type(&generator.symbols).is_array() {
+                    make_pseudo_memory_operand(src, 0)
+                } else {
+                    generator.translate_bt_value_to_asm_operand(src)
+                };
+
+                let dst = generator.translate_bt_value_to_asm_operand(dst_ptr);
+                asm_instructions.push(AsmInstruction::Lea { src, dst });
+            }
+
+            ir::BtInstruction::StoreAtOffset { src, dst_ptr, dst_offset } => {
+                let asm_type = src.get_type(&generator.symbols).into();
+                let src = generator.translate_bt_value_to_asm_operand(src);
+                let dst = make_pseudo_memory_operand(dst_ptr, *dst_offset);
+                asm_instructions.push(AsmInstruction::Mov { asm_type, src, dst });
+            }
+
+            ir::BtInstruction::AddPtr { src_ptr, index, scale, dst_ptr } => {
+                let index_asm_type = index.get_type(&generator.symbols).into();
+
+                let base = generator.translate_bt_value_to_asm_operand(src_ptr);
+                let index = generator.translate_bt_value_to_asm_operand(index);
+                let dst = generator.translate_bt_value_to_asm_operand(dst_ptr);
+
+                // Move the base src_ptr into RAX
+                let asm_type = AsmType::QuadWord;
+                let rax_reg = AsmOperand::hw_reg(HwRegister::RAX, asm_type);
+                asm_instructions.push(AsmInstruction::Mov { asm_type, src: base, dst: rax_reg });
+
+                // If the index is a constant (immediate value) then we can calculate `index * scale` at compile-time
+                // and use base-relative addressing.
+                if let AsmOperand::Imm(constant_index) = &index {
+                    let constant_index = *constant_index as i32;
+                    let scale = *scale as i32;
+                    let relative = constant_index * scale;
+                    let memory = AsmOperand::Memory { base: HwRegister::RAX, relative };
+
+                    asm_instructions.push(AsmInstruction::Lea { src: memory, dst });
+                } else {
+                    // Move and sign-extend the index into RBX
+                    asm_instructions.push(AsmInstruction::MovSx {
+                        src_type: index_asm_type,
+                        dst_type: AsmType::QuadWord,
+                        src: index,
+                        dst: AsmOperand::hw_reg(HwRegister::RBX, AsmType::QuadWord),
+                    });
+
+                    // LEA supports a scale of 1,2,4,8. For anything else we'll have to generate a Mul instruction.
+                    if is_supported_lea_scale(*scale) {
+                        let idx = AsmOperand::Indexed { base: HwRegister::RAX, index: HwRegister::RBX, scale: *scale };
+                        asm_instructions.push(AsmInstruction::Lea { src: idx, dst });
+                    } else {
+                        asm_instructions.push(AsmInstruction::Binary {
+                            op: AsmBinaryOp::Mul,
+                            asm_type: AsmType::QuadWord,
+                            src: AsmOperand::Imm(*scale as u64),
+                            dst: AsmOperand::hw_reg(HwRegister::RBX, AsmType::QuadWord),
+                        });
+
+                        let idx = AsmOperand::Indexed { base: HwRegister::RAX, index: HwRegister::RBX, scale: 1 };
+                        asm_instructions.push(AsmInstruction::Lea { src: idx, dst });
+                    }
+                }
+            }
+
             ir::BtInstruction::Label { id } => {
                 let id = translate_ir_label_to_target(id, generator);
                 asm_instructions.push(AsmInstruction::Label { id });
@@ -433,9 +503,17 @@ fn translate_ir_label_to_target(target: &ir::BtLabelIdentifier, generator: &mut 
     generator.labels.translate_ir_label_into_function_local_label(target)
 }
 
-/// Replaces the pseudo registers with either stack-allocated variables or Data operands, and returns the required
+fn make_pseudo_memory_operand(value: &ir::BtValue, offset: usize) -> AsmOperand {
+    let ir::BtValue::Variable(name) = value else {
+        ICE!("Expected a BtValue::Variable");
+    };
+
+    AsmOperand::PseudoMemory { name: name.clone(), offset }
+}
+
+/// Replaces the pseudo operands with either stack-allocated variables or Data operands, and returns the required
 /// amount of stack space that the function needs to allocate.
-fn replace_pseudo_registers(function: &mut AsmFunction, symbols: &AsmSymbolTable) -> usize {
+fn replace_pseudo_operands(function: &mut AsmFunction, symbols: &AsmSymbolTable) -> usize {
     let mut pseudo_stack_map = HashMap::new();
     let mut stack_addr = 0;
 
@@ -443,87 +521,103 @@ fn replace_pseudo_registers(function: &mut AsmFunction, symbols: &AsmSymbolTable
     for instr in instructions {
         match instr {
             AsmInstruction::Mov { src, dst, .. } => {
-                stack_addr = replace_pseudo_register(stack_addr, src, symbols, &mut pseudo_stack_map);
-                stack_addr = replace_pseudo_register(stack_addr, dst, symbols, &mut pseudo_stack_map);
+                stack_addr = replace_pseudo_operand(stack_addr, src, symbols, &mut pseudo_stack_map);
+                stack_addr = replace_pseudo_operand(stack_addr, dst, symbols, &mut pseudo_stack_map);
             }
 
             AsmInstruction::MovSx { src, dst, .. } => {
-                stack_addr = replace_pseudo_register(stack_addr, src, symbols, &mut pseudo_stack_map);
-                stack_addr = replace_pseudo_register(stack_addr, dst, symbols, &mut pseudo_stack_map);
+                stack_addr = replace_pseudo_operand(stack_addr, src, symbols, &mut pseudo_stack_map);
+                stack_addr = replace_pseudo_operand(stack_addr, dst, symbols, &mut pseudo_stack_map);
             }
 
             AsmInstruction::MovZx { src, dst, .. } => {
-                stack_addr = replace_pseudo_register(stack_addr, src, symbols, &mut pseudo_stack_map);
-                stack_addr = replace_pseudo_register(stack_addr, dst, symbols, &mut pseudo_stack_map);
+                stack_addr = replace_pseudo_operand(stack_addr, src, symbols, &mut pseudo_stack_map);
+                stack_addr = replace_pseudo_operand(stack_addr, dst, symbols, &mut pseudo_stack_map);
             }
 
             AsmInstruction::Lea { src, dst } => {
-                stack_addr = replace_pseudo_register(stack_addr, src, symbols, &mut pseudo_stack_map);
-                stack_addr = replace_pseudo_register(stack_addr, dst, symbols, &mut pseudo_stack_map);
+                stack_addr = replace_pseudo_operand(stack_addr, src, symbols, &mut pseudo_stack_map);
+                stack_addr = replace_pseudo_operand(stack_addr, dst, symbols, &mut pseudo_stack_map);
             }
 
             AsmInstruction::Cvtfp2si { src, dst, .. } => {
-                stack_addr = replace_pseudo_register(stack_addr, src, symbols, &mut pseudo_stack_map);
-                stack_addr = replace_pseudo_register(stack_addr, dst, symbols, &mut pseudo_stack_map);
+                stack_addr = replace_pseudo_operand(stack_addr, src, symbols, &mut pseudo_stack_map);
+                stack_addr = replace_pseudo_operand(stack_addr, dst, symbols, &mut pseudo_stack_map);
             }
 
             AsmInstruction::Cvtsi2fp { src, dst, .. } => {
-                stack_addr = replace_pseudo_register(stack_addr, src, symbols, &mut pseudo_stack_map);
-                stack_addr = replace_pseudo_register(stack_addr, dst, symbols, &mut pseudo_stack_map);
+                stack_addr = replace_pseudo_operand(stack_addr, src, symbols, &mut pseudo_stack_map);
+                stack_addr = replace_pseudo_operand(stack_addr, dst, symbols, &mut pseudo_stack_map);
+            }
+
+            AsmInstruction::Cvtfp2fp { src, dst, .. } => {
+                stack_addr = replace_pseudo_operand(stack_addr, src, symbols, &mut pseudo_stack_map);
+                stack_addr = replace_pseudo_operand(stack_addr, dst, symbols, &mut pseudo_stack_map);
             }
 
             AsmInstruction::Unary { operand, .. } => {
-                stack_addr = replace_pseudo_register(stack_addr, operand, symbols, &mut pseudo_stack_map);
+                stack_addr = replace_pseudo_operand(stack_addr, operand, symbols, &mut pseudo_stack_map);
             }
 
             AsmInstruction::Binary { src, dst, .. } => {
-                stack_addr = replace_pseudo_register(stack_addr, src, symbols, &mut pseudo_stack_map);
-                stack_addr = replace_pseudo_register(stack_addr, dst, symbols, &mut pseudo_stack_map);
+                stack_addr = replace_pseudo_operand(stack_addr, src, symbols, &mut pseudo_stack_map);
+                stack_addr = replace_pseudo_operand(stack_addr, dst, symbols, &mut pseudo_stack_map);
             }
 
             AsmInstruction::Cmp { op1, op2, .. } => {
-                stack_addr = replace_pseudo_register(stack_addr, op1, symbols, &mut pseudo_stack_map);
-                stack_addr = replace_pseudo_register(stack_addr, op2, symbols, &mut pseudo_stack_map);
+                stack_addr = replace_pseudo_operand(stack_addr, op1, symbols, &mut pseudo_stack_map);
+                stack_addr = replace_pseudo_operand(stack_addr, op2, symbols, &mut pseudo_stack_map);
             }
 
             AsmInstruction::IDiv { operand, .. } => {
-                stack_addr = replace_pseudo_register(stack_addr, operand, symbols, &mut pseudo_stack_map);
+                stack_addr = replace_pseudo_operand(stack_addr, operand, symbols, &mut pseudo_stack_map);
             }
 
             AsmInstruction::Div { operand, .. } => {
-                stack_addr = replace_pseudo_register(stack_addr, operand, symbols, &mut pseudo_stack_map);
+                stack_addr = replace_pseudo_operand(stack_addr, operand, symbols, &mut pseudo_stack_map);
             }
 
             AsmInstruction::SetCC { operand, .. } => {
-                stack_addr = replace_pseudo_register(stack_addr, operand, symbols, &mut pseudo_stack_map);
+                stack_addr = replace_pseudo_operand(stack_addr, operand, symbols, &mut pseudo_stack_map);
             }
 
             AsmInstruction::Call(operand) => {
-                stack_addr = replace_pseudo_register(stack_addr, operand, symbols, &mut pseudo_stack_map);
+                stack_addr = replace_pseudo_operand(stack_addr, operand, symbols, &mut pseudo_stack_map);
             }
 
             AsmInstruction::Push(operand) => {
-                stack_addr = replace_pseudo_register(stack_addr, operand, symbols, &mut pseudo_stack_map);
+                stack_addr = replace_pseudo_operand(stack_addr, operand, symbols, &mut pseudo_stack_map);
             }
 
-            _ => (),
+            // These instructions have no operands
+            AsmInstruction::Cdq { .. } => (),
+            AsmInstruction::Jmp { .. } => (),
+            AsmInstruction::JmpCC { .. } => (),
+            AsmInstruction::Label { .. } => (),
+            AsmInstruction::Ret => (),
         }
     }
 
     stack_addr.unsigned_abs() as usize
 }
 
-fn replace_pseudo_register(
-    stack_addr: i32,
+fn replace_pseudo_operand(
+    mut stack_addr: i32,
     operand: &mut AsmOperand,
     symbols: &AsmSymbolTable,
     pseudo_stack_map: &mut HashMap<String, i32>,
 ) -> i32 {
-    let AsmOperand::Pseudo(name) = operand else {
+    if !matches!(operand, AsmOperand::Pseudo(_) | AsmOperand::PseudoMemory { .. }) {
         return stack_addr;
+    }
+
+    let (name, offset) = match operand {
+        AsmOperand::Pseudo(name) => (name, None),
+        AsmOperand::PseudoMemory { name, offset } => (name, Some(*offset)),
+        _ => unreachable!("Checked above for Pseudo or PseudoMemory operands"),
     };
 
-    // If this pseudo register holds a function name then replace it with the appropriate operand
+    // If this pseudo operand holds a function name then replace it with the appropriate operand
     if let Some(AsmSymbol::Function { .. }) = symbols.get(name) {
         *operand = AsmOperand::Function(name.clone());
         return stack_addr;
@@ -533,41 +627,56 @@ fn replace_pseudo_register(
         ICE!("AsmSymbolTable does not contain entry for '{name}'");
     };
 
-    // If this pseudo register is for a variable with a static storage duration then replace it with a Data operand.
-    // Don't add it to the `pseudo_stack_map`; that's only for pseudo registers we replace with stack variables.
+    // If this pseudo operand is for a variable with a static storage duration then replace it with a Data operand.
+    // Don't add it to the `pseudo_stack_map`; that's only for pseudo operands we replace with stack variables.
     //
     if *is_static {
         *operand = AsmOperand::Data(name.clone());
         return stack_addr;
     };
 
-    // Do we already have a stack variable for the pseudo register? If so, return it's existing address.
-    //
+    // If we have an offset from a PseudoMemory operand (for an aggregate type) then add the offset to the
+    // given stack address.
+    let add_offset = |addr: i32| -> i32 { if let Some(offset) = offset { addr + offset as i32 } else { addr } };
+
+    // Do we already have a stack variable for the pseudo operand? If so, return it's existing address.
     if let Some(existing_stack_addr) = pseudo_stack_map.get(name) {
-        *operand = AsmOperand::stack_address(*existing_stack_addr);
+        *operand = AsmOperand::stack_address(add_offset(*existing_stack_addr));
         return stack_addr;
     }
 
     let variable_size = asm_type.size_bytes() as i32;
     let variable_alignment = asm_type.alignment_bytes() as i32;
 
-    // If necessary align the stack_addr.
-    let mut stack_addr = stack_addr;
-    if stack_addr % variable_alignment != 0 {
-        stack_addr = stack_addr - (-stack_addr % variable_alignment);
+    // First make space for the variable
+    stack_addr -= variable_size;
+
+    // Next ensure the stack address is aligned for the variable.
+    stack_addr = align_stack_addr(stack_addr, variable_alignment);
+
+    // Keep track of the variable's location
+    pseudo_stack_map.insert(name.clone(), stack_addr);
+
+    // Return the variable's location with optional offset for an aggregate type.
+    *operand = AsmOperand::stack_address(add_offset(stack_addr));
+
+    stack_addr
+}
+
+/// Aligns the relative stack address (a value <= 0) to the given alignment.
+pub(super) fn align_stack_addr(stack_addr: i32, alignment: i32) -> i32 {
+    assert!(stack_addr <= 0);
+    assert!(alignment > 0);
+
+    if stack_addr % alignment == 0 {
+        return stack_addr;
     }
 
-    // Create the new stack address
-    let relative_stack_addr = stack_addr - variable_size;
-    pseudo_stack_map.insert(name.clone(), relative_stack_addr);
-
-    *operand = AsmOperand::stack_address(relative_stack_addr);
-
-    relative_stack_addr
+    (stack_addr - alignment + 1) / alignment * alignment
 }
 
 fn allocate_stack_space(function: &mut AsmFunction, stack_space: usize) {
-    // The stack pointer needs to be 16-byte aligned, so we'll round up if necessary.
+    // The stack pointer needs to be 16-byte aligned, so we'll round up the stack space if necessary.
     let bytes_to_allocate = round_up_to_multiple_of_16(stack_space) as u64;
 
     // Insert the allocation at the very beginning.
@@ -580,6 +689,10 @@ fn allocate_stack_space(function: &mut AsmFunction, stack_space: usize) {
             dst: AsmOperand::Reg(HwRegister::RSP),
         },
     );
+}
+
+fn is_supported_lea_scale(scale: usize) -> bool {
+    matches!(scale, 1 | 2 | 4 | 8)
 }
 
 pub(super) fn round_up_to_multiple_of_16(x: usize) -> usize {

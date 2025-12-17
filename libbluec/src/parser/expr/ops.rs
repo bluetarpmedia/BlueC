@@ -3,14 +3,11 @@
 //! The `ops` module defines helper functions for parsing unary and binary operations.
 
 use super::super::meta;
-use super::super::{
-    AstAssignmentOp, AstBinaryOp, AstExpression, AstNodeId, AstUnaryOp, ParseError, ParseResult, Parser,
-};
-use super::parse_factor;
+use super::super::{AstAssignmentOp, AstBinaryOp, AstExpression, AstNodeId, AstUnaryOp, ParseResult, Parser};
+use super::parse_unary_expression;
 
 use crate::ICE;
 use crate::compiler_driver::Driver;
-use crate::compiler_driver::errors::Error;
 use crate::lexer;
 
 /// Parses a prefix unary operation and returns an AST expression.
@@ -20,15 +17,8 @@ pub fn parse_prefix_unary_operation(parser: &mut Parser, driver: &mut Driver) ->
     };
 
     let unary_op_token = unary_op_token.clone();
-    let op = parse_prefix_unary_operator(&unary_op_token.token_type);
-    let factor = parse_factor(parser, driver)?;
-
-    // Prefix increment and decrement can only be applied to l-values.
-    //
-    if is_incr_or_decr_op(&op) && !factor.is_lvalue() {
-        Error::expression_is_not_assignable(unary_op_token.location, driver);
-        return Err(ParseError);
-    }
+    let op = translate_prefix_unary_operator(&unary_op_token.token_type);
+    let unary_expr = parse_unary_expression(parser, driver)?;
 
     let end_loc = parser.token_stream.prev_token_source_location().expect("Should have a location");
 
@@ -42,25 +32,23 @@ pub fn parse_prefix_unary_operation(parser: &mut Parser, driver: &mut Driver) ->
     // rather than storing them as `AstExpression::UnaryOperation`s. This makes it easier to handle them later
     // for type checking etc.
     let expr = match op {
-        AstUnaryOp::Deref => AstExpression::Deref { node_id, expr: Box::new(factor) },
-        AstUnaryOp::AddressOf => AstExpression::AddressOf { node_id, expr: Box::new(factor) },
-        _ => AstExpression::UnaryOperation { node_id, op, expr: Box::new(factor) },
+        AstUnaryOp::Deref => AstExpression::Deref { node_id, expr: Box::new(unary_expr) },
+        AstUnaryOp::AddressOf => AstExpression::AddressOf { node_id, expr: Box::new(unary_expr) },
+        _ => AstExpression::UnaryOperation { node_id, op, expr: Box::new(unary_expr) },
     };
 
     Ok(expr)
 }
 
-/// Parses a postfix unary operation for the given factor and returns an AST expression.
-pub fn parse_postfix_unary_operation(
-    factor: AstExpression,
+/// Parses a postfix unary increment/decrement operation for the given expression and returns an AST expression.
+pub fn parse_postfix_incr_or_decr(
+    expr: AstExpression,
     parser: &mut Parser,
-    driver: &mut Driver,
+    _driver: &mut Driver,
 ) -> ParseResult<AstExpression> {
     let Some(unary_op_token) = parser.token_stream.take_token() else {
         ICE!("Token should exist");
     };
-
-    let unary_op_token = unary_op_token.clone();
 
     let op = match unary_op_token.token_type {
         lexer::TokenType::Increment => AstUnaryOp::PostfixIncrement,
@@ -68,36 +56,15 @@ pub fn parse_postfix_unary_operation(
         _ => ICE!("Invalid postfix operator '{}'", unary_op_token.token_type),
     };
 
-    // Postfix increment and decrement can only be applied to l-values.
-    if is_incr_or_decr_op(&op) && !factor.is_lvalue() {
-        Error::expression_is_not_assignable(unary_op_token.location, driver);
-        return Err(ParseError);
-    }
-
+    let unary_op_loc = unary_op_token.location;
     let end_loc = parser.token_stream.prev_token_source_location().expect("Should have a location");
 
     let node_id = AstNodeId::new();
-    parser.metadata.add_source_span(
-        node_id,
-        meta::AstNodeSourceSpanMetadata::from_source_location_pair(&unary_op_token.location, &end_loc),
-    );
+    parser
+        .metadata
+        .add_source_span(node_id, meta::AstNodeSourceSpanMetadata::from_source_location_pair(&unary_op_loc, &end_loc));
 
-    Ok(AstExpression::UnaryOperation { node_id, op, expr: Box::new(factor) })
-}
-
-/// Parses a token and returns an AST unary operator.
-pub fn parse_prefix_unary_operator(token_type: &lexer::TokenType) -> AstUnaryOp {
-    match token_type {
-        lexer::TokenType::Minus => AstUnaryOp::Negate,
-        lexer::TokenType::Plus => AstUnaryOp::Plus,
-        lexer::TokenType::BitwiseNot => AstUnaryOp::BitwiseNot,
-        lexer::TokenType::LogicalNot => AstUnaryOp::LogicalNot,
-        lexer::TokenType::Increment => AstUnaryOp::PrefixIncrement,
-        lexer::TokenType::Decrement => AstUnaryOp::PrefixDecrement,
-        lexer::TokenType::Multiply => AstUnaryOp::Deref,
-        lexer::TokenType::BitwiseAnd => AstUnaryOp::AddressOf,
-        _ => ICE!("Token '{token_type}' is not a unary operator"),
-    }
+    Ok(AstExpression::UnaryOperation { node_id, op, expr: Box::new(expr) })
 }
 
 /// Returns whether the given token is a prefix unary operator.
@@ -115,15 +82,6 @@ pub fn is_prefix_unary_operator(token_type: &lexer::TokenType) -> bool {
     )
 }
 
-/// Peeks ahead and returns whether the next token is a postfix unary operator.
-pub fn is_next_token_a_postfix_unary_operator(parser: &mut Parser) -> bool {
-    let Some(peek_next_token) = parser.token_stream.peek_next_token() else {
-        return false;
-    };
-
-    matches!(peek_next_token.token_type, lexer::TokenType::Increment | lexer::TokenType::Decrement)
-}
-
 /// Is the unary operator a pre- or post-fix increment/decrement operator?
 pub fn is_incr_or_decr_op(op: &AstUnaryOp) -> bool {
     matches!(
@@ -133,6 +91,11 @@ pub fn is_incr_or_decr_op(op: &AstUnaryOp) -> bool {
             | AstUnaryOp::PostfixIncrement
             | AstUnaryOp::PostfixDecrement
     )
+}
+
+/// Is the unary operator a pre- or post-fix increment operator?
+pub fn is_increment_op(op: &AstUnaryOp) -> bool {
+    matches!(op, AstUnaryOp::PrefixIncrement | AstUnaryOp::PostfixIncrement)
 }
 
 /// Is the token a binary operator?
@@ -182,9 +145,24 @@ pub fn is_assignment_operator(token_type: &lexer::TokenType) -> bool {
     )
 }
 
-/// Parses a token and produces an AST binary operator.
+/// Translates a token to the equivalent AST unary operator.
+pub fn translate_prefix_unary_operator(token_type: &lexer::TokenType) -> AstUnaryOp {
+    match token_type {
+        lexer::TokenType::Minus => AstUnaryOp::Negate,
+        lexer::TokenType::Plus => AstUnaryOp::Plus,
+        lexer::TokenType::BitwiseNot => AstUnaryOp::BitwiseNot,
+        lexer::TokenType::LogicalNot => AstUnaryOp::LogicalNot,
+        lexer::TokenType::Increment => AstUnaryOp::PrefixIncrement,
+        lexer::TokenType::Decrement => AstUnaryOp::PrefixDecrement,
+        lexer::TokenType::Multiply => AstUnaryOp::Deref,
+        lexer::TokenType::BitwiseAnd => AstUnaryOp::AddressOf,
+        _ => ICE!("Token '{token_type}' is not a unary operator"),
+    }
+}
+
+/// Translates a token to the equivalent AST binary operator.
 #[rustfmt::skip]
-pub fn parse_binary_operator(token_type: &lexer::TokenType) -> AstBinaryOp {
+pub fn translate_binary_operator(token_type: &lexer::TokenType) -> AstBinaryOp {
     match token_type {
         lexer::TokenType::Plus                   => AstBinaryOp::Add,
         lexer::TokenType::Minus                  => AstBinaryOp::Subtract,
@@ -208,9 +186,9 @@ pub fn parse_binary_operator(token_type: &lexer::TokenType) -> AstBinaryOp {
     }
 }
 
-/// Parses a token and produces an AST assignment operator.
+/// Translates a token to the equivalent AST assignment operator.
 #[rustfmt::skip]
-pub fn parse_assignment_operator(token_type: &lexer::TokenType) -> AstAssignmentOp {
+pub fn translate_assignment_operator(token_type: &lexer::TokenType) -> AstAssignmentOp {
     match token_type {
         lexer::TokenType::Assignment             => AstAssignmentOp::Assignment,
         lexer::TokenType::AdditionAssignment     => AstAssignmentOp::Addition,

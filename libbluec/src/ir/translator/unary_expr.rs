@@ -3,11 +3,11 @@
 //! The `unary_epxr` module defines functions to translate AST unary expressions into the BlueTac IR.
 
 use super::super::{BtBinaryOp, BtConstantValue, BtInstruction, BtUnaryOp, BtValue};
-use super::{BlueTacTranslator, EvalExpr};
 use super::expr;
+use super::{BlueTacTranslator, EvalExpr};
 
 use crate::ICE;
-use crate::parser::{AstExpression, AstFloatLiteralKind, AstType, AstUnaryOp};
+use crate::parser::{AstExpression, AstType, AstUnaryOp};
 use crate::sema::type_conversion;
 
 /// Translates a unary expression into BlueTac IR.
@@ -28,17 +28,18 @@ pub fn translate_unary_operation(
     let is_negate = *ast_op == AstUnaryOp::Negate;
 
     if is_negate {
-        if let AstExpression::FloatLiteral { value, kind, .. } = **ast_unary_expr {
-            let val = match kind {
-                AstFloatLiteralKind::Float => BtValue::Constant(BtConstantValue::Float32(-value as f32)),
+        if let AstExpression::FloatLiteral { node_id, value, .. } = **ast_unary_expr {
+            let data_type = translator.get_ast_type_from_node(&node_id);
+            let val = match data_type {
+                AstType::Float => BtValue::Constant(BtConstantValue::Float32(-value as f32)),
 
-                AstFloatLiteralKind::Double | AstFloatLiteralKind::LongDouble => {
-                    BtValue::Constant(BtConstantValue::Float64(-value))
-                }
+                AstType::Double | AstType::LongDouble => BtValue::Constant(BtConstantValue::Float64(-value)),
+
+                _ => ICE!("Invalid AstType '{data_type}' for float literal"),
             };
 
             return EvalExpr::Value(val);
-        } else if let AstExpression::IntegerLiteral { value, kind, .. } = **ast_unary_expr {
+        } else if let AstExpression::IntegerLiteral { node_id, value, .. } = **ast_unary_expr {
             // We're negating so the literal has to fit inside a 64-bit signed integer range.
             let int64 = type_conversion::convert_u64_to_i64(value);
 
@@ -46,7 +47,9 @@ pub fn translate_unary_operation(
             //      Remember, we can't negate i64::MIN because it would overflow.
             let negated_int64 = if int64 == i64::MIN { 0 } else { -int64 };
 
-            let literal_too_big_for_32bits = kind.data_type().bits() > 32;
+            let data_type = translator.get_ast_type_from_node(&node_id);
+            assert!(data_type.is_integer());
+            let literal_too_big_for_32bits = data_type.bits() > 32;
 
             // Handle special case of i32::MIN.
             //      In this case, we have a unary negate operator and a LongIntegerLiteral(2147483648).
@@ -55,10 +58,14 @@ pub fn translate_unary_operation(
             //
             let val = if literal_too_big_for_32bits && negated_int64 == i32::MIN as i64 {
                 BtValue::Constant(BtConstantValue::Int32(negated_int64 as i32))
-            } else if literal_too_big_for_32bits {
+            } else if data_type.bits() == 64 {
                 BtValue::Constant(BtConstantValue::Int64(negated_int64))
-            } else {
+            } else if data_type.bits() == 32 {
                 BtValue::Constant(BtConstantValue::Int32(type_conversion::convert_i64_to_i32(negated_int64)))
+            } else if data_type.bits() == 16 {
+                BtValue::Constant(BtConstantValue::Int16(type_conversion::convert_i64_to_i16(negated_int64)))
+            } else {
+                ICE!("Invalid AstType '{data_type}' for integer literal");
             };
 
             return EvalExpr::Value(val);
@@ -111,34 +118,32 @@ pub fn translate_unary_operation(
 fn translate_assign_incr_decr(
     translator: &mut BlueTacTranslator,
     op: &AstUnaryOp,
-    op_type: AstType,
+    operand_type: AstType,
     src: BtValue,
     instructions: &mut Vec<BtInstruction>,
 ) -> (Option<BtValue>, BtValue) {
-    let tmp = translator.make_temp_variable(op_type.clone());
-
     match op {
         AstUnaryOp::PrefixIncrement => {
-            let new_value = translate_prefix_increment(translator, src, tmp, instructions);
+            let new_value = translate_prefix_increment(translator, operand_type, src, instructions);
             (None, new_value)
         }
 
         AstUnaryOp::PrefixDecrement => {
-            let new_value = translate_prefix_decrement(translator, src, tmp, instructions);
+            let new_value = translate_prefix_decrement(translator, operand_type, src, instructions);
             (None, new_value)
         }
 
         AstUnaryOp::PostfixIncrement => {
-            let old_value = translator.make_temp_variable(op_type);
+            let old_value = translator.make_temp_variable(operand_type.clone());
             instructions.push(BtInstruction::Copy { src: src.clone(), dst: old_value.clone() });
-            let new_value = translate_prefix_increment(translator, src, tmp, instructions);
+            let new_value = translate_prefix_increment(translator, operand_type, src, instructions);
             (Some(old_value), new_value)
         }
 
         AstUnaryOp::PostfixDecrement => {
-            let old_value = translator.make_temp_variable(op_type);
+            let old_value = translator.make_temp_variable(operand_type.clone());
             instructions.push(BtInstruction::Copy { src: src.clone(), dst: old_value.clone() });
-            let new_value = translate_prefix_decrement(translator, src, tmp, instructions);
+            let new_value = translate_prefix_decrement(translator, operand_type, src, instructions);
             (Some(old_value), new_value)
         }
 
@@ -151,19 +156,32 @@ fn translate_assign_incr_decr(
 //          src = tmp
 fn translate_prefix_increment(
     translator: &mut BlueTacTranslator,
+    operand_type: AstType,
     src: BtValue,
-    tmp: BtValue,
     instructions: &mut Vec<BtInstruction>,
 ) -> BtValue {
     let src_type = src.get_type(&translator.symbols);
-    let incr_value = BtValue::Constant(BtConstantValue::one(src_type));
+    let tmp = translator.make_temp_variable(operand_type.clone());
 
-    instructions.push(BtInstruction::Binary {
-        op: BtBinaryOp::Add,
-        src1: src.clone(),
-        src2: incr_value,
-        dst: tmp.clone(),
-    });
+    if let AstType::Pointer(referent) = &operand_type {
+        let scale = if operand_type.is_function_pointer() { 8 } else { referent.bits() / 8 };
+
+        instructions.push(BtInstruction::AddPtr {
+            src_ptr: src.clone(),
+            index: BtValue::Constant(BtConstantValue::Int32(1)),
+            scale,
+            dst_ptr: tmp.clone(),
+        });
+    } else {
+        let incr_value = BtValue::Constant(BtConstantValue::one(src_type));
+
+        instructions.push(BtInstruction::Binary {
+            op: BtBinaryOp::Add,
+            src1: src.clone(),
+            src2: incr_value,
+            dst: tmp.clone(),
+        });
+    }
 
     instructions.push(BtInstruction::Copy { src: tmp.clone(), dst: src.clone() });
 
@@ -175,19 +193,32 @@ fn translate_prefix_increment(
 //          src = tmp
 fn translate_prefix_decrement(
     translator: &mut BlueTacTranslator,
+    operand_type: AstType,
     src: BtValue,
-    tmp: BtValue,
     instructions: &mut Vec<BtInstruction>,
 ) -> BtValue {
     let src_type = src.get_type(&translator.symbols);
-    let decr_value = BtValue::Constant(BtConstantValue::one(src_type));
+    let tmp = translator.make_temp_variable(operand_type.clone());
 
-    instructions.push(BtInstruction::Binary {
-        op: BtBinaryOp::Subtract,
-        src1: src.clone(),
-        src2: decr_value,
-        dst: tmp.clone(),
-    });
+    if let AstType::Pointer(referent) = operand_type {
+        let scale = referent.bits() / 8;
+
+        instructions.push(BtInstruction::AddPtr {
+            src_ptr: src.clone(),
+            index: BtValue::Constant(BtConstantValue::Int32(-1)),
+            scale,
+            dst_ptr: tmp.clone(),
+        });
+    } else {
+        let decr_value = BtValue::Constant(BtConstantValue::one(src_type));
+
+        instructions.push(BtInstruction::Binary {
+            op: BtBinaryOp::Subtract,
+            src1: src.clone(),
+            src2: decr_value,
+            dst: tmp.clone(),
+        });
+    }
 
     instructions.push(BtInstruction::Copy { src: tmp.clone(), dst: src.clone() });
 

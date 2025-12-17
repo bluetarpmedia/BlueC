@@ -1,4 +1,7 @@
 [
+    {"filename": "types_pointer_compare_different_pointer_types.c", "exit_code": 1},
+    {"filename": "types_pointer_compare_explicit_and_implict_addr.c", "exit_code": 1},
+    {"filename": "types_pointer_compare_pointer_to_int.c", "exit_code": 1},
     {"filename": "types_pointer_declare_pointer_in_for_loop.c", "exit_code": 5},
     {"filename": "types_pointer_simple.c", "exit_code": 3},
     {"filename": "types_pointer_multi_global", "exit_code": 1}

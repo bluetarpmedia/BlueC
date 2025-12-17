@@ -32,14 +32,27 @@ pub enum AstConstantFp {
 /// A constant initializer expression for a pointer type.
 #[derive(Debug, Clone, PartialEq)]
 pub enum AstConstantPtrInitializer {
+    /// Null pointer constant. `int *p = 0;`.
     NullPointerConstant,
+
+    /// Initialize a pointer by casting from an integer value. `int *p = (int *)123;`.
     CastExpression(u64),
+
+    /// Initialize a pointer with the address of a static storage variable or function.
+    /// ```c
+    /// static int a = 1;
+    /// static int *p = &a;
+    /// 
+    /// int get(void) { return 1; }
+    /// static int (*fn)(void) = &get;  // or `get` without `&`
+    /// ```
     AddressConstant { symbol: AstUniqueName },
 }
 
-/// A constant integer or floating-point value.
+/// An evaluated constant, compile-time value.
 #[derive(Debug, Clone, PartialEq)]
 pub enum AstConstantValue {
+    ZeroBytes(usize),
     Integer(AstConstantInteger),
     Fp(AstConstantFp),
     Pointer(AstType, AstConstantPtrInitializer),
@@ -71,8 +84,9 @@ impl fmt::Display for AstConstantFp {
 impl fmt::Display for AstConstantValue {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            AstConstantValue::Integer(value) => write!(f, "{}", value),
-            AstConstantValue::Fp(value) => write!(f, "{}", value),
+            AstConstantValue::ZeroBytes(size) => write!(f, "ZeroBytes({size})"),
+            AstConstantValue::Integer(value) => write!(f, "{value}"),
+            AstConstantValue::Fp(value) => write!(f, "{value}"),
             AstConstantValue::Pointer(ty, _) => write!(f, "{ty}"),
         }
     }
@@ -82,6 +96,7 @@ impl AstConstantValue {
     /// Gets the AST type of the constant value.
     pub fn get_ast_type(&self) -> AstType {
         match self {
+            AstConstantValue::ZeroBytes(_) => ICE!("ZeroBytes does not have an AstType"),
             AstConstantValue::Integer(constant_integer) => match constant_integer {
                 AstConstantInteger::Short(_) => AstType::Short,
                 AstConstantInteger::Int(_) => AstType::Int,
@@ -101,6 +116,7 @@ impl AstConstantValue {
     /// Is the constant value equal to zero?
     pub fn is_zero(&self) -> bool {
         match self {
+            AstConstantValue::ZeroBytes(_) => true,
             AstConstantValue::Integer(constant_integer) => match constant_integer {
                 AstConstantInteger::Short(value) => *value == 0,
                 AstConstantInteger::Int(value) => *value == 0,
@@ -109,9 +125,11 @@ impl AstConstantValue {
                 AstConstantInteger::UnsignedInt(value) => *value == 0,
                 AstConstantInteger::UnsignedLongLong(value) => *value == 0,
             },
+            // For floating-point values we only want to return true for positive zero '0.0', not '-0.0', because the
+            // bit representation is different.
             AstConstantValue::Fp(constant_fp) => match constant_fp {
-                AstConstantFp::Float(value) => *value == 0.0,
-                AstConstantFp::Double(value) => *value == 0.0,
+                AstConstantFp::Float(value) => value.is_sign_positive() && *value == 0.0,
+                AstConstantFp::Double(value) => value.is_sign_positive() && *value == 0.0,
             },
             AstConstantValue::Pointer(_, init) => matches!(init, AstConstantPtrInitializer::NullPointerConstant),
         }
@@ -120,6 +138,7 @@ impl AstConstantValue {
     /// Is the constant value below zero? Always false for unsigned types.
     pub fn has_negative_value(&self) -> bool {
         match self {
+            AstConstantValue::ZeroBytes(_) => false,
             AstConstantValue::Integer(constant_integer) => match constant_integer {
                 AstConstantInteger::Short(value) => *value < 0,
                 AstConstantInteger::Int(value) => *value < 0,
@@ -161,6 +180,7 @@ impl AstConstantValue {
         }
 
         match self {
+            AstConstantValue::ZeroBytes(_) => ICE!("Cannot cast ZeroBytes"),
             AstConstantValue::Integer(constant_integer) => match constant_integer {
                 // No-op from self to same type
                 AstConstantInteger::Short(_)

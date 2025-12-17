@@ -198,7 +198,7 @@ impl ExpectedMultiFileSuccessTestCase {
 
     fn bluec_link_with_gcc(&mut self, first: &str, second: &str) {
         // Use gcc to compile the second source file to an object file
-        let obj_file = TempFile::try_create_with_extension("gcc", "o");
+        let obj_file = TempFile::try_create_with_extension(second, "o");
         let obj_file = obj_file.expect("Did not create temp .o file");
         assert!(gcc_compile_to_obj_file(second, obj_file.path_as_str()).is_ok());
 
@@ -216,7 +216,7 @@ impl ExpectedMultiFileSuccessTestCase {
 
     fn gcc_link_with_bluec(&mut self, first: &str, second: &str) {
         // Use BlueC to compile the second source file to an object file
-        let obj_file = TempFile::try_create_with_extension("bluec", "o");
+        let obj_file = TempFile::try_create_with_extension(second, "o");
         let obj_file = obj_file.expect("Did not create temp .o file");
 
         let mut options = make_driver_options();

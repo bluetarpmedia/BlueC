@@ -3,6 +3,26 @@
 use crate::parser::AstType;
 
 #[test]
+fn ast_type_bits() {
+    assert_eq!(AstType::Short.bits(), 16);
+    assert_eq!(AstType::Int.bits(), 32);
+    assert_eq!(AstType::Long.bits(), 64);
+    assert_eq!(AstType::LongLong.bits(), 64);
+
+    assert_eq!(AstType::UnsignedShort.bits(), 16);
+    assert_eq!(AstType::UnsignedInt.bits(), 32);
+    assert_eq!(AstType::UnsignedLong.bits(), 64);
+    assert_eq!(AstType::UnsignedLongLong.bits(), 64);
+    
+    assert_eq!(AstType::new_pointer_to(AstType::Short).bits(), 64);
+    assert_eq!(AstType::new_pointer_to(AstType::Int).bits(), 64);
+
+    assert_eq!(AstType::new_array(AstType::Short, 10).bits() / 8, 20);
+    assert_eq!(AstType::new_array(AstType::Long, 10).bits() / 8, 80);
+    assert_eq!(AstType::new_array(AstType::new_pointer_to(AstType::new_fn(AstType::Int, vec![])), 3).bits() / 8, 24);
+}
+
+#[test]
 fn ast_type_integer_promotion() {
     assert_eq!(AstType::Short.promote_if_rank_lower_than_int(), AstType::Int);
     assert_eq!(AstType::UnsignedShort.promote_if_rank_lower_than_int(), AstType::Int);
@@ -181,6 +201,96 @@ fn ast_type_unsigned_integer_fits_inside() {
         AstType::UnsignedLong,
         &[AstType::UnsignedLong, AstType::UnsignedLongLong],
         &[AstType::Short, AstType::Int, AstType::Long, AstType::LongLong, AstType::UnsignedShort, AstType::UnsignedInt],
+    );
+}
+
+#[test]
+fn ast_type_to_string_simple() {
+    assert_eq!(AstType::Int.to_string(), "int");
+    assert_eq!(AstType::new_pointer_to(AstType::Short).to_string(), "short *");
+    assert_eq!(AstType::new_pointer_to(AstType::new_pointer_to(AstType::Double)).to_string(), "double **");
+}
+
+#[test]
+fn ast_type_to_string_arrays() {
+    assert_eq!(AstType::new_array(AstType::Double, 4).to_string(), "double [4]");
+    assert_eq!(AstType::new_array(AstType::UnsignedLongLong, 16).to_string(), "unsigned long long [16]");
+    assert_eq!(AstType::new_array(AstType::new_array(AstType::Int, 2), 5).to_string(), "int [5][2]");
+    assert_eq!(AstType::new_array(AstType::new_array(AstType::Float, 10), 5).to_string(), "float [5][10]");
+}
+
+#[test]
+fn ast_type_to_string_functions() {
+    assert_eq!(AstType::new_fn(AstType::Int, vec![]).to_string(), "int (void)");
+    assert_eq!(
+        AstType::new_fn(AstType::UnsignedShort, vec![AstType::Float, AstType::Double]).to_string(),
+        "unsigned short (float, double)"
+    );
+
+    // "int *(void)" (Function returning a pointer)
+    assert_eq!(AstType::new_fn(AstType::new_pointer_to(AstType::Int), vec![]).to_string(), "int *(void)");
+}
+
+#[test]
+fn ast_type_to_string_function_pointers() {
+    assert_eq!(AstType::new_pointer_to(AstType::new_fn(AstType::Int, vec![])).to_string(), "int (*)(void)");
+
+    assert_eq!(
+        AstType::new_pointer_to(AstType::new_fn(AstType::Int, vec![AstType::Int, AstType::Int])).to_string(),
+        "int (*)(int, int)"
+    );
+
+    assert_eq!(
+        AstType::new_pointer_to(AstType::new_fn(AstType::Float, vec![AstType::Int, AstType::Int])).to_string(),
+        "float (*)(int, int)"
+    );
+    assert_eq!(
+        AstType::new_pointer_to(AstType::new_fn(
+            AstType::Int,
+            vec![AstType::new_pointer_to(AstType::new_fn(AstType::Int, vec![]))]
+        ))
+        .to_string(),
+        "int (*)(int (*)(void))"
+    );
+}
+
+#[test]
+fn ast_type_to_string_mixed() {
+    // "int *[3]" (Array of 3 pointers to int)
+    assert_eq!(AstType::new_array(AstType::new_pointer_to(AstType::Int), 3).to_string(), "int *[3]");
+
+    // float *[6] (Array of 6 pointers to float)
+    assert_eq!(AstType::new_array(AstType::new_pointer_to(AstType::Float), 6).to_string(), "float *[6]");
+
+    // "int (*)[3]" (Pointer to an array of 3 ints)
+    assert_eq!(AstType::new_pointer_to(AstType::new_array(AstType::Int, 3)).to_string(), "int (*)[3]");
+
+    // "int (*[5])[3]" (Array of 5 pointers to arrays of 3 ints)
+    assert_eq!(
+        AstType::new_array(AstType::new_pointer_to(AstType::new_array(AstType::Int, 3)), 5).to_string(),
+        "int (*[5])[3]"
+    );
+
+    // long *[4][3] (Array of 4 arrays of 3 pointers to long)
+    assert_eq!(
+        AstType::new_array(AstType::new_array(AstType::new_pointer_to(AstType::Long), 3), 4).to_string(),
+        "long *[4][3]"
+    );
+}
+
+#[test]
+fn ast_type_to_string_complex() {
+    // "float (*[10])(int)" (Array of 10 function pointers)
+    assert_eq!(
+        AstType::new_array(AstType::new_pointer_to(AstType::new_fn(AstType::Float, vec![AstType::Int])), 10)
+            .to_string(),
+        "float (*[10])(int)"
+    );
+
+    // "int (*(void))[5]" (Function returning a pointer to an array)
+    assert_eq!(
+        AstType::new_fn(AstType::new_pointer_to(AstType::new_array(AstType::Int, 5)), vec![]).to_string(),
+        "int (*(void))[5]"
     );
 }
 

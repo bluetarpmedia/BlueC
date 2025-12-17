@@ -4,8 +4,9 @@
 
 use super::super::constant_eval;
 use super::super::type_resolution;
-use super::checker::{TypeCheckError, TypeCheckResult, TypeChecker};
+use super::checker::{CastWarningPolicy, TypeCheckError, TypeCheckResult, TypeChecker};
 use super::symbols;
+use super::utils;
 
 use crate::ICE;
 use crate::compiler_driver::Driver;
@@ -16,6 +17,7 @@ use crate::parser::{self, AstUnaryOp};
 use crate::parser::{
     AstAssignmentOp, AstBinaryOp, AstBlock, AstBlockItem, AstConstantValue, AstDeclaration, AstExpression,
     AstForInitializer, AstFullExpression, AstNodeId, AstStatement, AstStorageDuration, AstType, AstUniqueName,
+    AstVariableInitializer,
 };
 
 /// Traverses the AST and performs type checking.
@@ -23,6 +25,7 @@ pub fn typecheck_ast(ast_root: &mut parser::AstRoot, chk: &mut TypeChecker, driv
     _ = typecheck_declarations(&mut ast_root.0, chk, driver);
 }
 
+/// Type checks a list of declarations.
 fn typecheck_declarations(
     declarations: &mut [AstDeclaration],
     chk: &mut TypeChecker,
@@ -46,6 +49,7 @@ fn typecheck_declarations(
     if is_err { Err(TypeCheckError) } else { Ok(()) }
 }
 
+/// Type checks a variable, function, or type alias declaration.
 fn typecheck_declaration(decl: &mut AstDeclaration, chk: &mut TypeChecker, driver: &mut Driver) -> TypeCheckResult<()> {
     match decl {
         AstDeclaration::Variable(decl) => {
@@ -58,17 +62,20 @@ fn typecheck_declaration(decl: &mut AstDeclaration, chk: &mut TypeChecker, drive
             let var_type =
                 decl.declared_type.resolved_type.as_ref().expect("Expected variable decl type to be resolved");
 
-            // Typecheck the initializer expression, if it exists.
+            // Typecheck the initializer expression, if there is one.
             //
-            if let Some(init_expr) = &mut decl.init_expr {
-                typecheck_full_expression_for_result_type(init_expr, var_type, chk, driver)?;
+            if let Some(initializer) = &mut decl.initializer {
+                let (_, new_initializer) = typecheck_variable_initializer(var_type, initializer, chk, driver)?;
+
+                if let Some(new_initializer) = new_initializer {
+                    *initializer = new_initializer;
+                }
 
                 // An initializer expression for a static storage duration variable must be a constant expression, so
                 // we'll verify that by trying to evaluate it.
                 //
                 if decl.storage == AstStorageDuration::Static {
-                    let constant_value = evaluate_static_storage_initializer(var_type, init_expr, chk, driver)?;
-                    decl.init_constant_value = Some(constant_value);
+                    decl.init_constant_eval = evaluate_static_storage_initializer(initializer, chk, driver)?;
                 }
             }
         }
@@ -77,10 +84,16 @@ fn typecheck_declaration(decl: &mut AstDeclaration, chk: &mut TypeChecker, drive
             symbols::verify_function_declaration(function, &mut chk.symbols, driver)?;
 
             let fn_type = function.declared_type.resolved_type.as_ref().expect("Expected function type to be resolved");
-            let (return_type, params) = extract_fn_return_and_param_types(fn_type);
+            let (return_type, param_types) = extract_fn_return_and_param_types(fn_type);
+
+            if return_type.is_array() || return_type.is_function() {
+                let loc = chk.metadata.get_source_span_as_loc(&function.node_id).unwrap();
+                Error::function_invalid_return_type(return_type, loc, driver);
+            }
+
             let param_names = &function.param_names;
 
-            let valid_params = params.iter().zip(param_names).all(|(param_type, (param_ident, param_unique))| {
+            let valid_params = param_types.iter().zip(param_names).all(|(param_type, (param_ident, param_unique))| {
                 symbols::verify_function_parameter_declaration(
                     param_unique,
                     param_ident,
@@ -112,15 +125,106 @@ fn typecheck_declaration(decl: &mut AstDeclaration, chk: &mut TypeChecker, drive
     Ok(())
 }
 
+/// Type checks a variable initializer expression.
+///
+/// Returns the resolved `AstType` along with an optional new initializer if it needs to be rewritten.
+fn typecheck_variable_initializer(
+    variable_type: &AstType,
+    initializer: &mut AstVariableInitializer,
+    chk: &mut TypeChecker,
+    driver: &mut Driver,
+) -> TypeCheckResult<(AstType, Option<AstVariableInitializer>)> {
+    match initializer {
+        AstVariableInitializer::Scalar(full_expr) => {
+            let expr_type = typecheck_full_expression_for_result_type(full_expr, variable_type, chk, driver)?;
+            Ok((expr_type, None))
+        }
+
+        AstVariableInitializer::Aggregate { node_id, init } => {
+            let (element_type, element_count) = if variable_type.is_scalar() {
+                (variable_type, 1)
+            } else if let AstType::Array { element_type, count } = variable_type {
+                (element_type.as_ref(), *count)
+            } else {
+                todo!() // Future: Structs
+            };
+
+            // Type check each element in the initializer list.
+            //      Don't short-circuit if one fails because we want a diagnostic for each element that is invalid.
+            //      clippy suggests turning the `fold(..)?` into a short-circuiting `try_fold`, which we don't want.
+            //
+            #[allow(clippy::manual_try_fold)]
+            init.iter_mut().fold(Ok(()), |result, ini| {
+                result.and(typecheck_variable_initializer(element_type, ini, chk, driver).map(|_| ()))
+            })?;
+
+            // Add constant zero expressions for any missing elements in the initializer list. This also gives us
+            // an implicit zero for a case like `int x = {};`.
+            while init.len() < element_count {
+                init.push(make_zero_initializer(element_type, chk, driver)?);
+            }
+
+            // Initializing scalar type with initializer list; take the first scalar expression in the list, warn about
+            // the remainder, and return a new scalar initializer so that the caller can transform the aggregate
+            // initializer to a scalar one.
+            //
+            if variable_type.is_scalar() {
+                match init.len() {
+                    0 => unreachable!("Should have added zero initializer(s)"),
+                    1 => {
+                        // If there is a nested aggregate initializer, e.g. `int a = {{1}};`, then warn about the
+                        // unnecessary extra braces.
+                        if let AstVariableInitializer::Aggregate { .. } = init[0] {
+                            let loc = chk.metadata.get_source_span_as_loc(node_id).unwrap();
+                            Warning::too_many_braces_for_scalar_initializer(loc, driver);
+                        }
+                    }
+                    _ => {
+                        let loc = chk.metadata.get_source_span_as_loc(node_id).unwrap();
+                        Warning::too_many_elements_for_initializer(variable_type, loc, driver);
+                    }
+                }
+
+                chk.set_data_type(node_id, variable_type);
+
+                let scalar_initializer = take_first_scalar_initializer(&mut init[0]);
+                Ok((variable_type.clone(), Some(scalar_initializer)))
+            }
+            // Initializing array type with initializer list
+            //
+            else if let AstType::Array { count, .. } = variable_type {
+                // Warn if there are too many elements in the initializer list, and trim it to length.
+                if init.len() > *count {
+                    let loc = chk.metadata.get_source_span_as_loc(node_id).unwrap();
+                    Warning::too_many_elements_for_initializer(variable_type, loc, driver);
+
+                    init.truncate(*count);
+                }
+
+                chk.set_data_type(node_id, variable_type);
+
+                Ok((variable_type.clone(), None))
+            }
+            // Future: Struct
+            //
+            else {
+                todo!()
+            }
+        }
+    }
+}
+
+/// Type checks a block (compound statement).
 fn typecheck_block(block: &mut AstBlock, chk: &mut TypeChecker, driver: &mut Driver) -> TypeCheckResult<()> {
     // Create a new scope so that we can track typedef declarations.
     //
     chk.begin_declaration_scope();
 
+    // If typechecking fails for a declaration or statement, move to the next.
     for item in &mut block.0 {
         match item {
-            AstBlockItem::Declaration(decl) => typecheck_declaration(decl, chk, driver)?,
-            AstBlockItem::Statement(stmt) => typecheck_statement(stmt, chk, driver)?,
+            AstBlockItem::Declaration(decl) => _ = typecheck_declaration(decl, chk, driver),
+            AstBlockItem::Statement(stmt) => _ = typecheck_statement(stmt, chk, driver),
         }
     }
 
@@ -129,6 +233,7 @@ fn typecheck_block(block: &mut AstBlock, chk: &mut TypeChecker, driver: &mut Dri
     Ok(())
 }
 
+/// Type checks a statement.
 fn typecheck_statement(stmt: &mut AstStatement, chk: &mut TypeChecker, driver: &mut Driver) -> TypeCheckResult<()> {
     match stmt {
         AstStatement::Expression(full_expr) => {
@@ -206,6 +311,7 @@ fn typecheck_statement(stmt: &mut AstStatement, chk: &mut TypeChecker, driver: &
     Ok(())
 }
 
+/// Type checks a return statement.
 fn typecheck_return_statement(
     stmt: &mut AstStatement,
     chk: &mut TypeChecker,
@@ -220,6 +326,8 @@ fn typecheck_return_statement(
     typecheck_full_expression_for_result_type(full_expr, &function_return_type, chk, driver).map(|_| ())
 }
 
+/// Type checks a full expression which must evaluate to a type of `result_type`. If the expression does not already
+/// evaluate to that type, then a cast is added.
 fn typecheck_full_expression_for_result_type(
     full_expr: &mut AstFullExpression,
     result_type: &AstType,
@@ -228,24 +336,27 @@ fn typecheck_full_expression_for_result_type(
 ) -> TypeCheckResult<AstType> {
     let expr_type = typecheck_full_expression(full_expr, chk, driver)?;
 
-    // If the full expression's type doesn't match the given result type then add a cast.
-    //
-    if &expr_type != result_type {
-        let converted_expr = convert_expression_type(&mut full_expr.expr, result_type, chk, driver)?;
-
-        // Re-write the full expression to use the converted expression
-        *full_expr = AstFullExpression { node_id: full_expr.node_id, expr: converted_expr };
+    if expr_type == *result_type {
+        return Ok(expr_type);
     }
 
-    Ok(expr_type)
+    let converted_expr = convert_expression_type(&full_expr.node_id, &mut full_expr.expr, result_type, chk, driver)?;
+
+    // Update the full expression to use the converted expression
+    *full_expr = AstFullExpression { node_id: full_expr.node_id, expr: converted_expr };
+
+    chk.set_data_type(&full_expr.node_id, result_type);
+
+    Ok(result_type.clone())
 }
 
+/// Type checks a full expression.
 fn typecheck_full_expression(
     full_expr: &mut AstFullExpression,
     chk: &mut TypeChecker,
     driver: &mut Driver,
 ) -> TypeCheckResult<AstType> {
-    let inner_expr_data_type = typecheck_expression(&mut full_expr.expr, None, chk, driver)?;
+    let inner_expr_data_type = typecheck_expression_with_decay(&mut full_expr.expr, chk, driver)?;
 
     // The full expression itself has the same type as its inner expression root.
     chk.set_data_type(&full_expr.node_id, &inner_expr_data_type);
@@ -253,39 +364,65 @@ fn typecheck_full_expression(
     Ok(inner_expr_data_type)
 }
 
-/// The context of a parent expression.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-enum ParentExprCtx {
-    SuppressDecay,
-}
-
-fn typecheck_expression(
+/// Type checks an expression and performs function-to-function pointer and array-to-pointer decay, where appropriate.
+fn typecheck_expression_with_decay(
     expr: &mut AstExpression,
-    parent_ctx: Option<ParentExprCtx>,
     chk: &mut TypeChecker,
     driver: &mut Driver,
 ) -> TypeCheckResult<AstType> {
-    let parent_ctx_suppresses_decay = parent_ctx.is_some_and(|ctx| ctx == ParentExprCtx::SuppressDecay);
+    let ty = typecheck_expression(expr, chk, driver)?;
 
+    if let AstType::Array { element_type, .. } = ty {
+        let original_expr = take_expression(expr);
+
+        // The source span for the new AddressOf expression will be the same as the original expression,
+        // since our new AddressOf that we're inserting doesn't appear in the source code.
+        let node_id = AstNodeId::new();
+        let original_expr_span = chk.metadata.get_source_span(&original_expr.node_id()).unwrap();
+        chk.metadata.add_source_span(node_id, *original_expr_span);
+
+        *expr = AstExpression::AddressOf { node_id, expr: Box::new(original_expr) };
+
+        let decayed_type = AstType::new_pointer_to(*element_type);
+        chk.set_data_type(&node_id, &decayed_type);
+
+        Ok(decayed_type)
+    } else if let AstType::Function { .. } = ty {
+        let original_expr = take_expression(expr);
+
+        // The source span for the new AddressOf expression will be the same as the original expression,
+        // since our new AddressOf that we're inserting doesn't appear in the source code.
+        let node_id = AstNodeId::new();
+        let original_expr_span = chk.metadata.get_source_span(&original_expr.node_id()).unwrap();
+        chk.metadata.add_source_span(node_id, *original_expr_span);
+
+        *expr = AstExpression::AddressOf { node_id, expr: Box::new(original_expr) };
+
+        let decayed_type = AstType::new_pointer_to(ty);
+        chk.set_data_type(&node_id, &decayed_type);
+
+        Ok(decayed_type)
+    } else {
+        Ok(ty)
+    }
+}
+
+/// Type checks an expression.
+fn typecheck_expression(
+    expr: &mut AstExpression,
+    chk: &mut TypeChecker,
+    driver: &mut Driver,
+) -> TypeCheckResult<AstType> {
     match expr {
         AstExpression::Identifier { node_id, unique_name, .. } => {
             // Record that the symbol has been used.
             chk.symbols.set_symbol_used(unique_name);
 
-            let symbol = chk.symbols.get(&unique_name).unwrap();
-            let symbol_type = symbol.data_type.clone();
+            // If the symbol doesn't exist then there was a previous typechecking error with its declaration, so
+            // we'll abort typechecking this expression.
+            let symbol = chk.symbols.get(&unique_name).ok_or(TypeCheckError)?;
 
-            // If the identifier is a function designator of function type and the parent expression is not preventing
-            // a decay (implicit conversion) then the type of the function designator is a function pointer.
-            // Some parent expressions (like AddressOf) prevent a decay.
-            //
-            if let AstType::Function { .. } = symbol_type
-                && !parent_ctx_suppresses_decay
-            {
-                let fn_ptr_type = AstType::new_pointer_to(symbol_type);
-                chk.set_data_type(node_id, &fn_ptr_type);
-                return Ok(fn_ptr_type);
-            }
+            let symbol_type = symbol.data_type.clone();
 
             chk.set_data_type(node_id, &symbol_type);
             Ok(symbol_type)
@@ -303,49 +440,10 @@ fn typecheck_expression(
             Ok(data_type)
         }
 
-        AstExpression::Cast { node_id, target_type, expr } => {
-            let expr_type = typecheck_expression(expr, None, chk, driver)?;
-
-            let target_resolved_type =
-                type_resolution::resolve_declared_type(target_type, Some(&mut chk.symbols), Some(driver))
-                    .map_err(|_| TypeCheckError)?;
-
-            target_type.resolved_type = Some(target_resolved_type);
-
-            let cast_to_type = target_type.resolved_type.clone().unwrap();
-
-            // Warn if casting a pointer to an integer type smaller than pointer size.
-            if expr_type.is_pointer() && cast_to_type.is_integer() && cast_to_type.bits() < expr_type.bits() {
-                let cast_op_loc = chk.metadata.get_source_span_as_loc(node_id).unwrap();
-                let expr_loc = chk.metadata.get_source_span_as_loc(&expr.node_id()).unwrap();
-
-                Warning::pointer_to_smaller_int_cast(&expr_type, &cast_to_type, cast_op_loc, expr_loc, driver);
-            }
-
-            // Cannot cast to a function type
-            if cast_to_type.is_function() {
-                let cast_op_loc = chk.metadata.get_source_span_as_loc(node_id).unwrap();
-                let expr_loc = chk.metadata.get_source_span_as_loc(&expr.node_id()).unwrap();
-
-                Error::cannot_cast_to_function_type(cast_op_loc, expr_loc, &cast_to_type, driver);
-            }
-
-            // Cannot cast between pointer and floating-point types.
-            if cast_to_type.is_pointer() && expr_type.is_floating_point()
-                || cast_to_type.is_floating_point() && expr_type.is_pointer()
-            {
-                let expr_loc = chk.metadata.get_source_span_as_loc(&expr.node_id()).unwrap();
-                Error::invalid_cast(expr_loc, &expr_type, &cast_to_type, driver);
-            }
-
-            // Future: Warn about UB casting from a negative float literal to an unsigned int, e.g. `(unsigned int)-1`
-
-            chk.set_data_type(node_id, &cast_to_type);
-            Ok(cast_to_type)
-        }
+        AstExpression::Cast { .. } => typecheck_cast_expression(expr, chk, driver),
 
         AstExpression::Deref { node_id, expr } => {
-            let expr_type = typecheck_expression(expr, None, chk, driver)?;
+            let expr_type = typecheck_expression_with_decay(expr, chk, driver)?;
 
             if let AstType::Pointer(referenced) = expr_type {
                 chk.set_data_type(node_id, &referenced);
@@ -363,7 +461,8 @@ fn typecheck_expression(
         }
 
         AstExpression::AddressOf { node_id, expr } => {
-            let expr_type = typecheck_expression(expr, Some(ParentExprCtx::SuppressDecay), chk, driver)?;
+            let expr_type = typecheck_expression(expr, chk, driver)?; // Note: No decay
+
             if expr.is_lvalue() {
                 let ptr_type = AstType::Pointer(Box::new(expr_type));
                 chk.set_data_type(node_id, &ptr_type);
@@ -375,6 +474,8 @@ fn typecheck_expression(
             }
         }
 
+        AstExpression::Subscript { .. } => typecheck_subscript_expression(expr, chk, driver),
+
         AstExpression::UnaryOperation { .. } => typecheck_unary_operation(expr, chk, driver),
 
         AstExpression::BinaryOperation { .. } => typecheck_binary_operation(expr, chk, driver),
@@ -385,6 +486,110 @@ fn typecheck_expression(
 
         AstExpression::FunctionCall { .. } => typecheck_function_call(expr, chk, driver),
     }
+}
+
+/// Type checks a cast expression.
+fn typecheck_cast_expression(
+    expr: &mut AstExpression,
+    chk: &mut TypeChecker,
+    driver: &mut Driver,
+) -> TypeCheckResult<AstType> {
+    let AstExpression::Cast { node_id, target_type, expr } = expr else {
+        ICE!("Expected cast expression");
+    };
+
+    let expr_type = typecheck_expression_with_decay(expr, chk, driver)?;
+
+    let target_resolved_type =
+        type_resolution::resolve_declared_type(target_type, Some(&mut chk.symbols), Some(driver))
+            .map_err(|_| TypeCheckError)?;
+
+    target_type.resolved_type = Some(target_resolved_type);
+
+    let cast_to_type = target_type.resolved_type.clone().unwrap();
+
+    // Warn if casting a pointer to an integer type smaller than pointer size.
+    if expr_type.is_pointer() && cast_to_type.is_integer() && cast_to_type.bits() < expr_type.bits() {
+        let cast_op_loc = chk.metadata.get_source_span_as_loc(node_id).unwrap();
+        let expr_loc = chk.metadata.get_source_span_as_loc(&expr.node_id()).unwrap();
+        Warning::pointer_to_smaller_int_cast(&expr_type, &cast_to_type, cast_op_loc, expr_loc, driver);
+    }
+
+    // Cannot cast to a function or array type
+    if cast_to_type.is_function() || cast_to_type.is_array() {
+        let cast_op_loc = chk.metadata.get_source_span_as_loc(node_id).unwrap();
+        let expr_loc = chk.metadata.get_source_span_as_loc(&expr.node_id()).unwrap();
+
+        Error::cannot_cast_to_function_or_array_type(cast_op_loc, expr_loc, &cast_to_type, driver);
+    }
+
+    // Cannot cast between pointer and floating-point types.
+    if cast_to_type.is_pointer() && expr_type.is_floating_point()
+        || cast_to_type.is_floating_point() && expr_type.is_pointer()
+    {
+        let expr_loc = chk.metadata.get_source_span_as_loc(&expr.node_id()).unwrap();
+        Error::invalid_cast(expr_loc, &expr_type, &cast_to_type, driver);
+    }
+
+    // Future: Warn about UB casting from a negative float literal to an unsigned int, e.g. `(unsigned int)-1`
+
+    chk.set_data_type(node_id, &cast_to_type);
+    Ok(cast_to_type)
+}
+
+/// Type checks an array subscript expression.
+fn typecheck_subscript_expression(
+    expr: &mut AstExpression,
+    chk: &mut TypeChecker,
+    driver: &mut Driver,
+) -> TypeCheckResult<AstType> {
+    let AstExpression::Subscript { node_id, expr1, expr2 } = expr else {
+        ICE!("Expected subscript expression");
+    };
+
+    let expr1_type = typecheck_expression_with_decay(expr1, chk, driver)?;
+    let expr2_type = typecheck_expression_with_decay(expr2, chk, driver)?;
+
+    let valid_types =
+        (expr1_type.is_pointer() && expr2_type.is_integer()) || (expr2_type.is_pointer() && expr1_type.is_integer());
+
+    if !valid_types {
+        let loc = chk.metadata.get_source_span_as_loc(node_id).unwrap();
+
+        let expr1_loc = chk.metadata.get_source_span_as_loc(&expr1.node_id()).unwrap();
+        let expr2_loc = chk.metadata.get_source_span_as_loc(&expr2.node_id()).unwrap();
+
+        let neither_is_pointer = !expr1_type.is_pointer() && !expr2_type.is_pointer();
+
+        let err = if neither_is_pointer {
+            "Subscripted value is not an array or pointer".to_string()
+        } else {
+            "Array subscript must be an integer".to_string()
+        };
+
+        let mut diag = Diagnostic::error_at_location(err, loc);
+        if neither_is_pointer {
+            diag.add_location(expr1_loc);
+            diag.add_location(expr2_loc);
+        } else if expr1_type.is_pointer() && !expr2_type.is_integer() {
+            diag.add_location(expr2_loc);
+        } else if expr2_type.is_pointer() && !expr1_type.is_integer() {
+            diag.add_location(expr1_loc);
+        }
+
+        driver.add_diagnostic(diag);
+        return Err(TypeCheckError);
+    }
+
+    let ptr_type = if expr1_type.is_pointer() { expr1_type } else { expr2_type };
+    let AstType::Pointer(referent_type) = ptr_type else {
+        ICE!("Expected an AstType::Pointer");
+    };
+
+    // The type of the subscript expression is the pointer's referent type.
+    chk.set_data_type(node_id, &referent_type);
+
+    Ok(*referent_type)
 }
 
 /// Type checks the operand expression in the unary operation and then checks the unary operation itself with
@@ -400,13 +605,21 @@ fn typecheck_unary_operation(
 
     // LogicalNot (and the binary operations for LogicalAnd/Or) have type of 'int'.
     if *op == parser::AstUnaryOp::LogicalNot {
-        typecheck_expression(operand_expr, None, chk, driver)?;
+        typecheck_expression_with_decay(operand_expr, chk, driver)?;
         chk.set_data_type(node_id, &AstType::Int);
         return Ok(AstType::Int);
     }
 
-    // Otherwise the unary operation takes the type of its operand expression
-    let operand_type = typecheck_expression(operand_expr, Some(ParentExprCtx::SuppressDecay), chk, driver)?;
+    // The unary operation takes the type of its operand expression
+    let operand_type = typecheck_expression_with_decay(operand_expr, chk, driver)?;
+
+    // Pre/postfix increment & decrement require a modifiable lvalue.
+    if parser::expr::ops::is_incr_or_decr_op(op) && !is_modifiable_lvalue(operand_expr, &operand_type) {
+        let loc = chk.metadata.get_source_span_as_loc(node_id).unwrap();
+        let is_increment = parser::expr::ops::is_increment_op(op);
+        Error::cannot_increment_or_decrement_expression(is_increment, &operand_type, loc, driver);
+        return Err(TypeCheckError);
+    }
 
     if operand_type.is_pointer() && unary_operator_incompatible_with_ptr_operand(*op) {
         let err = format!("Unary operation is invalid on operand of type '{operand_type}'");
@@ -441,8 +654,8 @@ fn typecheck_binary_operation(
         ICE!("Expected binary operation");
     };
 
-    let left_type = typecheck_expression(left, None, chk, driver)?;
-    let right_type = typecheck_expression(right, None, chk, driver)?;
+    let left_type = typecheck_expression_with_decay(left, chk, driver)?;
+    let right_type = typecheck_expression_with_decay(right, chk, driver)?;
 
     // LogicalAnd `&&` and LogicalOr `||` evaluate to a value of type 'int' so we don't need to cast the operands.
     if *op == AstBinaryOp::LogicalAnd || *op == AstBinaryOp::LogicalOr {
@@ -456,19 +669,30 @@ fn typecheck_binary_operation(
     if (left_type.is_pointer() || right_type.is_pointer() || left_type.is_function() || right_type.is_function())
         && binary_operator_incompatible_with_ptr_operand(*op)
     {
-        let loc = chk.metadata.get_source_span_as_loc(node_id).unwrap();
-        Error::invalid_binary_expression_operands(&left_type, &right_type, loc, driver);
+        error_invalid_binary_expression_operands(node_id, left, right, &left_type, &right_type, chk, driver);
         return Err(TypeCheckError);
     }
 
     // Various binary operators cannot have floating-point operands
     let has_fp_operand = left_type.is_floating_point() || right_type.is_floating_point();
     if has_fp_operand && binary_operator_incompatible_with_fp_operand(*op) {
-        let loc = chk.metadata.get_source_span_as_loc(node_id).unwrap();
-        Error::invalid_binary_expression_operands(&left_type, &right_type, loc, driver);
+        error_invalid_binary_expression_operands(node_id, left, right, &left_type, &right_type, chk, driver);
+        return Err(TypeCheckError);
     }
 
-    // Take ownership of the left and right expressions (by replacing them with a 'null' value, which will never be used).
+    // Binary operations where one operand is a pointer and the other is an integer, e.g. `1 + ptr` or `ptr == 0`.
+    //
+    if (left_type.is_pointer() && right_type.is_integer()) || (right_type.is_pointer() && left_type.is_integer()) {
+        return typecheck_ptr_and_int_binary_operation(expr, chk, driver);
+    }
+
+    // Binary operation where both operands are pointers of the same type
+    //
+    if left_type.is_pointer() && left_type == right_type {
+        return typecheck_ptr_binary_operation(expr, chk, driver);
+    }
+
+    // Take ownership of the expressions (by replacing them with a 'null' value, which will never be used again).
     let left = take_boxed_expression(left);
     let right = take_boxed_expression(right);
 
@@ -530,8 +754,8 @@ fn typecheck_binary_operation(
     //      But we still cast the lhs to the data type because the lhs may have been promoted to 'int'
     //      if it was a smaller integer type (_Bool, char, short).
     //
-    let left = chk.wrap_in_cast_if_neeeded(&operand_data_type, left, driver);
-    let right = chk.wrap_in_cast_if_neeeded(&operand_data_type, right, driver);
+    let left = chk.add_cast_if_needed(&operand_data_type, left, CastWarningPolicy::WarnOnImplicitConversion, driver);
+    let right = chk.add_cast_if_needed(&operand_data_type, right, CastWarningPolicy::WarnOnImplicitConversion, driver);
 
     // Determine the data type of the binary operation itself
     let binary_op_data_type = if op.is_relational() { AstType::Int } else { operand_data_type };
@@ -545,6 +769,96 @@ fn typecheck_binary_operation(
     Ok(binary_op_data_type)
 }
 
+/// Type checks a binary operation with a pointer and integer operand (in either order).
+fn typecheck_ptr_and_int_binary_operation(
+    expr: &mut AstExpression,
+    chk: &mut TypeChecker,
+    driver: &mut Driver,
+) -> TypeCheckResult<AstType> {
+    let AstExpression::BinaryOperation { node_id, op, left, right } = expr else {
+        ICE!("Expected binary operation");
+    };
+
+    let left = take_boxed_expression(left);
+    let right = take_boxed_expression(right);
+
+    let left_type = chk.get_data_type(&left.node_id());
+    let right_type = chk.get_data_type(&right.node_id());
+
+    assert!(left_type.is_pointer() && right_type.is_integer() || right_type.is_pointer() && left_type.is_integer());
+
+    // Valid operations are addition, subtraction and relational operators.
+    let valid_op = matches!(op, AstBinaryOp::Add | AstBinaryOp::Subtract) || op.is_relational();
+    if !valid_op {
+        error_invalid_binary_expression_operands(node_id, &left, &right, &left_type, &right_type, chk, driver);
+        return Err(TypeCheckError);
+    }
+
+    // Can subtract an integer from a pointer, but not vice versa.
+    if *op == AstBinaryOp::Subtract && left_type.is_integer() {
+        error_invalid_binary_expression_operands(node_id, &left, &right, &left_type, &right_type, chk, driver);
+        return Err(TypeCheckError);
+    }
+
+    // Determine which operand is the pointer and which is the integer.
+    let (left_is_ptr, ptr_type, ptr_expr, int_type, mut int_expr) = if left_type.is_pointer() {
+        (true, left_type, left, right_type, right)
+    } else {
+        (false, right_type, right, left_type, left)
+    };
+
+    // Emit a warning about if we're comparing a pointer and an integer, except for a null pointer constant.
+    if op.is_relational() && !is_null_pointer_constant(&int_expr, &ptr_type, chk, driver) {
+        warn_compare_pointer_and_integer(node_id, &ptr_expr, &int_expr, &ptr_type, &int_type, chk, driver);
+    }
+
+    // Cast the integer expression to a 'long' type. This helps us later with IR lowering.
+    let original_int_expr = take_boxed_expression(&mut int_expr);
+    int_expr = chk.add_cast_if_needed(&AstType::Long, original_int_expr, CastWarningPolicy::NoWarning, driver);
+
+    // The data type of the binary operation is 'int' if the operation is relational or otherwise the pointer's type.
+    let expression_type = if op.is_relational() { AstType::Int } else { ptr_type };
+
+    chk.set_data_type(node_id, &expression_type);
+
+    // Update the binary operation to use the new cast expression.
+    let (left, right) = if left_is_ptr { (ptr_expr, int_expr) } else { (int_expr, ptr_expr) };
+    *expr = AstExpression::BinaryOperation { node_id: *node_id, op: *op, left, right };
+
+    Ok(expression_type)
+}
+
+/// Type checks a binary operation with two pointer operands.
+fn typecheck_ptr_binary_operation(
+    expr: &mut AstExpression,
+    chk: &mut TypeChecker,
+    driver: &mut Driver,
+) -> TypeCheckResult<AstType> {
+    let AstExpression::BinaryOperation { node_id, op, left, right } = expr else {
+        ICE!("Expected binary operation");
+    };
+
+    let left_type = chk.get_data_type(&left.node_id());
+    let right_type = chk.get_data_type(&right.node_id());
+
+    assert!(left_type.is_pointer() && left_type == right_type);
+
+    let valid_op = op.is_relational() || *op == AstBinaryOp::Subtract;
+
+    if !valid_op {
+        error_invalid_binary_expression_operands(node_id, left, right, &left_type, &right_type, chk, driver);
+        return Err(TypeCheckError);
+    }
+
+    // Subtracting a pointer from another evaluates to a value of type '__ptrdiff_t' (aka 'long'). Relational operators
+    // evaluate to 'int'.
+    let expression_type = if *op == AstBinaryOp::Subtract { AstType::__ptrdiff_t() } else { AstType::Int };
+
+    chk.set_data_type(node_id, &expression_type);
+
+    Ok(expression_type)
+}
+
 /// Type checks the left and right expressions in the assignment (including compound assignment) operation, wraps the
 /// rhs expression with a cast to the lhs type, and returns the lhs type.
 fn typecheck_assignment(
@@ -556,14 +870,17 @@ fn typecheck_assignment(
         ICE!("Expected assignment expression");
     };
 
-    let lhs_type = typecheck_expression(lhs, Some(ParentExprCtx::SuppressDecay), chk, driver)?;
-    let rhs_type = typecheck_expression(rhs, None, chk, driver)?;
+    let lhs_type = typecheck_expression_with_decay(lhs, chk, driver)?;
 
     // The lhs must be a modifiable lvalue.
     if !is_modifiable_lvalue(lhs, &lhs_type) {
-        let loc = chk.metadata.get_source_span_as_loc(node_id).unwrap();
-        Error::expression_is_not_assignable(loc, driver);
+        let assign_op_loc = chk.metadata.get_source_span_as_loc(node_id).unwrap();
+        let lhs_loc = chk.metadata.get_source_span_as_loc(&lhs.node_id()).unwrap();
+        Error::expression_is_not_assignable(assign_op_loc, lhs_loc, lhs.is_lvalue(), &lhs_type, driver);
+        return Err(TypeCheckError);
     }
+
+    let rhs_type = typecheck_expression_with_decay(rhs, chk, driver)?;
 
     // Compound assignment evaluates to the type of the lvalue. Depending on the operation we may need to cast the
     // rhs rvalue to the computation type of the lhs and rhs, but we can't do the cast here because we only have
@@ -581,26 +898,33 @@ fn typecheck_assignment(
         if (lhs_type.is_pointer() || rhs_type.is_pointer() || lhs_type.is_function() || rhs_type.is_function())
             && assignment_operator_incompatible_with_ptr_operand(*op)
         {
-            let loc = chk.metadata.get_source_span_as_loc(node_id).unwrap();
-            Error::invalid_binary_expression_operands(&lhs_type, &rhs_type, loc, driver);
+            error_invalid_binary_expression_operands(node_id, lhs, rhs, &lhs_type, &rhs_type, chk, driver);
             return Err(TypeCheckError);
         }
 
         // Some compound assignment operators cannot have floating-point operands
         let has_fp_operand = lhs_type.is_floating_point() || rhs_type.is_floating_point();
         if has_fp_operand && assignment_operator_incompatible_with_fp_operand(*op) {
-            let loc = chk.metadata.get_source_span_as_loc(node_id).unwrap();
-            Error::invalid_binary_expression_operands(&lhs_type, &rhs_type, loc, driver);
+            error_invalid_binary_expression_operands(node_id, lhs, rhs, &lhs_type, &rhs_type, chk, driver);
+            return Err(TypeCheckError);
         }
 
-        // There are strict rules about types for `+=` and `-=`.
+        // For compound addition & subtraction (`+=` and `-=`), either both operands must be arithmetic types
+        // or the lhs can be a pointer and the rhs can be arithmetic.
         if matches!(op, AstAssignmentOp::Addition | AstAssignmentOp::Subtraction) {
             let valid = (lhs_type.is_arithmetic() && rhs_type.is_arithmetic())
                 || (lhs_type.is_pointer() && rhs_type.is_integer());
 
             if !valid {
-                let loc = chk.metadata.get_source_span_as_loc(node_id).unwrap();
-                Error::invalid_binary_expression_operands(&lhs_type, &rhs_type, loc, driver);
+                error_invalid_binary_expression_operands(node_id, lhs, rhs, &lhs_type, &rhs_type, chk, driver);
+                return Err(TypeCheckError);
+            }
+
+            // Pointer arithmetic
+            if lhs_type.is_pointer() && rhs_type.is_integer() {
+                chk.set_data_type(node_id, &lhs_type);
+                chk.set_data_type(computation_node_id, &lhs_type);
+                return Ok(lhs_type);
             }
         }
 
@@ -630,12 +954,12 @@ fn typecheck_assignment(
     }
 
     let original_lhs = take_boxed_expression(lhs);
-    let converted_rhs = convert_expression_type(rhs, &lhs_type, chk, driver)?;
+    let converted_rhs = convert_expression_type(&rhs.node_id(), rhs, &lhs_type, chk, driver)?;
 
     // Data type of an assignment is the lhs type
     chk.set_data_type(node_id, &lhs_type);
 
-    // Re-write the original assignment expression and insert the possibly-casted rhs.
+    // Rewrite the original assignment expression and insert the possibly-casted rhs.
     *expr = AstExpression::Assignment {
         node_id: *node_id,
         computation_node_id: *computation_node_id,
@@ -658,9 +982,9 @@ fn typecheck_conditional(
         ICE!("Expected conditional expression");
     };
 
-    typecheck_expression(condition, None, chk, driver)?;
-    typecheck_expression(consequent, None, chk, driver)?;
-    typecheck_expression(alternative, None, chk, driver)?;
+    typecheck_expression_with_decay(condition, chk, driver)?;
+    typecheck_expression_with_decay(consequent, chk, driver)?;
+    typecheck_expression_with_decay(alternative, chk, driver)?;
 
     let common_type = match get_common_type_for_expressions(consequent, alternative, chk, driver) {
         Ok(common_type) => common_type,
@@ -692,8 +1016,9 @@ fn typecheck_conditional(
     let original_alternative = take_boxed_expression(alternative);
 
     // Wrap each operand in a Cast
-    let casted_consequent = chk.wrap_in_cast_if_neeeded(&common_type, original_consequent, driver);
-    let casted_alternative = chk.wrap_in_cast_if_neeeded(&common_type, original_alternative, driver);
+    let cast_enable_warning = CastWarningPolicy::WarnOnImplicitConversion;
+    let casted_consequent = chk.add_cast_if_needed(&common_type, original_consequent, cast_enable_warning, driver);
+    let casted_alternative = chk.add_cast_if_needed(&common_type, original_alternative, cast_enable_warning, driver);
 
     // Data type of the conditional is the common type of the consequent and alternative
     chk.set_data_type(node_id, &common_type);
@@ -722,7 +1047,7 @@ fn typecheck_function_call(
     };
 
     // Type check the designator expression.
-    _ = typecheck_expression(designator, Some(ParentExprCtx::SuppressDecay), chk, driver)?;
+    _ = typecheck_expression(designator, chk, driver)?; // Note: No decay
 
     // Get the type of the function designator (function type or function pointer type) and the optional name
     // of the function. The name might be `None` if the designator is a function pointer. We only need the name
@@ -758,9 +1083,9 @@ fn typecheck_function_call(
             .iter_mut()
             .zip(params)
             .filter_map(|(arg, param_type)| {
-                _ = typecheck_expression(arg, None, chk, driver).ok()?;
+                _ = typecheck_expression_with_decay(arg, chk, driver).ok()?;
 
-                let converted_arg = convert_expression_type(arg, param_type, chk, driver).ok()?;
+                let converted_arg = convert_expression_type(&arg.node_id(), arg, param_type, chk, driver).ok()?;
 
                 Some(converted_arg)
             })
@@ -833,10 +1158,32 @@ fn get_function_designator_type(
             Ok((unique_name, fn_ptr_type))
         }
 
-        AstExpression::UnaryOperation { node_id, op, expr } => {
+        AstExpression::Subscript { node_id, expr1, expr2 } => {
+            let (unique_name1, expr1_t) = get_function_designator_type(expr1, chk, driver)?;
+            let (unique_name2, expr2_t) = get_function_designator_type(expr2, chk, driver)?;
+
+            if let AstType::Pointer(referent) = expr1_t
+                && let AstType::Array { element_type, .. } = *referent
+            {
+                return Ok((unique_name1, element_type.as_ref().clone()));
+            }
+
+            if let AstType::Pointer(referent) = expr2_t
+                && let AstType::Array { element_type, .. } = *referent
+            {
+                return Ok((unique_name2, element_type.as_ref().clone()));
+            }
+
+            let call_type = chk.get_data_type(node_id);
+            let loc = chk.metadata.get_source_span_as_loc(node_id).unwrap();
+            Error::invalid_call_type(&call_type, loc, driver);
+            Err(TypeCheckError)
+        }
+
+        AstExpression::UnaryOperation { node_id, op, .. } => {
             if parser::expr::ops::is_incr_or_decr_op(op) {
-                let (unique_name, expr_type) = get_function_designator_type(expr, chk, driver)?;
-                Ok((unique_name, expr_type))
+                let expr_type = chk.get_data_type(node_id);
+                Ok((None, expr_type))
             } else {
                 let call_type = chk.get_data_type(node_id);
                 let loc = chk.metadata.get_source_span_as_loc(node_id).unwrap();
@@ -845,10 +1192,10 @@ fn get_function_designator_type(
             }
         }
 
-        AstExpression::BinaryOperation { node_id, op, left, .. } => {
+        AstExpression::BinaryOperation { node_id, op, .. } => {
             if matches!(op, AstBinaryOp::Add | AstBinaryOp::Subtract) {
-                let (unique_name, expr_type) = get_function_designator_type(left, chk, driver)?;
-                Ok((unique_name, expr_type))
+                let expr_type = chk.get_data_type(node_id);
+                Ok((None, expr_type))
             } else {
                 let call_type = chk.get_data_type(node_id);
                 let loc = chk.metadata.get_source_span_as_loc(node_id).unwrap();
@@ -857,10 +1204,10 @@ fn get_function_designator_type(
             }
         }
 
-        AstExpression::Assignment { node_id, op, lhs, .. } => {
+        AstExpression::Assignment { node_id, op, .. } => {
             if matches!(op, AstAssignmentOp::Assignment | AstAssignmentOp::Addition | AstAssignmentOp::Subtraction) {
-                let (unique_name, expr_type) = get_function_designator_type(lhs, chk, driver)?;
-                Ok((unique_name, expr_type))
+                let expr_type = chk.get_data_type(node_id);
+                Ok((None, expr_type))
             } else {
                 let call_type = chk.get_data_type(node_id);
                 let loc = chk.metadata.get_source_span_as_loc(node_id).unwrap();
@@ -888,19 +1235,45 @@ fn get_function_designator_type(
     }
 }
 
+/// Evaluates a variable initializer expression for a static storage variable (must evaluate to a constant value).
 fn evaluate_static_storage_initializer(
-    var_type: &AstType,
-    init_full_expr: &AstFullExpression,
+    initializer: &AstVariableInitializer,
+    chk: &mut TypeChecker,
+    driver: &mut Driver,
+) -> TypeCheckResult<Vec<AstConstantValue>> {
+    let mut eval = Vec::new();
+
+    match initializer {
+        AstVariableInitializer::Scalar(full_expr) => {
+            eval.push(evaluate_static_storage_scalar_initializer(full_expr, chk, driver)?);
+        }
+        AstVariableInitializer::Aggregate { init, .. } => {
+            for ini in init {
+                let mut values = evaluate_static_storage_initializer(ini, chk, driver)?;
+                eval.append(&mut values);
+            }
+        }
+    }
+
+    // Merge consecutive ZeroBytes elements, e.g. `[ZeroBytes(4), ZeroBytes(4)]` becomes `[ZeroBytes(8)]`.
+    eval = utils::combine_consecutive_zero_bytes(eval);
+
+    Ok(eval)
+}
+
+/// Evaluates a variable initializer expression for a static storage variable which evaluates as a scalar value.
+fn evaluate_static_storage_scalar_initializer(
+    full_expr: &AstFullExpression,
     chk: &mut TypeChecker,
     driver: &mut Driver,
 ) -> TypeCheckResult<AstConstantValue> {
-    let constant_value = constant_eval::evaluate_constant_full_expr(init_full_expr, Some(chk));
+    let constant_value = constant_eval::evaluate_constant_full_expr(full_expr, Some(chk));
 
     let constant_value = match constant_value {
         Some(val) => val,
 
         None => {
-            let loc = chk.metadata.get_source_span_as_loc(&init_full_expr.node_id).unwrap();
+            let loc = chk.metadata.get_source_span_as_loc(&full_expr.node_id).unwrap();
             let err =
                 "Initializer must be a constant expression for a variable with static storage duration".to_string();
             driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
@@ -908,32 +1281,50 @@ fn evaluate_static_storage_initializer(
         }
     };
 
-    let constant_value_type = constant_value.get_ast_type();
+    // If the constant value is zero then we return a special marker type, which tracks the size in bytes of the
+    // required zero value (e.g. 4 bytes for a zero 'int', 8 bytes for a zero 'double' or pointer). This helps us
+    // later during codegen because we can save space by using a dedicated directive for zero.
+    if constant_value.is_zero() {
+        let ty = constant_value.get_ast_type();
+        return Ok(AstConstantValue::ZeroBytes(ty.bits() / 8));
+    }
 
-    if constant_value_type == *var_type {
+    // If the constant value's type matches the required full expression type then we're done.
+    let constant_value_type = constant_value.get_ast_type();
+    let full_expr_type = chk.get_data_type(&full_expr.node_id);
+    if constant_value_type == full_expr_type {
         return Ok(constant_value);
     }
 
     let original_value = constant_value.clone();
 
-    // Cast the constant value to the variable's type and emit a warning.
-    //      If the variable's type is a pointer then we cast the constant value to u64.
+    // Cast the constant value to the full expression's type and emit a warning.
+    //      If the full expression's type is a pointer then we cast the constant value to u64.
     //
-    let casted_value = if var_type.is_pointer() {
+    let casted_value = if full_expr_type.is_pointer() {
         constant_value.cast_to(&AstType::UnsignedLong)
     } else {
-        constant_value.cast_to(var_type)
+        constant_value.cast_to(&full_expr_type)
     };
 
     if casted_value != original_value {
         let old_value = original_value.to_string();
         let new_value = casted_value.to_string();
-        let sign_change =
-            constant_value_type.is_integer() && var_type.is_integer() && !constant_value_type.same_signedness(var_type);
+        let sign_change = constant_value_type.is_integer()
+            && full_expr_type.is_integer()
+            && !constant_value_type.same_signedness(&full_expr_type);
 
-        let loc = chk.metadata.get_source_span_as_loc(&init_full_expr.node_id).unwrap();
+        let loc = chk.metadata.get_source_span_as_loc(&full_expr.node_id).unwrap();
 
-        Warning::implicit_conversion(&constant_value_type, var_type, &old_value, &new_value, sign_change, loc, driver);
+        Warning::implicit_literal_conversion(
+            &constant_value_type,
+            &full_expr_type,
+            &old_value,
+            &new_value,
+            sign_change,
+            loc,
+            driver,
+        );
     }
 
     Ok(casted_value)
@@ -942,6 +1333,7 @@ fn evaluate_static_storage_initializer(
 /// Converts the given expression to the given target type by wrapping it in a cast, unless it already has the
 /// desired type, or emits an error if the conversion is not valid.
 fn convert_expression_type(
+    expr_node_id: &AstNodeId, // In case `expr` is from a larger full-expression.
     expr: &mut AstExpression,
     target_type: &AstType,
     chk: &mut TypeChecker,
@@ -954,16 +1346,18 @@ fn convert_expression_type(
     }
 
     // Ensure the conversion is valid.
-    check_conversion(expr, &expr_type, target_type, chk, driver)?;
+    check_conversion(expr_node_id, expr, &expr_type, target_type, chk, driver)?;
 
     // Take ownership of the expression (by replacing with a 'null' value, which will never be used).
     let original_expr = take_expression(expr);
 
     // Cast the expression to the target type
-    Ok(chk.wrap_in_cast(target_type, Box::new(original_expr), driver))
+    Ok(chk.add_cast(target_type, Box::new(original_expr), CastWarningPolicy::WarnOnImplicitConversion, driver))
 }
 
+/// Checks whether a conversion from a `source_type` to a `dest_type` is valid; emits a diagnostic if not.
 fn check_conversion(
+    source_expr_node_id: &AstNodeId, // In case `source_expr` is from a larger full-expression.
     source_expr: &AstExpression,
     source_type: &AstType,
     dest_type: &AstType,
@@ -979,19 +1373,19 @@ fn check_conversion(
     }
 
     if dest_type.is_arithmetic() && source_type.is_pointer() {
-        let loc = chk.metadata.get_source_span_as_loc(&source_expr.node_id()).unwrap();
+        let loc = chk.metadata.get_source_span_as_loc(source_expr_node_id).unwrap();
         Error::incompatible_pointer_to_arithmetic_conversion(source_type, dest_type, loc, driver);
         return Err(TypeCheckError);
     }
 
     if dest_type.is_function_pointer() && source_type.is_function_pointer() {
-        let loc = chk.metadata.get_source_span_as_loc(&source_expr.node_id()).unwrap();
+        let loc = chk.metadata.get_source_span_as_loc(source_expr_node_id).unwrap();
         Error::incompatible_fn_pointer_types(dest_type, source_type, loc, driver);
         return Err(TypeCheckError);
     }
 
     if dest_type.is_pointer() && source_type.is_pointer() {
-        let loc = chk.metadata.get_source_span_as_loc(&source_expr.node_id()).unwrap();
+        let loc = chk.metadata.get_source_span_as_loc(source_expr_node_id).unwrap();
         Error::incompatible_pointer_types(dest_type, source_type, loc, driver);
         return Err(TypeCheckError);
     }
@@ -1000,8 +1394,14 @@ fn check_conversion(
         && source_type.is_arithmetic()
         && !is_null_pointer_constant(source_expr, dest_type, chk, driver)
     {
-        let loc = chk.metadata.get_source_span_as_loc(&source_expr.node_id()).unwrap();
+        let loc = chk.metadata.get_source_span_as_loc(source_expr_node_id).unwrap();
         Error::incompatible_arithmetic_to_pointer_conversion(source_type, dest_type, loc, driver);
+        return Err(TypeCheckError);
+    }
+
+    if dest_type.is_array() && source_type.is_scalar() {
+        let loc = chk.metadata.get_source_span_as_loc(source_expr_node_id).unwrap();
+        Error::cannot_initialize_array_with_scalar(source_type, loc, driver);
         return Err(TypeCheckError);
     }
 
@@ -1062,6 +1462,7 @@ fn get_common_type_for_expressions(
     Ok(AstType::get_common_type(&a_type, &b_type).promote_if_rank_lower_than_int())
 }
 
+/// Does the given `expr` expression evaluate as a null pointer constant value (zero)?
 fn is_null_pointer_constant(expr: &AstExpression, ptr_type: &AstType, chk: &TypeChecker, driver: &mut Driver) -> bool {
     match expr {
         AstExpression::IntegerLiteral { value, .. } => *value == 0,
@@ -1179,6 +1580,61 @@ fn assignment_operator_incompatible_with_fp_operand(op: AstAssignmentOp) -> bool
     )
 }
 
+/// Makes an `AstVariableInitializer` with a constant zero expression (or an aggregate of constant zeros).
+fn make_zero_initializer(
+    element_type: &AstType,
+    chk: &mut TypeChecker,
+    driver: &mut Driver,
+) -> TypeCheckResult<AstVariableInitializer> {
+    if let AstType::Array { element_type: array_elem_type, count } = element_type {
+        let node_id = AstNodeId::new();
+
+        let mut init = Vec::with_capacity(*count);
+        for _ in 0..*count {
+            init.push(make_zero_initializer(array_elem_type, chk, driver)?);
+        }
+
+        chk.set_data_type(&node_id, element_type);
+
+        Ok(AstVariableInitializer::Aggregate { node_id, init })
+    } else if element_type.is_scalar() {
+        // If necessary, this 'int' will get promoted to the `element_type`.
+        let mut constant_zero = AstFullExpression::new(AstExpression::new_int_literal(0));
+
+        _ = typecheck_full_expression_for_result_type(&mut constant_zero, element_type, chk, driver)?;
+
+        Ok(AstVariableInitializer::Scalar(constant_zero))
+    } else {
+        ICE!("Did not make a zero initializer for '{element_type}'")
+    }
+}
+
+fn take_first_scalar_initializer(initializer: &mut AstVariableInitializer) -> AstVariableInitializer {
+    match initializer {
+        AstVariableInitializer::Scalar(full_expr) => {
+            let expr = take_expression(&mut full_expr.expr);
+            AstVariableInitializer::Scalar(AstFullExpression { node_id: full_expr.node_id, expr })
+        }
+        AstVariableInitializer::Aggregate { init, .. } => take_first_scalar_initializer(&mut init[0]),
+    }
+}
+
+fn error_invalid_binary_expression_operands(
+    node_id: &AstNodeId,
+    lhs_expr: &AstExpression,
+    rhs_expr: &AstExpression,
+    lhs_type: &AstType,
+    rhs_type: &AstType,
+    chk: &mut TypeChecker,
+    driver: &mut Driver,
+) {
+    let op_loc = chk.metadata.get_source_span_as_loc(node_id).unwrap();
+    let lhs_loc = chk.metadata.get_source_span_as_loc(&lhs_expr.node_id()).unwrap();
+    let rhs_loc = chk.metadata.get_source_span_as_loc(&rhs_expr.node_id()).unwrap();
+
+    Error::invalid_binary_expression_operands(op_loc, lhs_type, rhs_type, lhs_loc, rhs_loc, driver);
+}
+
 fn warn_compare_different_pointer_types(
     expr_node_id: &AstNodeId,
     left: &AstExpression,
@@ -1255,6 +1711,7 @@ fn extract_fn_return_and_param_types(fn_type: &AstType) -> (&AstType, &Vec<AstTy
 }
 
 fn is_modifiable_lvalue(expr: &AstExpression, expr_type: &AstType) -> bool {
-    // To be modifiable, the lvalue must designate an object (not a function), and the object cannot be const (future).
-    expr.is_lvalue() && !expr_type.is_function()
+    // To be modifiable, the lvalue must designate an object (not a function or an array),
+    // and the object cannot be const (future).
+    expr.is_lvalue() && !(expr_type.is_function() || expr_type.is_array())
 }

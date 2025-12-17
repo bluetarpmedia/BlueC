@@ -21,24 +21,31 @@ pub enum AsmType {
     QuadWord,
     FpSingle,
     FpDouble,
+    ByteArray { size: usize, align: usize },
 }
 
 impl From<&BtType> for AsmType {
     fn from(bt_type: &BtType) -> Self {
-        AsmType::from(*bt_type)
+        AsmType::from(bt_type.clone())
     }
 }
 
 impl From<BtType> for AsmType {
     fn from(bt_type: BtType) -> Self {
         match bt_type {
-            BtType::Void => ICE!("No AsmType for BtType::Void"),
             BtType::Int16 | BtType::UInt16 => AsmType::Word,
             BtType::Int32 | BtType::UInt32 => AsmType::DoubleWord,
             BtType::Int64 | BtType::UInt64 | BtType::Pointer => AsmType::QuadWord,
             BtType::Float32 => AsmType::FpSingle,
             BtType::Float64 => AsmType::FpDouble,
-            BtType::Function => ICE!("No AsmType for BtType::Function")
+            BtType::Array { element_type, count } => {
+                let size = element_type.bits() / 8 * count;
+                // If an array's size in bytes is >= 16 then its alignment is 16. Otherwise its the element type size.
+                let align = if size >= 16 { 16 } else { element_type.bits() / 8 };
+                AsmType::ByteArray { size, align }
+            }
+            BtType::Void => ICE!("No AsmType for BtType::Void"),
+            BtType::Function => ICE!("No AsmType for BtType::Function"),
         }
     }
 }
@@ -52,6 +59,7 @@ impl fmt::Display for AsmType {
             AsmType::QuadWord => write!(f, "QuadWord"),
             AsmType::FpSingle => write!(f, "Single"),
             AsmType::FpDouble => write!(f, "Double"),
+            AsmType::ByteArray { size, align } => write!(f, "ByteArray[{size}, align={align}]"),
         }
     }
 }
@@ -66,12 +74,16 @@ impl AsmType {
             AsmType::QuadWord => 8,
             AsmType::FpSingle => 4,
             AsmType::FpDouble => 8,
+            AsmType::ByteArray { size, .. } => *size,
         }
     }
 
     /// The natural alignment in bytes that the type requires is the same as its size.
     pub fn alignment_bytes(&self) -> usize {
-        self.size_bytes()
+        match self {
+            AsmType::ByteArray { align, .. } => *align,
+            _ => self.size_bytes()
+        }
     }
 
     /// Is this type a primitive scalar data type?
@@ -93,6 +105,7 @@ impl AsmType {
             AsmType::QuadWord => "q",
             AsmType::FpSingle => "ss",
             AsmType::FpDouble => "sd",
+            AsmType::ByteArray { .. } => ICE!("No operand string for an AsmType::ByteArray"),
         }
     }
 }
@@ -116,12 +129,14 @@ pub struct AsmFunction {
 pub struct AsmStaticStorageVariable {
     pub name: String,
     pub is_global: bool,
-    pub init_value: AsmConstantInitializer,
+    pub alignment: usize,
+    pub init_value: Vec<AsmConstantInitializer>,
 }
 
 /// A read-only constant.
 pub struct AsmConstant {
     pub label: AsmLabelName,
+    pub alignment: usize,
     pub value: AsmConstantInitializer,
 }
 
@@ -133,17 +148,18 @@ pub struct AsmConstant {
 /// Float32 and 64 values are converted to their bit representation as `Imm32` and `Imm64` unsigned values.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum AsmConstantInitializer {
-    Imm16 { value: u16, align: usize, signed: bool },
-    Imm32 { value: u32, align: usize, signed: bool },
-    Imm64 { value: u64, align: usize, signed: bool },
-    AddressConstant { object: String }
+    ZeroBytes(usize),
+    Imm16 { value: u16, signed: bool },
+    Imm32 { value: u32, signed: bool },
+    Imm64 { value: u64, signed: bool },
+    AddressConstant { object: String },
 }
 
 impl From<f64> for AsmConstantInitializer {
     /// Creates an `AsmStaticInitializer` from the given `f64` value.
     fn from(value: f64) -> Self {
         let bits = value.to_bits();
-        Self::Imm64 { value: bits, align: 8, signed: false }
+        Self::Imm64 { value: bits, signed: false }
     }
 }
 
@@ -151,6 +167,7 @@ impl AsmConstantInitializer {
     /// Is the initializer value zero?
     pub fn is_zero(&self) -> bool {
         match self {
+            AsmConstantInitializer::ZeroBytes(_) => true,
             AsmConstantInitializer::Imm16 { value, .. } => *value == 0,
             AsmConstantInitializer::Imm32 { value, .. } => *value == 0,
             AsmConstantInitializer::Imm64 { value, .. } => *value == 0,
@@ -161,6 +178,7 @@ impl AsmConstantInitializer {
     /// The size in bytes for the type of the initializer value.
     pub fn size_bytes(&self) -> usize {
         match self {
+            AsmConstantInitializer::ZeroBytes(size) => *size,
             AsmConstantInitializer::Imm16 { .. } => 2,
             AsmConstantInitializer::Imm32 { .. } => 4,
             AsmConstantInitializer::Imm64 { .. } => 8,
@@ -168,25 +186,10 @@ impl AsmConstantInitializer {
         }
     }
 
-    /// The byte alignment requirement of the initializer value.
-    ///
-    /// This should be >= its `size_bytes`. For example, in some cases it may be necessary to align
-    /// a value to a 16-byte alignment in order to use a certain instruction.
-    pub fn alignment_bytes(&self) -> usize {
-        let alignment = match self {
-            AsmConstantInitializer::Imm16 { align, .. } => *align,
-            AsmConstantInitializer::Imm32 { align, .. } => *align,
-            AsmConstantInitializer::Imm64 { align, .. } => *align,
-            AsmConstantInitializer::AddressConstant { .. } => 8,
-        };
-
-        debug_assert!(alignment >= self.size_bytes());
-        alignment
-    }
-
     /// Gets initializer value's `AsmType`.
     pub fn asm_type(&self) -> AsmType {
         match self {
+            AsmConstantInitializer::ZeroBytes(_) => ICE!("No AsmType for AsmConstantInitializer::ZeroBytes"),
             AsmConstantInitializer::Imm16 { .. } => AsmType::Word,
             AsmConstantInitializer::Imm32 { .. } => AsmType::DoubleWord,
             AsmConstantInitializer::Imm64 { .. } => AsmType::QuadWord,
@@ -276,23 +279,29 @@ pub enum AsmBinaryOp {
 /// An instruction operand.
 #[derive(Debug, Clone)]
 pub enum AsmOperand {
-    /// An immediate value (fits i16, u16, i32, u32, i64 and u64 values)
+    /// An immediate value (holds signed/unsigned i16, u16, i32, u32, i64 and u64 values)
     Imm(u64),
 
     /// A hardware register
     Reg(HwRegister),
 
-    /// A pseudo-variable; operands that could live in HW registers, as well as for static-storage duration variables
-    Pseudo(String),
-
-    /// A memory operand with base-relative addressing. `address = relative(%base)` in AT&T (or `[base] + relative`)
+    /// A memory operand with base-relative addressing. AT&T `address = relative(%base)` (Intel `[base] + relative`).
     Memory { base: HwRegister, relative: i32 },
+
+    /// An indexed operand. AT&T `address = (%base, %index, scale)` (or Intel `[base + scale*index]`).
+    Indexed { base: HwRegister, index: HwRegister, scale: usize },
 
     /// A global value stored in the Data section.
     Data(String),
 
     /// A function name
     Function(String),
+
+    /// A pseudo-variable for a scalar object, before we've allocated a register/memory location for it.
+    Pseudo(String),
+
+    /// A pseudo-variable for an aggregate object, before we've allocated a memory location for it.
+    PseudoMemory { name: String, offset: usize },
 }
 
 impl AsmOperand {
@@ -415,7 +424,10 @@ impl AsmOperand {
 
     /// Is this operand a memory address?
     pub fn is_memory_address(&self) -> bool {
-        matches!(self, AsmOperand::Memory { .. } | AsmOperand::Data(_) | AsmOperand::Function(_))
+        matches!(
+            self,
+            AsmOperand::Memory { .. } | AsmOperand::Indexed { .. } | AsmOperand::Data(_) | AsmOperand::Function(_)
+        )
     }
 
     /// Is this operand a HW (general or XMM) register?
@@ -425,11 +437,7 @@ impl AsmOperand {
 
     /// Is this operand an XMM HW register?
     pub fn is_xmm_hw_register(&self) -> bool {
-        if let AsmOperand::Reg(reg) = &self {
-            reg.is_xmm()
-        } else {
-            false
-        }
+        if let AsmOperand::Reg(reg) = &self { reg.is_xmm() } else { false }
     }
 }
 

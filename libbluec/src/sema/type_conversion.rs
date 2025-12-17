@@ -44,6 +44,18 @@ pub fn convert_u64_to_i32(value: u64) -> i32 {
     value as i32
 }
 
+/// Converts a `u64` value to an `i16`.
+///
+/// This is suitable for implementing a C cast from unsigned 64-bit to signed 16-bit:
+/// ```c
+/// short result = (short)some_unsigned_64bit_value;
+/// ```
+///
+/// This conversion truncates the upper 48 bits of the `u64` value.
+pub fn convert_u64_to_i16(value: u64) -> i16 {
+    value as i16
+}
+
 /// Converts a `u64` value to a `u32`.
 ///
 /// This is suitable for implementing a C cast from unsigned 64-bit to unsigned 32-bit:
@@ -54,6 +66,18 @@ pub fn convert_u64_to_i32(value: u64) -> i32 {
 /// This conversion truncates the upper 32 bits of the `u64` value.
 pub fn convert_u64_to_u32(value: u64) -> u32 {
     value as u32
+}
+
+/// Converts a `u64` value to a `u16`.
+///
+/// This is suitable for implementing a C cast from unsigned 64-bit to unsigned 16-bit:
+/// ```c
+/// unsigned short result = (unsigned short)some_unsigned_64bit_value;
+/// ```
+///
+/// This conversion truncates the upper 48 bits of the `u64` value.
+pub fn convert_u64_to_u16(value: u64) -> u16 {
+    value as u16
 }
 
 /// Converts an `i64` value to an `i32`.

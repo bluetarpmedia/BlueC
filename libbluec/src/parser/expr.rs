@@ -12,7 +12,9 @@ use super::recursive_descent::literal;
 use super::recursive_descent::peek;
 use super::recursive_descent::utils;
 use super::symbol::SymbolKind;
-use super::{AstDeclaredType, AstExpression, AstFullExpression, AstNodeId, AstUniqueName};
+use super::{
+    AstAssignmentOp, AstBinaryOp, AstDeclaredType, AstExpression, AstFullExpression, AstNodeId, AstUniqueName,
+};
 use super::{ParseError, ParseResult, Parser};
 use super::{add_error, add_error_at_eof};
 
@@ -22,6 +24,7 @@ use crate::compiler_driver::diagnostics::Diagnostic;
 use crate::compiler_driver::diagnostics::SourceIdentifier;
 use crate::compiler_driver::errors::Error;
 use crate::lexer;
+use crate::lexer::SourceLocation;
 
 /// Parses a full expression.
 ///
@@ -58,11 +61,12 @@ pub fn parse_optional_full_expression(
 
 /// Parses a tree of (sub)expression(s).
 ///
-/// An expression is either a factor, a binary operation, or a ternary/conditional expression, and
-/// may be a subexpression inside a larger tree of expressions.
+/// An expression is either a unary expression, a binary expression, an assignment expression, or a ternary/conditional
+/// expression, and may be a subexpression inside a larger tree of expressions. Assignment expressions include
+/// compound assignment operations like `+=`.
 ///
 /// ```markdown
-/// <exp> ::= <factor> | <exp> <binop> <exp> | <exp> "?" <exp> ":" <exp>
+/// <expr> ::= <unary-expr> | <expr> <binary-op> <expr> | <lhs> <assign-op> <rhs> | <expr> "?" <expr> ":" <expr>
 /// ```
 pub fn parse_expression(parser: &mut Parser, driver: &mut Driver) -> ParseResult<AstExpression> {
     parse_expression_with_precedence(parser, driver, 0)
@@ -78,26 +82,26 @@ fn parse_expression_with_precedence(
     driver: &mut Driver,
     min_precedence: i32,
 ) -> ParseResult<AstExpression> {
-    // Capture the source location of the first token in the left-hand-side factor/expression.
-    // We may need this metadata for an error diagnostic below.
-    let mut left_loc = parser.token_stream.peek_next_source_location().ok_or(ParseError)?;
+    // At the moment this is just a single unary expression, but we name it `left` in case we're about to parse an
+    // assignment/ternary/binary operation, in which case it becomes the left-hand-side expression for what
+    // follows.
+    let mut left = parse_unary_expression(parser, driver)?;
 
-    // This may be a single factor, but we'll call it `left` in case we have an assignment/ternary/binary operation.
-    let mut left = parse_factor(parser, driver)?;
-
+    // Do we have a binary, assignment, or ternary expression?
+    //      If so, keep parsing with precedence climbing to build the expression tree. If not, we'll return the
+    //      unary expression which we named `left`.
+    //      We use a parsing trick to pretend that ternary expressions are binary expressions; see below.
+    //
     while let Some(peek_next_token) = parser.token_stream.peek_next_token()
         && (ops::is_binary_operator(&peek_next_token.token_type)
             || ops::is_assignment_operator(&peek_next_token.token_type))
         && ops::operator_precedence(&peek_next_token.token_type) >= min_precedence
     {
-        let Some(next_token) = parser.token_stream.take_token() else {
+        let Some(token) = parser.token_stream.take_token() else {
             ICE!("Expected token");
         };
 
-        // Extend the `left` expression's source location to include everything we've parsed for it.
-        left_loc.set_span_up_to_location(&next_token.location);
-
-        let operator_precedence = ops::operator_precedence(&next_token.token_type);
+        let operator_precedence = ops::operator_precedence(&token.token_type);
 
         // Left-associative means we exclude the next operator's precedence level
         let left_associative_precedence = operator_precedence + 1;
@@ -105,32 +109,14 @@ fn parse_expression_with_precedence(
         // Right-associative means we include the next operator's precedence level
         let right_associative_precedence = operator_precedence;
 
-        let next_token_type = next_token.token_type.clone();
+        let token_type = token.token_type.clone();
+        let token_loc = token.location;
 
-        match next_token_type {
+        match token_type {
             // Assignment (including compound assignment)
-            //
-            token_type if ops::is_assignment_operator(&token_type) => {
-                let node_id = AstNodeId::new();
-                let computation_node_id = AstNodeId::new();
-
-                // For an assignment we set the source span to be the `lhs` expression, since that's the object
-                // being assigned to.
-                parser
-                    .metadata
-                    .add_source_span(node_id, meta::AstNodeSourceSpanMetadata::from_source_location(&left_loc));
-
-                let right = parse_expression_with_precedence(parser, driver, right_associative_precedence)?;
-
-                let op = ops::parse_assignment_operator(&token_type);
-
-                left = AstExpression::Assignment {
-                    node_id,
-                    computation_node_id,
-                    op,
-                    lhs: Box::new(left),
-                    rhs: Box::new(right),
-                };
+            tt if ops::is_assignment_operator(&tt) => {
+                let op = ops::translate_assignment_operator(&tt);
+                left = parse_assignment_expression(op, &token_loc, left, right_associative_precedence, parser, driver)?;
             }
 
             // Ternary/conditional expression
@@ -140,51 +126,14 @@ fn parse_expression_with_precedence(
             //      We pretend that the 3 tokens "?" <consequent> ":" are the binary operator. We lookup the precedence
             //      for the "?" token.
             lexer::TokenType::Ternary => {
-                let node_id = AstNodeId::new();
-
-                // Get the location of the '?' token.
-                let loc = parser.token_stream.prev_token_source_location().unwrap();
-
-                parser.metadata.add_source_span(node_id, meta::AstNodeSourceSpanMetadata::from_source_location(&loc));
-
-                let consequent = parse_expression(parser, driver)?; // Note: precedence == 0
-
-                let colon_token = parser.token_stream.take_token_if_expected(lexer::TokenType::Colon);
-                if colon_token.is_none() {
-                    let loc = utils::get_next_source_location_after_previous_token(parser);
-                    add_error(driver, "Missing `:` and alternative in ternary/conditional expression", loc);
-                    return Err(ParseError);
-                }
-
-                let alternative = parse_expression_with_precedence(parser, driver, right_associative_precedence);
-                if alternative.is_err() {
-                    let loc = utils::get_next_source_location_after_previous_token(parser);
-                    add_error(driver, "Missing alternative in ternary/conditional expression", loc);
-                    return Err(ParseError);
-                }
-                let alternative = alternative.unwrap();
-
-                left = AstExpression::Conditional {
-                    node_id,
-                    expr: Box::new(left),
-                    consequent: Box::new(consequent),
-                    alternative: Box::new(alternative),
-                };
+                left = parse_ternary_expression(left, right_associative_precedence, parser, driver)?;
             }
 
-            // Binary operators
+            // Binary expression
             _ => {
-                let op = ops::parse_binary_operator(&next_token_type);
-
-                let node_id = AstNodeId::new();
-                parser.metadata.add_source_span(
-                    node_id,
-                    meta::AstNodeSourceSpanMetadata::from_source_location(&next_token.location),
-                );
-
-                let right = parse_expression_with_precedence(parser, driver, left_associative_precedence)?;
-
-                left = AstExpression::BinaryOperation { node_id, op, left: Box::new(left), right: Box::new(right) };
+                let op = ops::translate_binary_operator(&token_type);
+                let op_loc = token.location;
+                left = parse_binary_expression(op, &op_loc, left, left_associative_precedence, parser, driver)?;
             }
         }
     }
@@ -192,176 +141,243 @@ fn parse_expression_with_precedence(
     Ok(left)
 }
 
-/// Parses a factor.
+/// Parses an assignment expression for the given assignment operator `op` and `lhs` expression.
+fn parse_assignment_expression(
+    op: AstAssignmentOp,
+    op_loc: &SourceLocation,
+    lhs: AstExpression,
+    precedence: i32,
+    parser: &mut Parser,
+    driver: &mut Driver,
+) -> ParseResult<AstExpression> {
+    let rhs = parse_expression_with_precedence(parser, driver, precedence)?;
+
+    let node_id = AstNodeId::new();
+    parser.metadata.add_source_span(node_id, meta::AstNodeSourceSpanMetadata::from_source_location(op_loc));
+
+    let computation_node_id = AstNodeId::new(); // No source location needed; this is for the typechecker
+    Ok(AstExpression::Assignment { node_id, computation_node_id, op, lhs: Box::new(lhs), rhs: Box::new(rhs) })
+}
+
+/// Parses a ternary/conditional expression for the given `condition` expression.
+fn parse_ternary_expression(
+    condition: AstExpression,
+    alternative_expr_precedence: i32,
+    parser: &mut Parser,
+    driver: &mut Driver,
+) -> ParseResult<AstExpression> {
+    // Get the location of the '?' token.
+    let loc = parser.token_stream.prev_token_source_location().unwrap();
+
+    let node_id = AstNodeId::new();
+    parser.metadata.add_source_span(node_id, meta::AstNodeSourceSpanMetadata::from_source_location(&loc));
+
+    let consequent = parse_expression(parser, driver)?; // Note: precedence == 0
+
+    let colon_token = parser.token_stream.take_token_if_expected(lexer::TokenType::Colon);
+    if colon_token.is_none() {
+        let loc = utils::get_next_source_location_after_previous_token(parser);
+        add_error(driver, "Missing `:` and alternative in ternary/conditional expression", loc);
+        return Err(ParseError);
+    }
+
+    let alternative = parse_expression_with_precedence(parser, driver, alternative_expr_precedence);
+    if alternative.is_err() {
+        let loc = utils::get_next_source_location_after_previous_token(parser);
+        add_error(driver, "Missing alternative in ternary/conditional expression", loc);
+        return Err(ParseError);
+    }
+    let alternative = alternative.unwrap();
+
+    Ok(AstExpression::Conditional {
+        node_id,
+        expr: Box::new(condition),
+        consequent: Box::new(consequent),
+        alternative: Box::new(alternative),
+    })
+}
+
+/// Parses a binary expression for the given binary operator `op` and the `lhs` expression.
+fn parse_binary_expression(
+    op: AstBinaryOp,
+    op_loc: &SourceLocation,
+    lhs: AstExpression,
+    rhs_precedence: i32,
+    parser: &mut Parser,
+    driver: &mut Driver,
+) -> ParseResult<AstExpression> {
+    let node_id = AstNodeId::new();
+    parser.metadata.add_source_span(node_id, meta::AstNodeSourceSpanMetadata::from_source_location(op_loc));
+
+    let rhs = parse_expression_with_precedence(parser, driver, rhs_precedence)?;
+
+    Ok(AstExpression::BinaryOperation { node_id, op, left: Box::new(lhs), right: Box::new(rhs) })
+}
+
+/// Parses a unary expression.
 ///
-/// A factor is either an integer literal, a variable identifier, a function call,
-/// a prefix/postfix unary operation, or a parenthesised-expression.
+/// A unary expression is either a prefix unary operation, a cast expression, or a postfix expression.
 ///
 /// ```markdown
-/// <factor> ::= <int> | <identifier> | <identifier> "(" [<argument-list>] ")" |
-///              <unop> <factor> | <factor> <unop> | "(" <exp> ")" | "(" {type-specifier}+ ")" <factor>
+/// <unary-expr> ::= <unary-op> <unary-expr> | <cast-expr> | <postfix-expr>
 /// ```
-pub fn parse_factor(parser: &mut Parser, driver: &mut Driver) -> ParseResult<AstExpression> {
-    // Peek at the next two tokens because we need to distinguish a variable from a function call.
-    match parser.token_stream.peek_next_2_tokens() {
-        // Function call
-        (Some(t1), Some(t2))
-            if utils::token_is_identifier_and_not_reserved(t1) && t2.has_type(lexer::TokenType::OpenParen) =>
-        {
-            parse_function_call_expression(parser, driver)
-        }
+pub fn parse_unary_expression(parser: &mut Parser, driver: &mut Driver) -> ParseResult<AstExpression> {
+    if let Some(peek_next_token) = parser.token_stream.peek_next_token() {
+        let peek_next_token_type = peek_next_token.token_type.clone();
 
-        (Some(t1), _) => {
-            match &t1.token_type {
-                lexer::TokenType::IntegerLiteral { .. } => literal::parse_integer_literal(parser, driver),
-                lexer::TokenType::FloatLiteral { .. } => literal::parse_float_literal(parser, driver),
-
-                // Variable
-                lexer::TokenType::Identifier(_) => parse_variable_expression(parser, driver),
-
-                // Prefix unary operation
-                op if ops::is_prefix_unary_operator(op) => {
-                    ops::parse_prefix_unary_operation(parser, driver).map_err(|_| ParseError)
-                }
-
-                lexer::TokenType::OpenParen => {
-                    //
-                    // Cast expression
-                    //
-                    if peek::is_type_cast_operator(parser, driver) {
-                        let node_id = AstNodeId::new();
-
-                        let open_paren_token = parser.token_stream.take_token().unwrap(); // Open Paren
-
-                        parser.metadata.add_source_span(
-                            node_id,
-                            meta::AstNodeSourceSpanMetadata::from_source_location(&open_paren_token.location),
-                        );
-
-                        // Type specifiers
-                        let (basic_type, storage) = parse_type_and_storage_specifiers(parser, driver, false)?;
-                        if let Some(storage) = storage {
-                            add_error(driver, "A cast expression cannot have a storage class specifier", storage.loc);
-                            return Err(ParseError);
-                        }
-
-                        // Optional abstract declarator
-                        let has_declarator = !parser.token_stream.next_token_has_type(lexer::TokenType::CloseParen);
-
-                        let declarator = if has_declarator {
-                            let require_abstract = declarator::ParseOption::RequireAbstract;
-                            let declarator = declarator::parse_declarator(parser, driver, require_abstract)?;
-                            Some(declarator)
-                        } else {
-                            None
-                        };
-
-                        _ = utils::expect_token(lexer::TokenType::CloseParen, parser, driver)?;
-
-                        let cast_expr = parse_factor(parser, driver)?;
-
-                        let target_type = AstDeclaredType::unresolved(basic_type, None, declarator);
-                        Ok(AstExpression::Cast { node_id, target_type, expr: Box::new(cast_expr) })
-                    }
-                    //
-                    // Parenthesised expression (with possible function call)
-                    //
-                    else {
-                        _ = parser.token_stream.take_token(); // Open Paren
-
-                        let inner_expr = parse_expression(parser, driver)?; // Note: precedence == 0, because it's inside parentheses
-
-                        _ = utils::expect_token(lexer::TokenType::CloseParen, parser, driver)?;
-
-                        // Track that the expression was wrapped in parentheses so that later we can warn about
-                        // mixing different binary operators without parentheses.
-                        parser.metadata.set_expr_has_parens(inner_expr.node_id());
-
-                        // Is this a function call?
-                        if parser.token_stream.next_token_has_type(lexer::TokenType::OpenParen) {
-                            let (args, args_node_id) = parse_function_call_arguments(parser, driver)?;
-
-                            let node_id = AstNodeId::new();
-                            let span = parser.metadata.get_source_span(&inner_expr.node_id()).unwrap();
-                            parser.metadata.add_source_span(node_id, *span);
-
-                            return Ok(AstExpression::FunctionCall {
-                                node_id,
-                                designator: Box::new(inner_expr),
-                                args,
-                                args_node_id,
-                            });
-                        }
-
-                        // Peek ahead for a postfix unary operator
-                        if ops::is_next_token_a_postfix_unary_operator(parser) {
-                            ops::parse_postfix_unary_operation(inner_expr, parser, driver)
-                        } else {
-                            Ok(inner_expr)
-                        }
-                    }
-                }
-
-                _ => {
-                    add_error(driver, "Missing expression", t1.location);
-                    Err(ParseError)
-                }
+        match peek_next_token_type {
+            // Prefix unary operation
+            tt if ops::is_prefix_unary_operator(&tt) => {
+                ops::parse_prefix_unary_operation(parser, driver).map_err(|_| ParseError)
             }
-        }
 
-        _ => {
-            add_error_at_eof(parser, driver, "Expected expression".into());
-            Err(ParseError)
+            // Cast expression
+            lexer::TokenType::OpenParen if peek::is_type_cast_operator(parser, driver) => {
+                parse_cast_expression(parser, driver)
+            }
+
+            // Postfix expression
+            _ => parse_postfix_expression(parser, driver),
         }
+    } else {
+        add_error_at_eof(parser, driver, "Expected expression".into());
+        Err(ParseError)
     }
 }
 
-fn parse_function_call_expression(parser: &mut Parser, driver: &mut Driver) -> ParseResult<AstExpression> {
-    let identifier_token = parser.token_stream.take_token().ok_or(ParseError)?;
+/// Parses a cast expression.
+///
+/// ```markdown
+/// <cast-expr> ::= "(" { <type-specifier> }+ [ <abstract-declarator> ] ")" <unary-expr>
+/// ```
+fn parse_cast_expression(parser: &mut Parser, driver: &mut Driver) -> ParseResult<AstExpression> {
+    let open_paren_loc = utils::expect_token(lexer::TokenType::OpenParen, parser, driver)?;
 
-    let name = identifier_token
-        .get_identifier()
-        .or_else(|| {
-            ICE!("Expected identifier token");
-        })
-        .unwrap()
-        .clone();
+    // Type specifiers
+    let (basic_type, storage) = parse_type_and_storage_specifiers(parser, driver, false)?;
+    if let Some(storage) = storage {
+        add_error(driver, "A cast expression cannot have a storage class specifier", storage.loc);
+        return Err(ParseError);
+    }
 
-    let identifier_token_loc = identifier_token.location;
+    // Optional abstract declarator
+    let has_declarator = !parser.token_stream.next_token_has_type(lexer::TokenType::CloseParen);
 
-    // Identifier resolution
-    let unique_name = verify_function_identifier(&name, identifier_token_loc, parser, driver)?;
+    let declarator = if has_declarator {
+        let require_abstract = declarator::ParseOption::RequireAbstract;
+        let declarator = declarator::parse_declarator(parser, driver, require_abstract)?;
+        Some(declarator)
+    } else {
+        None
+    };
+
+    _ = utils::expect_token(lexer::TokenType::CloseParen, parser, driver)?;
+
+    // The expression being cast
+    let expr_to_cast = parse_unary_expression(parser, driver)?;
+
+    // The resolved type to which the expression is being cast
+    let target_type = AstDeclaredType::unresolved(basic_type, None, declarator);
 
     let node_id = AstNodeId::new();
-    parser
-        .metadata
-        .add_source_span(node_id, meta::AstNodeSourceSpanMetadata::from_source_location(&identifier_token_loc));
+    parser.metadata.add_source_span(node_id, meta::AstNodeSourceSpanMetadata::from_source_location(&open_paren_loc));
 
-    let designator = Box::new(AstExpression::Identifier { node_id, name, unique_name });
-
-    make_function_call_expression(designator, parser, driver)
+    Ok(AstExpression::Cast { node_id, target_type, expr: Box::new(expr_to_cast) })
 }
 
-fn make_function_call_expression(
-    designator: Box<AstExpression>,
+/// Parses a postfix expression.
+///
+/// A postfix expression is either a function call expression, an array subscript expression, or a postfix
+/// increment or decrement operation.
+///
+/// ```markdown
+/// <postfix-expr> ::= <postfix-expr> "(" [ <argument-list> ] ")"
+///                    | <postfix-expr> "[" <expr> "]"
+///                    | <postfix-expr> "++"
+///                    | <postfix-expr> "--"
+///                    | <primary-expr>
+/// ```
+fn parse_postfix_expression(parser: &mut Parser, driver: &mut Driver) -> ParseResult<AstExpression> {
+    // Parse the primary expression
+    let mut postfix_expr = parse_primary_expression(parser, driver)?;
+
+    // Is there a postfix operator?
+    while let Some(peek_next_token) = parser.token_stream.peek_next_token() {
+        let peek_next_token_type = peek_next_token.token_type.clone();
+
+        match peek_next_token_type {
+            // Function call
+            lexer::TokenType::OpenParen => {
+                postfix_expr = parse_function_call_expression(postfix_expr, parser, driver)?;
+            }
+
+            // Array subscript
+            lexer::TokenType::OpenSqBracket => {
+                postfix_expr = parse_array_subscript_expression(postfix_expr, parser, driver)?;
+            }
+
+            // Postfix increment/decrement
+            lexer::TokenType::Increment | lexer::TokenType::Decrement => {
+                postfix_expr = ops::parse_postfix_incr_or_decr(postfix_expr, parser, driver)?;
+            }
+            _ => break,
+        }
+    }
+
+    Ok(postfix_expr)
+}
+
+/// Parses a primary expression.
+///
+/// A primary expression is either a literal, an identifier, or a parenthesised expression.
+///
+/// ```markdown
+/// <primary-expr> ::= <literal> | <identifier> | "(" <expr> ")"
+/// ```
+fn parse_primary_expression(parser: &mut Parser, driver: &mut Driver) -> ParseResult<AstExpression> {
+    if let Some(peek_next_token) = parser.token_stream.peek_next_token() {
+        let peek_next_token_type = peek_next_token.token_type.clone();
+
+        match peek_next_token_type {
+            // Literals
+            lexer::TokenType::IntegerLiteral { .. } => literal::parse_integer_literal(parser, driver),
+            lexer::TokenType::FloatLiteral { .. } => literal::parse_float_literal(parser, driver),
+
+            // Identifier
+            lexer::TokenType::Identifier(_) => parse_identifier_expression(parser, driver),
+
+            // Parenthesised expression
+            lexer::TokenType::OpenParen => parse_parenthesised_expression(parser, driver),
+
+            _ => {
+                add_error(driver, "Expected expression", peek_next_token.location);
+                Err(ParseError)
+            }
+        }
+    } else {
+        add_error_at_eof(parser, driver, "Expected expression".into());
+        Err(ParseError)
+    }
+}
+
+/// Parses a function call expression where the given `expr` is the function designator.
+fn parse_function_call_expression(
+    expr: AstExpression,
     parser: &mut Parser,
     driver: &mut Driver,
 ) -> ParseResult<AstExpression> {
     let (args, args_node_id) = parse_function_call_arguments(parser, driver)?;
 
-    let node_id = AstNodeId::new();
+    let designator = Box::new(expr);
     let designator_span = parser.metadata.get_source_span(&designator.node_id()).unwrap();
+
+    let node_id = AstNodeId::new();
     parser.metadata.add_source_span(node_id, *designator_span);
 
-    let fn_call = AstExpression::FunctionCall { node_id, designator, args, args_node_id };
-
-    if parser.token_stream.next_token_has_type(lexer::TokenType::OpenParen) {
-        make_function_call_expression(Box::new(fn_call), parser, driver)
-    } else {
-        Ok(fn_call)
-    }
+    Ok(AstExpression::FunctionCall { node_id, designator, args, args_node_id })
 }
 
+/// Parses the function call arguments.
 fn parse_function_call_arguments(
     parser: &mut Parser,
     driver: &mut Driver,
@@ -397,7 +413,31 @@ fn parse_function_call_arguments(
     Ok((args, args_node_id))
 }
 
-fn parse_variable_expression(parser: &mut Parser, driver: &mut Driver) -> ParseResult<AstExpression> {
+/// Parses an array subscript expression where the given `expr` is the expression where the postfix '[]' is applied to.
+fn parse_array_subscript_expression(
+    expr: AstExpression,
+    parser: &mut Parser,
+    driver: &mut Driver,
+) -> ParseResult<AstExpression> {
+    let open_sq_bracket_loc = utils::expect_token(lexer::TokenType::OpenSqBracket, parser, driver)?;
+
+    let subscript_expr = parse_expression(parser, driver)?; // Note: precedence == 0
+
+    _ = utils::expect_token(lexer::TokenType::CloseSqBracket, parser, driver)?;
+
+    let node_id = AstNodeId::new();
+
+    // Set the source location as the '[' token. (Diagnostics can add the other expressions as locations.)
+    parser.metadata.add_source_span(
+        node_id,
+        meta::AstNodeSourceSpanMetadata::from_source_location(&open_sq_bracket_loc),
+    );
+
+    Ok(AstExpression::Subscript { node_id, expr1: Box::new(expr), expr2: Box::new(subscript_expr) })
+}
+
+/// Parses an identifier expression.
+fn parse_identifier_expression(parser: &mut Parser, driver: &mut Driver) -> ParseResult<AstExpression> {
     let identifier_token = parser.token_stream.take_token().cloned().ok_or(ParseError)?;
 
     let name = identifier_token.get_identifier().unwrap_or_else(|| {
@@ -417,75 +457,53 @@ fn parse_variable_expression(parser: &mut Parser, driver: &mut Driver) -> ParseR
         .add_source_span(node_id, meta::AstNodeSourceSpanMetadata::from_source_location(&identifier_token.location));
 
     // Identifier resolution
-    //
-    let unique_name = verify_identifier(name, identifier_token.location, parser, driver)?;
+    let unique_name = resolve_identifier(name, identifier_token.location, parser, driver)?;
 
-    let identifier = AstExpression::Identifier { node_id, name: name.clone(), unique_name };
-
-    // Peek ahead for a postfix unary operator
-    if ops::is_next_token_a_postfix_unary_operator(parser) {
-        ops::parse_postfix_unary_operation(identifier, parser, driver).map_err(|_| ParseError)
-    } else {
-        Ok(identifier)
-    }
+    Ok(AstExpression::Identifier { node_id, name: name.clone(), unique_name })
 }
 
-fn verify_function_identifier(
-    function_name: &str,
-    function_name_loc: lexer::SourceLocation,
-    parser: &mut Parser,
-    driver: &mut Driver,
-) -> ParseResult<AstUniqueName> {
-    // Is there a function (or variable, if a function pointer) visible from the current scope for the given identifier?
-    //      Sema will typecheck that the variable is a function pointer later.
-    //
-    if let Some(decl) = parser.identifiers.resolve_identifier(function_name, SearchScope::All) {
-        if decl.kind == SymbolKind::Function || decl.kind == SymbolKind::Variable {
-            Ok(decl.unique.clone())
-        } else {
-            let err = format!(
-                "Cannot call '{}' because '{}' is not a function in this scope",
-                &function_name, &function_name
-            );
-            let mut diag = Diagnostic::error_at_location(err, function_name_loc);
-            diag.add_note(format!("{} '{}' was previously declared here:", decl.kind, &function_name), Some(decl.loc));
-            driver.add_diagnostic(diag);
-            Err(ParseError)
-        }
-    } else {
-        Error::call_undeclared_function(SourceIdentifier(function_name, function_name_loc), driver);
-        Err(ParseError)
-    }
+/// Parses a parenthesised expression.
+fn parse_parenthesised_expression(parser: &mut Parser, driver: &mut Driver) -> ParseResult<AstExpression> {
+    _ = utils::expect_token(lexer::TokenType::OpenParen, parser, driver)?;
+
+    let expr = parse_expression(parser, driver)?; // Note: precedence == 0
+
+    _ = utils::expect_token(lexer::TokenType::CloseParen, parser, driver)?;
+
+    // Track that the expression was wrapped in parentheses so that later we can warn about mixing different binary
+    // operators without parentheses.
+    parser.metadata.set_expr_has_parens(expr.node_id());
+
+    Ok(expr)
 }
 
-fn verify_identifier(
-    variable_name: &str,
-    variable_name_loc: lexer::SourceLocation,
+/// Resolves the given identifier to its unique name.
+fn resolve_identifier(
+    identifier: &str,
+    identifier_loc: SourceLocation,
     parser: &mut Parser,
     driver: &mut Driver,
 ) -> ParseResult<AstUniqueName> {
     // Is there a function or variable visible from the current scope for the given identifier?
-    //      We may be initializing a function pointer. Sema will perform typechecking later.
-    //
-    if let Some(decl) = parser.identifiers.resolve_identifier(variable_name, SearchScope::All) {
+    if let Some(decl) = parser.identifiers.resolve_identifier(identifier, SearchScope::All) {
         if decl.kind == SymbolKind::Variable || decl.kind == SymbolKind::Function {
             Ok(decl.unique.clone())
         } else {
-            let err = format!("'{}' is not a variable in this scope", variable_name);
-            let mut diag = Diagnostic::error_at_location(err, variable_name_loc);
-            diag.add_note(format!("{} '{}' was previously declared here:", decl.kind, variable_name), Some(decl.loc));
+            let err = format!("'{}' is a type alias in this scope", identifier);
+            let mut diag = Diagnostic::error_at_location(err, identifier_loc);
+            diag.add_note(format!("{} '{}' was previously declared here:", decl.kind, identifier), Some(decl.loc));
             driver.add_diagnostic(diag);
 
             Err(ParseError)
         }
     } else {
-        let err = if utils::is_builtin_type_specifier(variable_name) {
-            format!("Invalid use of type `{}`", variable_name)
+        let err = if utils::is_builtin_type_specifier(identifier) {
+            format!("Invalid use of type `{}`", identifier)
         } else {
-            format!("Use of undeclared identifier `{}`", variable_name)
+            format!("Use of undeclared identifier `{}`", identifier)
         };
 
-        driver.add_diagnostic(Diagnostic::error_at_location(err, variable_name_loc));
+        driver.add_diagnostic(Diagnostic::error_at_location(err, identifier_loc));
 
         Err(ParseError)
     }

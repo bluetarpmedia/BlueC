@@ -1,0 +1,21 @@
+warning: Implicit conversion from 'long long' to 'unsigned int' changes signedness and
+         value from -1 to 4294967295
+   |
+   | unsigned int a = -1LL;
+   |                  ^^^^
+   |
+
+warning: Implicit conversion from 'unsigned int' to 'int' changes signedness and value
+         from 4294967295 to -1
+   |
+   | int b = 0xFFFFFFFFu;
+   |         ^^^^^^^^^^^
+   |
+
+warning: Implicit conversion from 'int' to 'short' changes value from 100000 to -31072
+   |
+   | short c = 100000;
+   |           ^^^^^^
+   |
+
+3 warnings generated

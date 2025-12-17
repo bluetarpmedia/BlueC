@@ -9,6 +9,7 @@
 //! - build symbols:   Build a Symbol Table of all symbols in the AST and their types.
 
 pub(super) mod checker;
+pub(super) mod utils;
 mod symbols;
 mod traverse;
 

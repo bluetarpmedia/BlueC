@@ -14,7 +14,24 @@ use std::io::Cursor;
 use std::vec;
 
 #[test]
-fn variables() {
+fn invalid_types() {
+    // Function cannot return a function type
+    verify_sema_error("int (foo(void))(void);");
+    verify_sema_error("typedef int MyFun(int); MyFun func(void);");
+
+    // Function pointer cannot return a function type
+    verify_sema_error("int ((*invalid_func_ptr)(int, int))(void);");
+    verify_sema_error("typedef int MyFun(int); MyFun (*fn)(int);");
+    verify_sema_error("typedef int MyFun(int); MyFun (*array_of_fn_ptr[10])(int);");
+
+    // Cannot declare an array of function type
+    verify_sema_error("int arr[5](void);");
+    verify_sema_error("int (arr[5])(void);");
+    verify_sema_error("typedef int MyFun(int); MyFun arr[5];");
+}
+
+#[test]
+fn simple_variables() {
     let mut driver = compiler_driver::Driver::for_testing();
 
     verify_types(&mut driver, "int a;", vec![AstType::Int]);
@@ -29,6 +46,12 @@ fn variables() {
     verify_types(&mut driver, "double x = 1.0, y = 2.0;", vec![AstType::Double, AstType::Double]);
     verify_types(&mut driver, "extern int a;", vec![AstType::Int]);
     verify_types(&mut driver, "static int a;", vec![AstType::Int]);
+}
+
+#[test]
+fn pointer_variables() {
+    let mut driver = compiler_driver::Driver::for_testing();
+
     verify_types(&mut driver, "int*a;", vec![AstType::new_pointer_to(AstType::Int)]);
     verify_types(&mut driver, "int *a;", vec![AstType::new_pointer_to(AstType::Int)]);
     verify_types(&mut driver, "int **a;", vec![AstType::new_pointer_to(AstType::new_pointer_to(AstType::Int))]);
@@ -47,7 +70,19 @@ fn variables() {
         "int (*(*(*(a))));",
         vec![AstType::new_pointer_to(AstType::new_pointer_to(AstType::new_pointer_to(AstType::Int)))],
     );
+
     verify_types(&mut driver, "int *a, b, c;", vec![AstType::new_pointer_to(AstType::Int), AstType::Int, AstType::Int]);
+
+    verify_types(
+        &mut driver,
+        "int *a, *b, *c;",
+        vec![
+            AstType::new_pointer_to(AstType::Int),
+            AstType::new_pointer_to(AstType::Int),
+            AstType::new_pointer_to(AstType::Int),
+        ],
+    );
+
     verify_types(
         &mut driver,
         "long long a, b, *c;",
@@ -57,6 +92,46 @@ fn variables() {
     verify_types(&mut driver, "int **a = 0;", vec![AstType::new_pointer_to(AstType::new_pointer_to(AstType::Int))]);
     verify_types(&mut driver, "int *(a) = 0;", vec![AstType::new_pointer_to(AstType::Int)]);
     verify_types(&mut driver, "int *a = 10 - 10;", vec![AstType::new_pointer_to(AstType::Int)]);
+
+    // Pointer to an array of 3 ints
+    verify_types(&mut driver, "int (*ptr)[3];", vec![AstType::new_pointer_to(AstType::new_array(AstType::Int, 3))]);
+}
+
+#[test]
+fn arrays() {
+    let mut driver = compiler_driver::Driver::for_testing();
+
+    verify_types(&mut driver, "int array[3];", vec![AstType::new_array(AstType::Int, 3)]);
+    verify_types(&mut driver, "int array[3][5];", vec![AstType::new_array(AstType::new_array(AstType::Int, 5), 3)]);
+    verify_types(
+        &mut driver,
+        "int array[33][44][55];",
+        vec![AstType::new_array(AstType::new_array(AstType::new_array(AstType::Int, 55), 44), 33)],
+    );
+
+    // Array of 3 pointers to int
+    verify_types(&mut driver, "int *arr[3];", vec![AstType::new_array(AstType::new_pointer_to(AstType::Int), 3)]);
+
+    // Array of 5 pointers to arrays of 3 ints
+    verify_types(
+        &mut driver,
+        "int (*array_of_five_ptrs[5])[3];",
+        vec![AstType::new_array(AstType::new_pointer_to(AstType::new_array(AstType::Int, 3)), 5)],
+    );
+
+    // Array of 4 arrays of 3 pointers to long
+    verify_types(
+        &mut driver,
+        "long *coords[4][3];",
+        vec![AstType::new_array(AstType::new_array(AstType::new_pointer_to(AstType::Long), 3), 4)],
+    );
+
+    // Array of 10 function pointers
+    verify_types(
+        &mut driver,
+        "float (*array_of_fn_ptr[10])(int);",
+        vec![AstType::new_array(AstType::new_pointer_to(AstType::new_fn(AstType::Float, vec![AstType::Int])), 10)],
+    );
 }
 
 #[test]
@@ -106,12 +181,19 @@ fn functions() {
         "int* get_ptr(float *a);",
         vec![AstType::new_fn(AstType::new_pointer_to(AstType::Int), vec![AstType::new_pointer_to(AstType::Float)])],
     );
+
+    // Function returning a pointer to an array
+    verify_types(
+        &mut driver,
+        "int (*my_func(void))[5];",
+        vec![AstType::new_fn(AstType::new_pointer_to(AstType::new_array(AstType::Int, 5)), vec![])],
+    );
 }
 
 #[test]
 fn function_pointers() {
     let mut driver = compiler_driver::Driver::for_testing();
-    
+
     verify_types(&mut driver, "int (*fn)(void);", vec![AstType::new_pointer_to(AstType::new_fn(AstType::Int, vec![]))]);
 
     verify_types(
@@ -170,6 +252,40 @@ fn type_aliases() {
     );
 }
 
+#[test]
+fn string_round_trip() {
+    let mut driver = compiler_driver::Driver::for_testing();
+
+    {
+        let expected_t = AstType::new_array(AstType::new_array(AstType::new_array(AstType::Int, 55), 44), 33);
+        verify_types(&mut driver, "int array[33][44][55];", vec![expected_t.clone()]);
+        assert_eq!(expected_t.to_string(), "int [33][44][55]");
+    }
+}
+
+fn verify_sema_error(source: &str) {
+    let mut driver = compiler_driver::Driver::for_testing();
+    let mut parser = make_parser(&mut driver, source);
+    let parsed = recursive_descent::parse_translation_unit(&mut parser, &mut driver);
+
+    if parsed.is_err() {
+        println!("Expect parse to succeed but it failed with:\n{source}");
+        assert!(false);
+        return;
+    }
+
+    if driver.has_error_diagnostics() {
+        driver.debug_print_diagnostics();
+    }
+    assert!(!driver.has_error_diagnostics(), "Did not expect errors after parsing");
+
+    let mut ast_root = parsed.unwrap();
+
+    _ = type_check::type_check(&mut ast_root, parser.metadata, &mut driver);
+
+    assert!(driver.has_error_diagnostics(), "Expect errors after sema type checking");
+}
+
 fn verify_types(driver: &mut compiler_driver::Driver, source: &str, expected: Vec<AstType>) {
     let types = parse_and_resolve_types(driver, source);
     if expected.is_empty() && types.is_none() {
@@ -190,7 +306,8 @@ fn parse_and_resolve_types(driver: &mut compiler_driver::Driver, source: &str) -
     let parsed = recursive_descent::parse_translation_unit(&mut parser, driver);
 
     if parsed.is_err() {
-        println!("Parse failed {source}");
+        println!("Expect parse to succeed but it failed with:\n{source}");
+        assert!(false);
         return None;
     }
     let mut ast_root = parsed.unwrap();

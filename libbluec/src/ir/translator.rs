@@ -67,7 +67,7 @@ impl BlueTacTranslator {
         name: &parser::AstUniqueName,
         is_global: bool,
         data_type: BtType,
-        init_value: BtConstantValue,
+        init_value: Vec<BtConstantValue>,
     ) {
         self.static_variables.push(BtStaticStorageVariable {
             name: name.to_string(),
@@ -79,9 +79,9 @@ impl BlueTacTranslator {
 
     /// Merges duplicate static-storage variable definitions.
     ///
-    /// It's valid to have multiple tentative definitions in file scope. In this case, a definition with a non-zero value
-    /// takes precedence, and all other tentative definitions are removed. If all the tentative definitions have a value
-    /// of zero then they are merged into one.
+    /// It's valid to have multiple tentative definitions in file scope. In this case, a definition with a non-zero
+    /// value takes precedence, and all other tentative definitions are removed. If all the tentative definitions have
+    /// a value of zero then they are merged into one.
     pub fn deduplicate_static_variables(&mut self) {
         let mut deduped = HashMap::new();
 
@@ -89,8 +89,13 @@ impl BlueTacTranslator {
             deduped
                 .entry(var.name.clone())
                 .and_modify(|existing: &mut BtStaticStorageVariable| {
+                    debug_assert!(!var.init_value.is_empty());
+
                     // Take the new declaration's value if it's non-zero.
-                    if !var.init_value.has_default_value() && existing.init_value.has_default_value() {
+                    let new_is_nonzero = var.init_value.len() > 1 || !var.init_value[0].has_default_value();
+                    let existing_is_zero = existing.init_value.len() == 1 && existing.init_value[0].has_default_value();
+
+                    if new_is_nonzero && existing_is_zero {
                         *existing = var.clone();
                     }
                 })
@@ -142,7 +147,13 @@ impl BlueTacTranslator {
 }
 
 /// Translates the parser's AST into BlueTac IR.
-pub fn translate_ast_to_ir(translator: &mut BlueTacTranslator, ast: parser::AstRoot) -> BtRoot {
+pub fn translate_ast_to_ir(
+    ast: parser::AstRoot,
+    metadata: parser::AstMetadata,
+    symbols: SymbolTable,
+) -> (BtRoot, SymbolTable) {
+    let mut translator = BlueTacTranslator::new(metadata, symbols);
+
     let mut bt_definitions = ast
         .0
         .into_iter()
@@ -151,7 +162,7 @@ pub fn translate_ast_to_ir(translator: &mut BlueTacTranslator, ast: parser::AstR
                 if func.body.is_none() {
                     None
                 } else {
-                    Some(BtDefinition::Function(translate_function(translator, &func)))
+                    Some(BtDefinition::Function(translate_function(&mut translator, &func)))
                 }
             }
 
@@ -161,19 +172,7 @@ pub fn translate_ast_to_ir(translator: &mut BlueTacTranslator, ast: parser::AstR
                 }
 
                 let is_global = var_decl.linkage == parser::AstLinkage::External;
-                let data_type: BtType = var_decl.declared_type.resolved_type.unwrap().into();
-
-                let init_value = match var_decl.init_constant_value {
-                    Some(const_value) => const_value.into(),
-                    None => data_type.get_const_default_value(),
-                };
-
-                translator.add_static_storage_duration_variable(
-                    &var_decl.unique_name,
-                    is_global,
-                    data_type,
-                    init_value,
-                );
+                translate_static_storage_duration_variable(&mut translator, &var_decl, is_global);
 
                 None
             }
@@ -185,10 +184,12 @@ pub fn translate_ast_to_ir(translator: &mut BlueTacTranslator, ast: parser::AstR
     // Merge the static variable definitions in case we have multiple tentative definitions.
     translator.deduplicate_static_variables();
 
-    // Append the static variables
-    bt_definitions.extend(translator.static_variables.iter().map(|var| BtDefinition::StaticVariable(var.clone())));
+    let BlueTacTranslator { static_variables, symbols, .. } = translator;
 
-    BtRoot(bt_definitions)
+    // Insert the static variable definitions at the front
+    bt_definitions.splice(0..0, static_variables.into_iter().map(BtDefinition::StaticVariable));
+
+    (BtRoot(bt_definitions), symbols)
 }
 
 fn translate_function(translator: &mut BlueTacTranslator, function: &parser::AstFunction) -> BtFunctionDefn {
@@ -259,19 +260,8 @@ fn translate_block(
                     //
                     if !var_decl.is_declaration_only && var_decl.storage == parser::AstStorageDuration::Static {
                         if var_decl.linkage == parser::AstLinkage::None {
-                            let data_type: BtType = var_decl.declared_type.resolved_type.clone().unwrap().into();
-
-                            let init_value = match &var_decl.init_constant_value {
-                                Some(const_value) => BtConstantValue::from(const_value.clone()),
-                                None => data_type.get_const_default_value(),
-                            };
-
-                            translator.add_static_storage_duration_variable(
-                                &var_decl.unique_name,
-                                false, // is_global
-                                data_type,
-                                init_value,
-                            );
+                            const IS_GLOBAL: bool = false;
+                            translate_static_storage_duration_variable(translator, var_decl, IS_GLOBAL);
                         } else {
                             ICE!("Static variable '{}' at block scope should have no linkage", var_decl.ident);
                         }
@@ -279,8 +269,13 @@ fn translate_block(
                     // Non-static variables with initializers are translated by `translate_variable_declaration` and
                     // their initializer expression is added to the function's instructions.
                     //
-                    else if var_decl.init_expr.is_some() {
-                        translate_var_declaration(translator, &var_decl.unique_name, &var_decl.init_expr, instructions);
+                    else if var_decl.initializer.is_some() {
+                        translate_var_declaration(
+                            translator,
+                            &var_decl.unique_name,
+                            &var_decl.initializer,
+                            instructions,
+                        );
                     }
                 }
             }
@@ -571,7 +566,7 @@ fn translate_for_statement(
         parser::AstForInitializer::Declaration(declarations) => {
             for decl in declarations {
                 if let parser::AstDeclaration::Variable(var_decl) = decl {
-                    translate_var_declaration(translator, &var_decl.unique_name, &var_decl.init_expr, instructions);
+                    translate_var_declaration(translator, &var_decl.unique_name, &var_decl.initializer, instructions);
                 }
             }
         }
@@ -633,12 +628,68 @@ fn translate_continue_statement(
 fn translate_var_declaration(
     translator: &mut BlueTacTranslator,
     unique_variable_name: &parser::AstUniqueName,
-    init_expr: &Option<parser::AstFullExpression>,
+    initializer: &Option<parser::AstVariableInitializer>,
     instructions: &mut Vec<BtInstruction>,
 ) {
-    if let Some(expr) = init_expr {
-        let init_result = expr::translate_full_expression(translator, expr, instructions);
-        let variable = BtValue::Variable(unique_variable_name.to_string());
-        instructions.push(BtInstruction::Copy { src: init_result, dst: variable });
+    if let Some(initializer) = initializer {
+        match initializer {
+            parser::AstVariableInitializer::Scalar(full_expr) => {
+                let init_result = expr::translate_full_expression(translator, full_expr, instructions);
+                let variable = BtValue::Variable(unique_variable_name.to_string());
+                instructions.push(BtInstruction::Copy { src: init_result, dst: variable });
+            }
+
+            parser::AstVariableInitializer::Aggregate { .. } => {
+                translate_aggregate_initializer(translator, unique_variable_name, 0, initializer, instructions);
+            }
+        }
     }
+}
+
+fn translate_aggregate_initializer(
+    translator: &mut BlueTacTranslator,
+    unique_variable_name: &parser::AstUniqueName,
+    offset: usize,
+    initializer: &parser::AstVariableInitializer,
+    instructions: &mut Vec<BtInstruction>,
+) -> usize {
+    match initializer {
+        parser::AstVariableInitializer::Scalar(full_expr) => {
+            let src = expr::translate_full_expression(translator, full_expr, instructions);
+            let src_type = src.get_type(&translator.symbols);
+            debug_assert!(src_type.bits() > 0 && src_type.bits().is_multiple_of(8));
+
+            let dst_ptr = BtValue::Variable(unique_variable_name.to_string());
+            instructions.push(BtInstruction::StoreAtOffset { src, dst_ptr, dst_offset: offset });
+
+            offset + src_type.bits() / 8
+        }
+
+        parser::AstVariableInitializer::Aggregate { init, .. } => {
+            let mut next_offset = offset;
+            for ini in init {
+                next_offset =
+                    translate_aggregate_initializer(translator, unique_variable_name, next_offset, ini, instructions);
+            }
+
+            next_offset
+        }
+    }
+}
+
+fn translate_static_storage_duration_variable(
+    translator: &mut BlueTacTranslator,
+    var_decl: &parser::AstVariableDeclaration,
+    is_global: bool,
+) {
+    let data_type: BtType = var_decl.declared_type.resolved_type.as_ref().unwrap().into();
+
+    let mut init_value =
+        var_decl.init_constant_eval.iter().map(|const_val| const_val.clone().into()).collect::<Vec<BtConstantValue>>();
+
+    if init_value.is_empty() {
+        init_value = vec![data_type.get_const_default_value()];
+    }
+
+    translator.add_static_storage_duration_variable(&var_decl.unique_name, is_global, data_type, init_value);
 }

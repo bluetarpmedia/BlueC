@@ -1,6 +1,6 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 
-mod ast_tests;
+mod ast_type_tests;
 mod decl_fn_tests;
 mod decl_var_tests;
 mod declarator_tests;

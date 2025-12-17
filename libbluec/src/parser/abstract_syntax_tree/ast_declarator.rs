@@ -1,10 +1,10 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 //
 //! The `ast_declarator` module defines the `AstDeclarator` type which represents parsed declarators in declarations.
-//! 
+//!
 //! A declarator is the part of a declaration that specifies the name and attributes of a variable or function.
 //! An abstract declarator omits the name.
-//! 
+//!
 //! ```c
 //! int foo;
 //!     ~~~
@@ -27,10 +27,10 @@ use super::super::{AstDeclaredType, AstIdentifier};
 use crate::lexer::SourceLocation;
 
 /// A parsed declarator.
-/// 
+///
 /// Declarators are parsed inside-out due to recursive descent parsing. Call [AstDeclarator::get_derived_kind] to
 /// get the derived kind, which is probably what you want when interpreting the declarator.
-/// 
+///
 /// ```c
 /// // Source                // AstDeclarator layout              // AstDeclarator::get_derived_kind
 /// int ** get_ptr(void);    Pointer{Pointer{Function{Ident}}}    Function
@@ -50,12 +50,14 @@ impl fmt::Display for AstDeclarator {
         match &self.kind {
             AstDeclaratorKind::Ident(ident) => write!(f, "{ident}"),
             AstDeclaratorKind::Pointer(decl) => write!(f, "*{decl}"),
+            AstDeclaratorKind::Array { decl, size } => write!(f, "{decl}[{size}]"),
             AstDeclaratorKind::Function { decl, params } => {
                 write!(f, "{decl}(")?;
                 fmt_params(params, f)?;
                 write!(f, ")")
             }
             AstDeclaratorKind::AbstractPointer => write!(f, "*"),
+            AstDeclaratorKind::AbstractArray { size } => write!(f, "[{size}]"),
             AstDeclaratorKind::AbstractFunction { params } => {
                 write!(f, "()(")?;
                 fmt_params(params, f)?;
@@ -77,9 +79,11 @@ impl AstDeclarator {
 
         let next_kind = match this_kind {
             AstDeclaratorKind::Ident(_) => this_kind,
+            AstDeclaratorKind::Array { decl, .. } => decl.get_derived_kind(),
             AstDeclaratorKind::Pointer(decl) => decl.get_derived_kind(),
             AstDeclaratorKind::Function { decl, .. } => decl.get_derived_kind(),
             AstDeclaratorKind::AbstractPointer => this_kind,
+            AstDeclaratorKind::AbstractArray { .. } => this_kind,
             AstDeclaratorKind::AbstractFunction { .. } => this_kind,
         };
 
@@ -95,8 +99,10 @@ impl AstDeclarator {
         match &self.kind {
             AstDeclaratorKind::Ident(ident) => Some(ident),
             AstDeclaratorKind::Pointer(decl) => decl.get_identifier(),
+            AstDeclaratorKind::Array { decl, .. } => decl.get_identifier(),
             AstDeclaratorKind::Function { decl, .. } => decl.get_identifier(),
             AstDeclaratorKind::AbstractPointer => None,
+            AstDeclaratorKind::AbstractArray { .. } => None,
             AstDeclaratorKind::AbstractFunction { .. } => None,
         }
     }
@@ -104,6 +110,11 @@ impl AstDeclarator {
     /// Is this declarator a function declarator?
     pub fn is_function(&self) -> bool {
         matches!(&self.kind, AstDeclaratorKind::Function { .. } | AstDeclaratorKind::AbstractFunction { .. })
+    }
+
+    /// Is this declarator an abstract array? (Array with no identifier like '[]' or '[3]').
+    pub fn is_abstract_array(&self) -> bool {
+        matches!(&self.kind, AstDeclaratorKind::AbstractArray { .. })
     }
 }
 
@@ -124,8 +135,10 @@ impl AstDeclarator {
 pub enum AstDeclaratorKind {
     Ident(AstIdentifier),
     Pointer(Box<AstDeclarator>),
+    Array { decl: Box<AstDeclarator>, size: usize },
     Function { decl: Box<AstDeclarator>, params: Vec<AstDeclaredType> },
     AbstractPointer,
+    AbstractArray { size: usize },
     AbstractFunction { params: Vec<AstDeclaredType> },
 }
 

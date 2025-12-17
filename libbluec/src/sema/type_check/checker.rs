@@ -32,6 +32,13 @@ pub struct TypeChecker {
     scopes: Vec<DeclarationScope>,
 }
 
+/// Whether to warn about implicit conversions when adding a cast.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum CastWarningPolicy {
+    WarnOnImplicitConversion,
+    NoWarning,
+}
+
 impl TypeChecker {
     /// Creates a new Type Checker.
     pub fn new(metadata: parser::AstMetadata, symbols: SymbolTable) -> Self {
@@ -90,70 +97,113 @@ impl TypeChecker {
         self.current_func_return_type = None;
     }
 
-    /// Wraps the given `AstExpression` in a cast to the given `ast_type`.
-    pub fn wrap_in_cast(
+    /// Wraps the given `AstExpression` in a cast to the given `target_type`.
+    pub fn add_cast(
         &mut self,
-        ast_type: &AstType,
+        target_type: &AstType,
         expr: Box<AstExpression>,
+        warning_policy: CastWarningPolicy,
         driver: &mut Driver,
     ) -> AstExpression {
         let node_id = AstNodeId::new();
 
-        self.set_data_type(&node_id, ast_type);
+        self.set_data_type(&node_id, target_type);
 
-        // Warn if implicitly casting a UnaryNegate with an integer literal to an unsigned integer, which will
-        // change signedness.
-        if ast_type.is_unsigned_integer()
-            && let AstExpression::UnaryOperation { node_id, op, expr: inner_expr } = expr.as_ref()
-            && *op == AstUnaryOp::Negate
-            && inner_expr.is_integer_literal()
-        {
-            let old_type = self.metadata.get_node_type(node_id).cloned().unwrap();
-            let loc = self.metadata.get_source_span_as_loc(node_id);
-            let sign_change = true;
+        if warning_policy == CastWarningPolicy::WarnOnImplicitConversion {
+            let mut emitted_warning = false;
 
-            let AstExpression::IntegerLiteral { value, .. } = inner_expr.as_ref() else {
-                ICE!("Expected an integer literal");
-            };
+            // Warn if implicitly casting a UnaryNegate with an integer literal to an unsigned integer, which will
+            // change signedness.
+            if target_type.is_unsigned_integer()
+                && let AstExpression::UnaryOperation { node_id, op, expr: inner_expr } = expr.as_ref()
+                && *op == AstUnaryOp::Negate
+                && inner_expr.is_integer_literal()
+            {
+                let old_type = self.metadata.get_node_type(node_id).cloned().unwrap();
+                let loc = self.metadata.get_source_span_as_loc(node_id);
+                let sign_change = true;
 
-            // Don't warn on implicit unsigned cast applied to '-0'.
-            if *value != 0 {
-                emit_implicit_conversion_warning(&old_type, ast_type, *value, true, loc.unwrap(), sign_change, driver);
+                let AstExpression::IntegerLiteral { value, .. } = inner_expr.as_ref() else {
+                    ICE!("Expected an integer literal");
+                };
+
+                // Don't warn on implicit unsigned cast applied to '-0'.
+                if *value != 0 {
+                    emit_implicit_literal_conversion_warning(
+                        &old_type,
+                        target_type,
+                        *value,
+                        true,
+                        loc.unwrap(),
+                        sign_change,
+                        driver,
+                    );
+
+                    emitted_warning = true;
+                }
+            }
+
+            // Warn if there's an implicit narrowing conversion for an integer literal (with or without change in signedness).
+            if let AstExpression::IntegerLiteral { node_id, value, kind, .. } = expr.as_ref()
+                && target_type.is_integer()
+                && !target_type.can_hold_value(*value)
+            {
+                let old_type = kind.data_type();
+                let loc = self.metadata.get_source_span_as_loc(node_id);
+                let sign_change =
+                    old_type.is_integer() && target_type.is_integer() && !old_type.same_signedness(target_type);
+
+                emit_implicit_literal_conversion_warning(
+                    &old_type,
+                    target_type,
+                    *value,
+                    false,
+                    loc.unwrap(),
+                    sign_change,
+                    driver,
+                );
+
+                emitted_warning = true;
+            }
+
+            // Warn if there's an implicit arithmetic conversion for non-literals
+            if !emitted_warning && !expr.is_arithmetic_literal() {
+                let expr_type = self.get_data_type(&expr.node_id());
+                let both_integers = target_type.is_integer() && expr_type.is_integer();
+                let both_floating_point = target_type.is_floating_point() && expr_type.is_floating_point();
+
+                if (both_integers || both_floating_point) && !expr_type.fits_inside(target_type) {
+                    let loc = self.metadata.get_source_span_as_loc(&expr.node_id()).unwrap();
+                    Warning::implicit_arithmetic_conversion(&expr_type, target_type, loc, driver);
+                }
             }
         }
 
-        // Warn if there's an implicit narrowing conversion (with or without change in signedness).
-        if let AstExpression::IntegerLiteral { node_id, value, kind, .. } = expr.as_ref()
-            && ast_type.is_integer()
-            && !ast_type.can_hold_value(*value)
-        {
-            let old_type = kind.data_type();
-            let loc = self.metadata.get_source_span_as_loc(node_id);
-            let sign_change = old_type.is_integer() && ast_type.is_integer() && !old_type.same_signedness(ast_type);
-
-            emit_implicit_conversion_warning(&old_type, ast_type, *value, false, loc.unwrap(), sign_change, driver);
-        }
-
-        let target_type = AstDeclaredType::resolved(ast_type);
+        let target_type = AstDeclaredType::resolved(target_type);
 
         AstExpression::Cast { node_id, target_type, expr }
     }
 
     /// If the given boxed `AstExpression`'s type already matches the `target_type` then the existing expression
     /// is returned as-is. Otherwise, wraps the expression in a cast to the target type.
-    pub fn wrap_in_cast_if_neeeded(
+    pub fn add_cast_if_needed(
         &mut self,
         target_type: &AstType,
         expr: Box<AstExpression>,
+        warning_policy: CastWarningPolicy,
         driver: &mut Driver,
     ) -> Box<AstExpression> {
         let expr_type = self.get_data_type(&expr.node_id());
 
-        if expr_type == *target_type { expr } else { Box::new(self.wrap_in_cast(target_type, expr, driver)) }
+        if expr_type == *target_type {
+            expr
+        } else {
+            Box::new(self.add_cast(target_type, expr, warning_policy, driver))
+        }
     }
 }
 
-fn emit_implicit_conversion_warning(
+fn emit_implicit_literal_conversion_warning(
     old_type: &AstType,
     new_type: &AstType,
     old_value: u64,
@@ -186,5 +236,5 @@ fn emit_implicit_conversion_warning(
         ICE!("Unhandled type");
     };
 
-    Warning::implicit_conversion(old_type, new_type, &old_value_str, &new_value_str, sign_change, loc, driver);
+    Warning::implicit_literal_conversion(old_type, new_type, &old_value_str, &new_value_str, sign_change, loc, driver);
 }

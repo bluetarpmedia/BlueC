@@ -1,0 +1,35 @@
+warning: Implicit conversion from 'long' to 'int' changes value from 4294967196 to -100
+   |
+   |     int a = 4294967196;
+   |             ^^^^^^^^^^
+   |
+
+warning: Implicit conversion from 'unsigned int' to 'int' changes signedness and value
+         from 4294967196 to -100
+   |
+   |     int b = 4294967196u;
+   |             ^^^^^^^^^^^
+   |
+
+warning: Implicit conversion from 'int' to 'unsigned int' changes signedness and value
+         from -1 to 4294967295
+   |
+   |     unsigned c = -1;
+   |                  ^^
+   |
+
+warning: Implicit conversion from 'long' to 'unsigned int' changes signedness and value
+         from -4294967296 to 0
+   |
+   |     unsigned d = -4294967296;
+   |                  ^^^^^^^^^^^
+   |
+
+warning: Implicit conversion from 'unsigned long long' to 'unsigned short' changes value
+         from 9223372036854775808 to 0
+   |
+   |     unsigned short e = 9223372036854775808ull;
+   |                        ^^^^^^^^^^^^^^^^^^^^^^
+   |
+
+5 warnings generated

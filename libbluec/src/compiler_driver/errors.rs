@@ -201,8 +201,36 @@ impl Error {
     }
 
     /// Emits an error that an expression is not assignable because it's not an lvalue.
-    pub fn expression_is_not_assignable(loc: SourceLocation, driver: &mut Driver) {
-        let err = "Expression is not assignable (must be an l-value)".to_string();
+    pub fn expression_is_not_assignable(
+        assign_op_loc: SourceLocation,
+        lhs_loc: SourceLocation,
+        is_lvalue: bool,
+        assign_type: &AstType,
+        driver: &mut Driver,
+    ) {
+        let err = if is_lvalue {
+            let type_description = get_type_description(assign_type);
+            format!("Cannot assign to {type_description} '{assign_type}'")
+        } else {
+            "Expression is not assignable (must be an l-value)".to_string()
+        };
+
+        let mut diag = Diagnostic::error_at_location(err, assign_op_loc);
+        diag.add_location(lhs_loc);
+        driver.add_diagnostic(diag);
+    }
+
+    /// Emits an error that an expression cannot be incremented or decremented.
+    pub fn cannot_increment_or_decrement_expression(
+        is_increment: bool,
+        ty: &AstType,
+        loc: SourceLocation,
+        driver: &mut Driver,
+    ) {
+        let type_description = get_type_description(ty);
+        let op_description = if is_increment { "increment" } else { "decrement" };
+        let err =
+            format!("Cannot {op_description} expression of {type_description} '{ty}'; operand must be an l-value");
         driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
     }
 
@@ -252,9 +280,19 @@ impl Error {
     }
 
     /// Emits an error that a binary operation has operands with invalid types.
-    pub fn invalid_binary_expression_operands(lhs: &AstType, rhs: &AstType, loc: SourceLocation, driver: &mut Driver) {
+    pub fn invalid_binary_expression_operands(
+        operator_loc: SourceLocation,
+        lhs: &AstType,
+        rhs: &AstType,
+        lhs_loc: SourceLocation,
+        rhs_loc: SourceLocation,
+        driver: &mut Driver,
+    ) {
         let err = format!("Invalid operand types in binary expression ('{lhs}' and '{rhs}')");
-        driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
+        let mut diag = Diagnostic::error_at_location(err, operator_loc);
+        diag.add_location(lhs_loc);
+        diag.add_location(rhs_loc);
+        driver.add_diagnostic(diag);
     }
 
     /// Emits an error that an expression cannot be called because it has the wrong type.
@@ -263,29 +301,35 @@ impl Error {
         driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
     }
 
+    /// Emits an error that a function has an invalid return type.
+    pub fn function_invalid_return_type(return_type: &AstType, loc: SourceLocation, driver: &mut Driver) {
+        let type_description = get_type_description(return_type);
+        let err = format!("Function cannot return {type_description} '{return_type}'");
+        driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
+    }
+
     /// Emits an error that a function type is not assignable
-    pub fn cannot_assign_to_fn_type(
-        fn_type: &AstType,
-        loc: SourceLocation,
-        driver: &mut Driver,
-    ) {
+    pub fn cannot_assign_to_fn_type(fn_type: &AstType, loc: SourceLocation, driver: &mut Driver) {
         let err = format!("Cannot assign a value to an expression of function type '{fn_type}'");
         driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
     }
 
-    /// Emits an error that an expression is being casted to a function type (not a function pointer).
-    pub fn cannot_cast_to_function_type(
+    /// Emits an error that an expression is being casted to a function type (not function pointer) or array type.
+    pub fn cannot_cast_to_function_or_array_type(
         cast_op_loc: SourceLocation,
         expr_loc: SourceLocation,
-        fn_type: &AstType,
+        cast_to_type: &AstType,
         driver: &mut Driver,
     ) {
-        let err = format!("Cannot cast an expression to a function type ('{fn_type}')");
+        let type_description = get_type_description(cast_to_type);
+        let err = format!("Cannot cast an expression to {type_description} ('{cast_to_type}')");
         let mut diag = Diagnostic::error_at_location(err, cast_op_loc);
         diag.add_location(expr_loc);
 
-        let suggested = format!("({})", AstType::new_pointer_to(fn_type.clone()));
-        diag.add_note_with_suggested_code("Try casting to a function pointer instead.".to_string(), suggested, None);
+        let suggested = format!("({})", AstType::new_pointer_to(cast_to_type.clone()));
+        let suggested_type = if cast_to_type.is_function() { "function pointer" } else { "pointer" };
+
+        diag.add_note_with_suggested_code(format!("Try casting to a {suggested_type} instead."), suggested, None);
 
         driver.add_diagnostic(diag);
     }
@@ -320,6 +364,31 @@ impl Error {
         let err = format!("Incompatible {arith} to pointer type conversion ('{arith_type}' to '{ptr_type}')");
         driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
     }
+
+    /// Emits an error that an array must be initialized with an initializer list.
+    pub fn cannot_initialize_array_with_scalar(init_type: &AstType, loc: SourceLocation, driver: &mut Driver) {
+        debug_assert!(init_type.is_scalar());
+
+        let err =
+            format!("Cannot initialize an array with a value of type '{init_type}'; must be an initializer list.");
+        let mut diag = Diagnostic::error_at_location(err, loc);
+
+        {
+            let note = "Add braces around the expression to create an initializer list, which will \
+                        initialize the first element of the array with this value, and the remaining \
+                        elements with zero.";
+
+            let indent = if loc.column == 1 { " ".to_string() } else { " ".repeat(loc.column - 2) };
+
+            let space = if loc.length == 1 { " ".to_string() } else { " ".repeat(loc.length - 2) };
+
+            let suggested = format!("{indent}{{{space}}}");
+
+            diag.add_note_with_suggested_code(note.to_string(), suggested, Some(loc));
+        }
+
+        driver.add_diagnostic(diag);
+    }
 }
 
 fn arithmetic_type_description(arith_type: &AstType) -> &str {
@@ -329,5 +398,15 @@ fn arithmetic_type_description(arith_type: &AstType) -> &str {
         "floating-point"
     } else {
         ICE!("Unhandled arithmetic type '{arith_type}'")
+    }
+}
+
+fn get_type_description(ty: &AstType) -> &str {
+    if ty.is_function() {
+        "function type"
+    } else if ty.is_array() {
+        "array type"
+    } else {
+        "type"
     }
 }

@@ -35,7 +35,7 @@ pub struct BtStaticStorageVariable {
     pub name: String,
     pub is_global: bool,
     pub data_type: BtType,
-    pub init_value: BtConstantValue,
+    pub init_value: Vec<BtConstantValue>,
 }
 
 /// A label identifier in IR.
@@ -103,6 +103,17 @@ pub enum BtInstruction {
     },
     StoreAddress {
         src: BtValue,
+        dst_ptr: BtValue,
+    },
+    StoreAtOffset {
+        src: BtValue,
+        dst_ptr: BtValue,
+        dst_offset: usize,
+    },
+    AddPtr {
+        src_ptr: BtValue,
+        index: BtValue,
+        scale: usize,
         dst_ptr: BtValue,
     },
     Jump {
@@ -204,7 +215,7 @@ impl fmt::Display for BtBinaryOp {
 }
 
 /// An IR data type.
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum BtType {
     Void,
     Int16,
@@ -215,8 +226,9 @@ pub enum BtType {
     UInt64,
     Float32,
     Float64,
-    Pointer, // Opaque pointer, effectively a UInt64 address.
-    Function, // Opaque function
+    Array { element_type: Box<BtType>, count: usize },
+    Pointer,  // Opaque pointer, effectively a UInt64 address.
+    Function, // Opaque function type
 }
 
 impl From<&AstType> for BtType {
@@ -234,6 +246,10 @@ impl From<&AstType> for BtType {
             AstType::Float => BtType::Float32,
             AstType::Double | AstType::LongDouble => BtType::Float64,
             AstType::Pointer(_) => BtType::Pointer,
+            AstType::Array { element_type: ast_elem_type, count } => {
+                let element_type = Box::new(ast_elem_type.as_ref().into());
+                BtType::Array { element_type, count: *count }
+            }
             AstType::Function { .. } => BtType::Function,
         }
     }
@@ -258,6 +274,7 @@ impl fmt::Display for BtType {
             BtType::Float32 => write!(f, "Float32"),
             BtType::Float64 => write!(f, "Float64"),
             BtType::Pointer => write!(f, "Pointer"),
+            BtType::Array { .. } => write!(f, "Array"),
             BtType::Function => write!(f, "Function"),
         }
     }
@@ -277,6 +294,7 @@ impl BtType {
             BtType::Float32 => BtConstantValue::Float32(0.0),
             BtType::Float64 => BtConstantValue::Float64(0.0),
             BtType::Pointer => BtConstantValue::UInt64(0),
+            BtType::Array { element_type, count } => BtConstantValue::ZeroBytes(element_type.bits() / 8 * count),
             BtType::Function => ICE!("Cannot get default value for BtType::Function"),
         }
     }
@@ -291,6 +309,7 @@ impl BtType {
             BtType::Float32 => 32,
             BtType::Float64 => 64,
             BtType::Pointer => 64,
+            BtType::Array { element_type, count } => element_type.bits() * count,
             BtType::Function => 0,
         }
     }
@@ -320,6 +339,11 @@ impl BtType {
         matches!(self, BtType::Pointer)
     }
 
+    /// Is this type an array type?
+    pub fn is_array(&self) -> bool {
+        matches!(self, BtType::Array { .. })
+    }
+
     /// Is this type a function type?
     pub fn is_function(&self) -> bool {
         matches!(self, BtType::Function)
@@ -338,6 +362,10 @@ impl BtType {
             BtType::Float32 => "f32".to_string(),
             BtType::Float64 => "f64".to_string(),
             BtType::Pointer => "ptr".to_string(),
+            BtType::Array { element_type, count } => {
+                let elem_type_str = element_type.to_printer();
+                format!("[{count} x {elem_type_str}]")
+            } 
             BtType::Function => "fn".to_string(),
         }
     }
@@ -346,6 +374,7 @@ impl BtType {
 /// A constant integer or floating-point value.
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum BtConstantValue {
+    ZeroBytes(usize),
     Int16(i16),
     Int32(i32),
     Int64(i64),
@@ -360,6 +389,7 @@ pub enum BtConstantValue {
 impl From<AstConstantValue> for BtConstantValue {
     fn from(value: AstConstantValue) -> Self {
         match value {
+            AstConstantValue::ZeroBytes(size) => BtConstantValue::ZeroBytes(size),
             AstConstantValue::Integer(constant_integer) => match constant_integer {
                 AstConstantInteger::Short(value) => BtConstantValue::Int16(value),
                 AstConstantInteger::Int(value) => BtConstantValue::Int32(value),
@@ -388,6 +418,7 @@ impl From<AstConstantValue> for BtConstantValue {
 impl fmt::Display for BtConstantValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            BtConstantValue::ZeroBytes(size) => write!(f, "ZeroBytes({size})"),
             BtConstantValue::Int16(value) => write!(f, "{value}"),
             BtConstantValue::Int32(value) => write!(f, "{value}"),
             BtConstantValue::Int64(value) => write!(f, "{value}"),
@@ -415,6 +446,7 @@ impl BtConstantValue {
             BtType::Float32 => BtConstantValue::Float32(1.0),
             BtType::Float64 => BtConstantValue::Float64(1.0),
             BtType::Pointer => ICE!("Cannot create a value of 1 for a pointer type"),
+            BtType::Array { .. } => ICE!("Cannot create a value of 1 for an array type"),
             BtType::Function => ICE!("Cannot create a value of 1 for a function type"),
         }
     }
@@ -422,6 +454,7 @@ impl BtConstantValue {
     /// Gets the IR type of the constant value.
     pub fn get_bt_type(&self) -> BtType {
         match self {
+            BtConstantValue::ZeroBytes(_) => ICE!("No BtType for BtConstantValue::ZeroBytes"),
             BtConstantValue::Int16(_) => BtType::Int16,
             BtConstantValue::Int32(_) => BtType::Int32,
             BtConstantValue::Int64(_) => BtType::Int64,
@@ -437,6 +470,7 @@ impl BtConstantValue {
     /// Is the constant value the default zero?
     pub fn has_default_value(&self) -> bool {
         match self {
+            BtConstantValue::ZeroBytes(_) => true,
             BtConstantValue::Int16(value) => *value == 0,
             BtConstantValue::Int32(value) => *value == 0,
             BtConstantValue::Int64(value) => *value == 0,

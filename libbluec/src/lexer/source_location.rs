@@ -5,6 +5,8 @@
 use std::fmt;
 
 /// The location and span of a token in the source file.
+/// 
+/// Line and column numbers are 1-based.
 #[derive(Debug, Default, Copy, Clone, PartialEq, Eq)]
 pub struct SourceLocation {
     pub line: usize,

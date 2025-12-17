@@ -1,0 +1,20 @@
+[
+    {
+        "test_case": "types_array_multi_global_array",
+        "filenames": [
+            "multi/global_array.c", "multi/global_array_client.c"
+        ]
+    },
+    {
+        "test_case": "types_array_multi_return_pointer_to_array",
+        "filenames": [
+            "multi/return_pointer_to_array.c", "multi/return_pointer_to_array_client.c"
+        ]
+    },
+    {
+        "test_case": "types_array_multi_set_array_val",
+        "filenames": [
+            "multi/set_array_val.c", "multi/set_array_val_client.c"
+        ]
+    }
+]

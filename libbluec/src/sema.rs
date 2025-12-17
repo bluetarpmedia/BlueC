@@ -42,6 +42,8 @@ pub fn semantic_analysis(
     //
     let (symbols, metadata) = type_check::type_check(&mut ast_root, metadata, driver);
 
+    // TODO: Remove this, and make sure subsequent passes can fail silently if type info is not available.
+    // This allows us to emit more diagnostics.
     // Don't proceed with further sema if type checking produced errors.
     if driver.has_error_diagnostics() {
         return;

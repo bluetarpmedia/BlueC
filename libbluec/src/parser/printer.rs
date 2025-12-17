@@ -60,17 +60,68 @@ fn print_variable_declaration(var_decl: &AstVariableDeclaration, metadata: Optio
             println!("{indent}storage={storage}");
         }
 
-        if let Some(expr) = &var_decl.init_expr {
+        // Initializer expression
+        if let Some(init) = &var_decl.initializer {
             println!("{indent}init:");
-            print_full_expression(expr, metadata, level + 2);
+            print_variable_initializer(init, metadata, level + 2);
             println!("{}|", make_close_indent(level + 2));
         }
 
-        if let Some(constant_value) = &var_decl.init_constant_value {
-            println!("{indent}init-evaluated-constant: {constant_value}");
+        // Evaluated constant initializer
+        if !var_decl.init_constant_eval.is_empty() {
+            print!("{indent}init-constant-eval: ");
+
+            let is_aggregate = var_decl.init_constant_eval.len() > 1;
+            if is_aggregate {
+                print!("{{ ");
+            }
+
+            const VALUES_PER_LINE: usize = 32;
+            if var_decl.init_constant_eval.len() > VALUES_PER_LINE {
+                print!("\n{indent}    ");
+            }
+
+            let mut first = true;
+            for (idx, val) in var_decl.init_constant_eval.iter().enumerate() {
+                if !first {
+                    print!(", ");
+                }
+
+                if idx > 0 && idx.is_multiple_of(VALUES_PER_LINE) {
+                    print!("\n{indent}    ");
+                }
+                
+                print!("{val}");
+                first = false;
+            }
+
+            if is_aggregate {
+                print!(" }}");
+            }
+
+            println!();
         }
 
         println!("{}|", make_close_indent(level + 1));
+    }
+}
+
+fn print_variable_initializer(init: &AstVariableInitializer, metadata: Option<&AstMetadata>, level: usize) {
+    match init {
+        AstVariableInitializer::Scalar(full_expr) => print_full_expression(full_expr, metadata, level),
+
+        AstVariableInitializer::Aggregate { node_id, init } => {
+            let indent = make_indent(level + 1);
+            print!("{indent}Aggregate");
+            print_node_type(node_id, metadata);
+            println!();
+
+            for i in init {
+                print_variable_initializer(i, metadata, level + 2);
+            }
+
+            println!("{}|", make_close_indent(level + 1));
+        }
     }
 }
 
@@ -92,7 +143,7 @@ fn print_function(function: &AstFunction, metadata: Option<&AstMetadata>, level:
         print!("Function");
     }
 
-    print!("(name=\"{}\", signature={}, linkage={linkage})", function.unique_name, function.declared_type);
+    print!("(name=\"{}\", signature=\"{}\", linkage={linkage})", function.unique_name, function.declared_type);
     print_resolved_type(&function.declared_type);
     println!();
 
@@ -545,6 +596,16 @@ fn print_expression(expr: &AstExpression, metadata: Option<&AstMetadata>, level:
             println!();
 
             print_expression(expr, metadata, level + 1);
+            println!("{}|", make_close_indent(level + 1));
+        }
+
+        AstExpression::Subscript { node_id, expr1, expr2 } => {
+            print!("{indent}Subscript");
+            print_node_type(node_id, metadata);
+            println!();
+
+            print_expression(expr1, metadata, level + 1);
+            print_expression(expr2, metadata, level + 1);
             println!("{}|", make_close_indent(level + 1));
         }
 

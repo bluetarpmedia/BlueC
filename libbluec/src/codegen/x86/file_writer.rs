@@ -2,9 +2,9 @@
 //
 //! The `file_writer` module provides functionality to write x86_64 assembly to a file.
 
-use crate::ICE;
 use super::ast::{AsmBinaryOp, AsmInstruction, AsmLabelName, AsmOperand, AsmType, AsmUnaryOp, ConditionalCode};
 use super::symbols::{AsmSymbol, AsmSymbolTable};
+use crate::ICE;
 
 use std::fs::File;
 use std::io::{BufWriter, Result, Write};
@@ -24,7 +24,7 @@ pub enum AsmDataDefinitionDirective {
     Word(u16),
     DoubleWord(u32), // Aka LongWord
     QuadWord(u64),
-    AddressConstant { object: String }
+    AddressConstant { object: String },
 }
 
 /// Space filling / storage reservation directives.
@@ -149,10 +149,12 @@ impl AsmFileWriter {
             }
 
             AsmInstruction::MovSx { src_type, dst_type, src, dst } => {
+                debug_assert!(src_type != dst_type);
                 self.write_binary_instruction(&make_two_operand_asm_instr("movs", src_type, dst_type), src, dst)
             }
 
             AsmInstruction::MovZx { src_type, dst_type, src, dst } => {
+                debug_assert!(src_type != dst_type);
                 self.write_binary_instruction(&make_two_operand_asm_instr("movz", src_type, dst_type), src, dst)
             }
 
@@ -258,12 +260,13 @@ impl AsmFileWriter {
             AsmInstruction::Label { id } => self.write_local_symbol_label(id),
 
             AsmInstruction::Call(operand) => {
-                if let AsmOperand::Memory { .. } = operand {
+                if matches!(operand, AsmOperand::Data(_) | AsmOperand::Memory { .. }) {
                     self.writeln_with_indent(&format!("callq *{}", self.asm_operand_to_string(operand)))?;
                     return Ok(());
                 }
 
                 let AsmOperand::Function(identifier) = operand else {
+                    println!("{:?}", operand);
                     ICE!("Invalid operand for function call");
                 };
 
@@ -343,6 +346,11 @@ impl AsmFileWriter {
                 }
             }
 
+            AsmOperand::Indexed { base, index, scale } => {
+                debug_assert!(matches!(scale, 1 | 2 | 4 | 8));
+                if *scale == 1 { format!("({base},{index})") } else { format!("({base},{index},{scale})") }
+            }
+
             AsmOperand::Function(name) => {
                 format!("{}(%rip)", make_asm_identifier(name))
             }
@@ -364,7 +372,11 @@ impl AsmFileWriter {
             }
 
             AsmOperand::Pseudo(name) => {
-                ICE!("AsmOperand::Pseudo {} should have been replaced", name);
+                ICE!("AsmOperand::Pseudo '{name}' should have been replaced");
+            }
+
+            AsmOperand::PseudoMemory { name, .. } => {
+                ICE!("AsmOperand::PseudoMemory '{name}' should have been replaced");
             }
         }
     }
