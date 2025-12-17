@@ -51,6 +51,7 @@ Options:
   --validate             Only run the lexer, parser, and sema stages
   --print-ast            Print the parsed AST to stdout (implies --parse)
   --print-tast           Print the type-checked AST to stdout (implies --validate)
+  --print-ir             Print the high-level BlueTac intermediate representation
 
   -h, --help             Print help
   -V, --version          Print version
@@ -169,7 +170,7 @@ The BlueC compiler pipeline is as follows.
   `long double` is effectively an alias for `double`; this is Standard-conforming but in future we may support 80-bit and/or 128-bit long doubles for certain targets
   * ✅ Pointers
   * ✅ Function pointers
-  * Arrays
+  * ✅ Arrays
   * `_Bool`, `char`, `void`
   * Structs
   * Enums
