@@ -365,6 +365,14 @@ impl Warning {
         driver.add_diagnostic(diag);
     }
 
+    /// Emits a warning that a subobject initializer is missing braces.
+    /// 
+    /// -Wmissing-braces
+    pub fn missing_braces_around_sub_object(loc: SourceLocation, driver: &mut Driver) {
+        let warning = "Initialization of sub-object is missing braces".to_string();
+        driver.add_diagnostic(Diagnostic::warning_at_location(warning, loc));
+    }
+
     /// Emits a warning that there are too many braces around an initializer list for a scalar type.
     /// 
     /// -Wmany-braces-around-scalar-init

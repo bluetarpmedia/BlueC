@@ -149,6 +149,21 @@ fn typecheck_variable_initializer(
                 todo!() // Future: Structs
             };
 
+            // Allow a sub-array to be initialized with a scalar, but warn about it unless the scalar value is zero.
+            if element_type.is_aggregate()
+                && init.len() == 1
+                && let AstVariableInitializer::Scalar(full_expr) = &init[0]
+            {
+                let loc = chk.metadata.get_source_span_as_loc(&full_expr.node_id).unwrap();
+                let scalar_is_literal_zero = full_expr.expr.is_integer_literal_with_value(0);
+                let scalar = std::mem::take(init);
+                *init = vec![AstVariableInitializer::Aggregate { node_id: AstNodeId::new(), init: scalar }];
+
+                if !scalar_is_literal_zero {
+                    Warning::missing_braces_around_sub_object(loc, driver);
+                }
+            }
+
             // Type check each element in the initializer list.
             //      Don't short-circuit if one fails because we want a diagnostic for each element that is invalid.
             //      clippy suggests turning the `fold(..)?` into a short-circuiting `try_fold`, which we don't want.

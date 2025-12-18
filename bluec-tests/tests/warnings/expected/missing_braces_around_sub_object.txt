@@ -1,0 +1,7 @@
+warning: Initialization of sub-object is missing braces
+   |
+   | int arr[3][3] = {7};
+   |                  ^
+   |
+
+1 warning generated

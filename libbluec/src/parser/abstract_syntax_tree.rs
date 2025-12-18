@@ -58,7 +58,7 @@ impl AstDeclaration {
 /// allocate any storage for it. For example, `extern int i;` or `struct Foo;`.
 ///
 /// Note that `extern int i = 3;` is a definition and the `extern` is ignored (and a warning is emitted).
-/// 
+///
 /// If the `initializer` expression can be evaluated at compile-time (i.e. it's a constant expression) then the result
 /// of its evaluation is stored in `init_constant_eval`. The sema stage is responsible for this evaluation. The
 /// evaluation is a `Vec` because a static storage variable of array type may have more than one initializer value.
@@ -319,6 +319,17 @@ impl AstExpression {
     /// Is the AST expression an integer literal?
     pub fn is_integer_literal(&self) -> bool {
         matches!(self, AstExpression::IntegerLiteral { .. })
+    }
+
+    /// Is the AST expression an integer literal with the given value?
+    pub fn is_integer_literal_with_value(&self, value: u64) -> bool {
+        if let AstExpression::IntegerLiteral { value: literal_value, .. } = self
+            && *literal_value == value
+        {
+            true
+        } else {
+            false
+        }
     }
 
     /// Is the AST expression an arithmetic (integer or floating-point) literal?
