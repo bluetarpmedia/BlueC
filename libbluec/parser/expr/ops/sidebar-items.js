@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["is_assignment_operator","is_binary_operator","is_incr_or_decr_op","is_next_token_a_postfix_unary_operator","is_prefix_unary_operator","operator_precedence","parse_assignment_operator","parse_binary_operator","parse_postfix_unary_operation","parse_prefix_unary_operation","parse_prefix_unary_operator"]};

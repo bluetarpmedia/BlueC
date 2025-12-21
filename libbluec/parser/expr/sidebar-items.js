@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["parse_expression","parse_factor","parse_full_expression","parse_optional_full_expression"],"mod":["ops"]};
