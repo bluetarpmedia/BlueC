@@ -212,7 +212,9 @@ impl AsmConstantInitializer {
             AsmConstantInitializer::Imm64 { .. } => 8,
             AsmConstantInitializer::AddressOf { .. } => 8,
             AsmConstantInitializer::AsciiString { byte_count, .. } => *byte_count,
-            AsmConstantInitializer::AsciiStringArray { .. } => todo!(),
+            AsmConstantInitializer::AsciiStringArray { .. } => {
+                ICE!("No size for AsmConstantInitializer::AsciiStringArray")
+            }
         }
     }
 
@@ -226,7 +228,9 @@ impl AsmConstantInitializer {
             AsmConstantInitializer::AddressOf { .. } => AsmType::QuadWord,
             AsmConstantInitializer::ZeroBytes(_) => ICE!("No AsmType for AsmConstantInitializer::ZeroBytes"),
             AsmConstantInitializer::AsciiString { .. } => ICE!("No AsmType for AsmConstantInitializer::AsciiString"),
-            AsmConstantInitializer::AsciiStringArray { .. } => ICE!("No AsmType for AsmConstantInitializer::AsciiStringArray"),
+            AsmConstantInitializer::AsciiStringArray { .. } => {
+                ICE!("No AsmType for AsmConstantInitializer::AsciiStringArray")
+            }
         }
     }
 }

@@ -100,7 +100,7 @@ pub fn generate_asm(bt_root: ir::BtRoot, symbols: SymbolTable, constants: Consta
     //
     let mut asm_symbols = AsmSymbolTable::from_frontend_symbols(generator.symbols);
 
-    // Add the constant table entries to the back-end symbol table and to the list of definitions.
+    // Add the floating-point constant table entries to the back-end symbol table and to the list of definitions.
     //
     let constants = generator.constants.get_float_constants();
     asm_definitions.reserve(constants.len());
@@ -229,7 +229,13 @@ fn generate_asm_static_constant(bt_static_constant: ir::BtStaticConstant, consta
             (AsmConstantInitializer::AsciiStringArray { values: values.clone() }, 1)
         }
 
-        _ => todo!(),
+        ConstantValue::F32 { value, alignment } => {
+            (AsmConstantInitializer::Imm32 { value: value.to_bits(), signed: false }, *alignment)
+        }
+
+        ConstantValue::F64 { value, alignment } => {
+            (AsmConstantInitializer::Imm64 { value: value.to_bits(), signed: false }, *alignment)
+        }
     };
 
     let label = AsmLabelName(bt_static_constant.name);
