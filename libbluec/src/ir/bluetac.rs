@@ -19,11 +19,17 @@ use crate::sema::symbol_table::SymbolTable;
 /// The root of the BlueTac IR contains a list of definitions.
 pub struct BtRoot(pub Vec<BtDefinition>);
 
-/// A BlueTac IR definition is either a function definition or a variable with static storage duration.
+/// A BlueTac IR definition is either a function definition, a variable with static storage duration, or a
+/// read-only constant value with global lifetime (equivalent of a static storage duration).
 #[derive(Debug)]
 pub enum BtDefinition {
+    /// A function definition
     Function(BtFunctionDefn),
+
+    /// A variable with static storage duration.
     StaticVariable(BtStaticStorageVariable),
+
+    /// A read-only constant value.
     StaticConstant(BtStaticConstant),
 }
 
@@ -46,7 +52,7 @@ pub struct BtStaticStorageVariable {
     pub init_value: Vec<BtStaticStorageInitializer>,
 }
 
-/// The IR for a global constant value.
+/// The IR for a global read-only constant value.
 #[derive(Debug, Clone)]
 pub struct BtStaticConstant {
     pub name: String,
