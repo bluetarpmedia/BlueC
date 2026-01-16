@@ -37,11 +37,11 @@ pub(super) fn promote_integer_literals_in_expr(expr: &mut AstExpression, metadat
     if let AstExpression::Cast { target_type, expr: inner_expr, .. } = expr
         && matches!(inner_expr.as_ref(), AstExpression::IntegerLiteral { .. })
     {
-        let cast_to_type = target_type.resolved_type.as_ref().expect("Sema typechecking should resolve type");
-
         // If we can promote the integer literal to the desired type, then replace the cast expression
         // with the new promoted expression.
-        if let Some(promoted) = try_promote_integer_literal(inner_expr.as_mut(), cast_to_type, metadata) {
+        if let Some(cast_to_type) = target_type.resolved_type.as_ref()
+            && let Some(promoted) = try_promote_integer_literal(inner_expr.as_mut(), cast_to_type, metadata)
+        {
             *expr = promoted;
         }
     }

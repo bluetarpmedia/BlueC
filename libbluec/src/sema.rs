@@ -43,12 +43,13 @@ pub fn semantic_analysis(
     //
     let (symbols, constants, mut metadata) = type_check::type_check(&mut ast_root, metadata, driver);
 
-    // TODO: Remove this, and make sure subsequent passes can fail silently if type info is not available.
-    // This allows us to emit more diagnostics.
-    // Don't proceed with further sema if type checking produced errors.
-    if driver.has_error_diagnostics() {
-        return;
-    }
+    // Validate labels
+    //      Verify that label names are unique and goto targets are valid in each function.
+    //
+    labels::validate_labels(&mut ast_root, driver, &metadata);
+
+    // Numeric literal promotion
+    literal_promotion::promote_integer_literals(&mut ast_root, &mut metadata);
 
     // Warn about unused symbols.
     //
@@ -58,20 +59,10 @@ pub fn semantic_analysis(
         Warning::unused_symbol(symbol, kind, driver);
     }
 
-    // Validate labels
-    //      Verify that label names are unique and goto targets are valid in each function.
-    //
-    labels::validate_labels(&mut ast_root, driver, &metadata);
-
-    // Numeric literal promotion
-    literal_promotion::promote_integer_literals(&mut ast_root, &mut metadata);
-
     // Warn about expressions missing parentheses.
     //
-    if driver.options().warnings_enabled {
-        expr::warn_about_expressions_with_mixed_operators(&mut ast_root, driver, &mut metadata);
-        expr::warn_about_assignment_in_condition_missing_parens(&mut ast_root, driver, &mut metadata);
-    }
+    expr::warn_about_expressions_with_mixed_operators(&mut ast_root, driver, &mut metadata);
+    expr::warn_about_assignment_in_condition_missing_parens(&mut ast_root, driver, &mut metadata);
 
     // Don't proceed to the next stage if we've emitted errors, or if client only wants to run up to this stage.
     if driver.has_error_diagnostics() || driver.options().validate {
