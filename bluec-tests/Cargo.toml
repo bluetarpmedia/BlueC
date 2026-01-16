@@ -1,6 +1,6 @@
 [package]
 name = "bluec-tests"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2024"
 authors = ["Neil Henderson <neil@bluetarpmedia.com>"]
 description = "Integration tests for the BlueC library"
