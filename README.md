@@ -135,10 +135,10 @@ The BlueC compiler pipeline is as follows.
 | Lexer | Hand-written | [lexer.rs](src/lexer.rs) |
 | Parser | Hand-written, recursive descent with precedence climbing for binary operations | [parser.rs](src/parser.rs) |
 | Sema | Semantic analysis of the C AST produced by the Parser | [sema.rs](src/sema.rs) |
-| IR translation | Lowers the C AST into a custom three-address code (TAC) intermediate representation, called BlueTac | [translation.rs](src/translation.rs) |
+| IR translation | Lowers the C AST into a custom three-address code (TAC) intermediate representation, called BlueTac | [ir.rs](src/ir.rs) |
 | Optimizer | Todo! Lowers the high-level IR to SSA form; applies a series of optimization transformations (see below) | |
 | Codegen | Generates an `x86_64` AST from the IR for the `System V AMD64 ABI` | [codegen.rs](src/codegen.rs) |
-| Code emission | Writes the `x86_64` assembly code to an output file, in AT&T syntax (Intel syntax coming later) | [x86_emit.rs](src/codegen/x86_emit.rs) |
+| Code emission | Writes the `x86_64` assembly code to an output file, in AT&T syntax (Intel syntax coming later) | [x86_emit.rs](src/codegen/x86/emit.rs) |
 | Assembler & linker | Uses an external tool (`gcc`) | [compiler_driver.rs](src/compiler_driver.rs) |
 
 ## Status and Roadmap
@@ -155,12 +155,13 @@ The BlueC compiler pipeline is as follows.
 * ✅ Switch statements
 * ✅ Function calls
 * ✅ File scope declarations and storage-specifiers
-* Literals
-  * ✅ Integer (Decimal, Hex, Octal, Binary (as an extension) and suffixes).
-  * ✅ Floating Point (Decimal and Hex)
-  * Character
-  * String
+* ✅ Literals
+  * ✅ Integer: Decimal, Hex, Octal, Binary and suffixes.
+  * ✅ Floating Point: Decimal and Hex
+  * ✅ Character
+  * ✅ String
 * Types
+  * ✅ `char` (8-bit)
   * ✅ `short` (16-bit)
   * ✅ `int` (32-bit)
   * ✅ `long` (64-bit)
@@ -171,7 +172,7 @@ The BlueC compiler pipeline is as follows.
   * ✅ Pointers
   * ✅ Function pointers
   * ✅ Arrays
-  * `_Bool`, `char`, `void`
+  * `_Bool`, `void`
   * Structs
   * Enums
   * Unions
