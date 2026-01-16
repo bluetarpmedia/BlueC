@@ -1,5 +1,5 @@
 warning: '<<' has a lower precedence than '+' which means the '+' expression is
-         evaluated first.
+         evaluated first. [-Wbitwise-op-parentheses]
    |
    |     int x = a + b << c;
    |               ~   ^^
@@ -17,7 +17,7 @@ note: Or add parentheses around the '<<' expression to evaluate it first.
    |
 
 warning: '<<' has a lower precedence than '+' which means the '+' expression is
-         evaluated first.
+         evaluated first. [-Wbitwise-op-parentheses]
    |
    |     int y = a << b + c;
    |               ^^   ~

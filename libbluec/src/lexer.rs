@@ -1,7 +1,7 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 //
-//! The `lexer` module handles the lexical analysis of the source code and then
-//! passes the results (a vector of tokens) to the parser.
+//! The `lexer` module handles the lexical analysis of the source code and then passes the results (a vector of tokens)
+//! to the parser.
 
 mod char_literal;
 mod line_lexer;

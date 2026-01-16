@@ -1,0 +1,8 @@
+warning: Implicit conversion from case value type 'long long' to switch condition type
+         'int' changes value from 4294967296 to 0 [-Wconstant-conversion]
+   |
+   |         case 4294967296:
+   |              ^^^^^^^^^^
+   |
+
+1 warning generated

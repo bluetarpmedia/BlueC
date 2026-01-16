@@ -1,4 +1,4 @@
-warning: Variable 'a' is uninitialized
+warning: Variable 'a' is uninitialized [-Wuninitialized]
    |
    |     int a;
    |         ^

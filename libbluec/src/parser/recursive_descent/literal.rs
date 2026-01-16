@@ -8,7 +8,7 @@ use super::{AstExpression, AstFloatLiteralKind, AstIntegerLiteralKind, AstNodeId
 use super::{ParseError, ParseResult, Parser, add_error};
 
 use crate::ICE;
-use crate::compiler_driver::{Driver, warnings::Warning};
+use crate::compiler_driver::{Driver, Warning};
 use crate::lexer;
 use crate::lexer::SourceLocation;
 use crate::parser::meta;

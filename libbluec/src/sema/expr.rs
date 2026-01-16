@@ -5,7 +5,7 @@
 use super::visitor;
 
 use crate::compiler_driver;
-use crate::compiler_driver::warnings::Warning;
+use crate::compiler_driver::Warning;
 use crate::parser;
 use crate::parser::{
     AstBinaryOp, AstBinaryOpFamily, AstExpression, AstFullExpression, AstFunction, AstNodeId, AstStatement,

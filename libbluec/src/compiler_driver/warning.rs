@@ -1,20 +1,24 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 //
-//! The `warnings` module defines all the warning diagnostics.
+//! The `warning` module defines functions to emit warning diagnostics.
 
 use crate::ICE;
-use crate::compiler_driver::Driver;
-use crate::compiler_driver::diagnostics::{Diagnostic, SourceIdentifier};
+
+use super::diagnostics::{Diagnostic, SourceIdentifier};
+use super::{Driver, WarningKind};
+
 use crate::lexer::{SourceLocation, TokenType};
 use crate::parser::expr::ops;
 use crate::parser::symbol::SymbolKind;
-use crate::parser::{AstBinaryOp, AstType};
+use crate::parser::{AstBinaryOp, AstBinaryOpFamily, AstType};
 
 pub struct Warning;
 
 impl Warning {
     /// Emits an implicit conversion warning for a numeric literal, optionally with a change in signedness.
-    pub fn implicit_literal_conversion(
+    ///
+    /// -Wconstant-conversion
+    pub fn constant_conversion(
         old_type: &AstType,
         new_type: &AstType,
         old_value: &str,
@@ -23,6 +27,8 @@ impl Warning {
         loc: SourceLocation,
         driver: &mut Driver,
     ) {
+        let kind = WarningKind::ConstantConversion;
+
         let message = if sign_change {
             format!(
                 "Implicit conversion from '{old_type}' to '{new_type}' changes signedness \
@@ -35,7 +41,7 @@ impl Warning {
             )
         };
 
-        driver.add_diagnostic(Diagnostic::warning_at_location(message, loc));
+        driver.add_diagnostic(Diagnostic::warning_at_location(kind, message, loc));
     }
 
     /// Emits an implicit conversion warning for an arithmetic type, where the conversion either changes signedness
@@ -54,57 +60,81 @@ impl Warning {
         let sign_change = (old_type.is_signed_integer() && new_type.is_unsigned_integer())
             || (new_type.is_signed_integer() && old_type.is_unsigned_integer());
 
-        let warning = if sign_change && precision_loss {
-            format!("Implicit conversion from '{old_type}' to '{new_type}' loses precision and changes signedness")
+        let (kind, message) = if sign_change && precision_loss {
+            let kind = WarningKind::SignConversion;
+            (
+                kind,
+                format!("Implicit conversion from '{old_type}' to '{new_type}' loses precision and changes signedness"),
+            )
         } else if sign_change {
-            format!("Implicit conversion from '{old_type}' to '{new_type}' changes signedness")
+            let kind = WarningKind::SignConversion;
+            (kind, format!("Implicit conversion from '{old_type}' to '{new_type}' changes signedness"))
         } else if precision_loss {
-            format!("Implicit conversion from '{old_type}' to '{new_type}' loses precision")
+            let kind = if old_type.is_integer() {
+                WarningKind::ImplicitIntConversion
+            } else if old_type.is_floating_point() {
+                WarningKind::ImplicitFloatConversion
+            } else {
+                WarningKind::ImplicitConversion
+            };
+
+            (kind, format!("Implicit conversion from '{old_type}' to '{new_type}' loses precision"))
         } else {
             ICE!("Did not handle narrowing warning for '{old_type}' to '{new_type}'");
         };
 
-        driver.add_diagnostic(Diagnostic::warning_at_location(warning, loc));
+        driver.add_diagnostic(Diagnostic::warning_at_location(kind, message, loc));
     }
 
     /// Emits an implicit conversion warning for a switch statement case value.
+    ///
+    /// -Wimplicit-conversion
     pub fn implicit_switch_case_conversion(
         case_data_type: &AstType,
         switch_data_type: &AstType,
         old_value: &str,
         new_value: &str,
+        sign_change: bool,
         loc: SourceLocation,
         driver: &mut Driver,
     ) {
+        let kind = if sign_change { WarningKind::SignConversion } else { WarningKind::ConstantConversion };
+
         let warning = format!(
             "Implicit conversion from case value type '{case_data_type}' to switch \
             condition type '{switch_data_type}' changes value from {old_value} to {new_value}"
         );
 
-        driver.add_diagnostic(Diagnostic::warning_at_location(warning, loc));
+        driver.add_diagnostic(Diagnostic::warning_at_location(kind, warning, loc));
     }
 
     /// Emits a warning about an 'extern' variable with an initializer.
     pub fn extern_initializer(loc: SourceLocation, driver: &mut Driver) {
+        let kind = WarningKind::ExternInitializer;
+
         let warning = String::from(
             "'extern' variable has an initializer, which makes it a variable definition. \
             Remove 'extern' since it has no effect.",
         );
 
-        driver.add_diagnostic(Diagnostic::warning_at_location(warning, loc));
+        driver.add_diagnostic(Diagnostic::warning_at_location(kind, warning, loc));
     }
 
     /// Emits a warning for a duplicate declaration specifier (e.g. duplicate storage class or 'signed'/'unsigned').
     ///
     /// -Wduplicate-decl-specifier
     pub fn duplicate_decl_specifier(specifier: SourceIdentifier, driver: &mut Driver) {
-        // TODO: Enable this warning even without '-Wall'.
+        let kind = WarningKind::DuplicateDeclSpecifier;
         let warning = format!("Duplicate '{}' specifier has no effect", specifier.0);
-        driver.add_diagnostic(Diagnostic::warning_at_location(warning, specifier.1));
+        driver.add_diagnostic(Diagnostic::warning_at_location(kind, warning, specifier.1));
     }
 
     /// Emits a warning that a declaration is missing its identifier.
+    ///
+    /// -Wmissing-declarations
     pub fn missing_declaration_identifier(is_typedef: bool, loc: SourceLocation, driver: &mut Driver) {
+        let kind = WarningKind::MissingDeclarations;
+
         let warning = if is_typedef {
             "Type alias declaration is missing the alias name"
         } else {
@@ -112,38 +142,51 @@ impl Warning {
         }
         .to_string();
 
-        driver.add_diagnostic(Diagnostic::warning_at_location(warning, loc));
+        driver.add_diagnostic(Diagnostic::warning_at_location(kind, warning, loc));
     }
 
     /// Emits a warning that a variable is uninitialized.
+    ///
+    /// -Wuninitialized
     pub fn uninitialized_variable(variable: SourceIdentifier, driver: &mut Driver) {
+        let kind = WarningKind::Uninitialized;
         let warning = format!("Variable '{}' is uninitialized", variable.0);
-        driver.add_diagnostic(Diagnostic::warning_at_location(warning, variable.1));
+        driver.add_diagnostic(Diagnostic::warning_at_location(kind, warning, variable.1));
     }
 
     /// Emits a warning that an integer literal is too large to be interpreted as signed and therefore is implicitly
     /// converted to unsigned.
+    ///
+    /// -Wimplicitly-unsigned-literal
     pub fn integer_literal_implicitly_unsigned(loc: SourceLocation, driver: &mut Driver) {
+        let kind = WarningKind::ImplicitlyUnsignedLiteral;
         let warning = "Integer literal is interpreted as unsigned because it is too large \
                        for a signed integer type";
-        driver.add_diagnostic(Diagnostic::warning_at_location(warning.to_string(), loc));
+        driver.add_diagnostic(Diagnostic::warning_at_location(kind, warning.to_string(), loc));
     }
 
     /// Emits a warning that a symbol is unused.
     ///
-    /// -Wunused-variable, -Wunused-function, -Wunused-local-typedef
+    /// -Wunused-variable
+    /// -Wunused-function
+    /// -Wunused-local-typedef
     pub fn unused_symbol(symbol: SourceIdentifier, kind: SymbolKind, driver: &mut Driver) {
-        let warning = if kind == SymbolKind::TypeAlias {
-            format!("Locally defined type alias '{}' is unused", symbol.0)
+        let (kind, warning) = if kind == SymbolKind::TypeAlias {
+            (WarningKind::UnusedLocalTypedef, format!("Locally defined type alias '{}' is unused", symbol.0))
+        } else if kind == SymbolKind::Function {
+            (WarningKind::UnusedFunction, format!("Function '{}' is unused", symbol.0))
         } else {
-            format!("{kind} '{}' is unused", symbol.0)
+            (WarningKind::UnusedVariable, format!("Variable '{}' is unused", symbol.0))
         };
-        driver.add_diagnostic(Diagnostic::warning_at_location(warning, symbol.1));
+
+        driver.add_diagnostic(Diagnostic::warning_at_location(kind, warning, symbol.1));
     }
 
     /// Emits a warning that an expression has mixed operators and is missing parentheses.
     ///
-    /// -Wlogical-op-parentheses, -Wbitwise-op-parentheses, -Wparentheses
+    /// -Wlogical-op-parentheses
+    /// -Wbitwise-op-parentheses
+    /// -Wparentheses
     pub fn mixed_operators_missing_parens(
         child_expr_op: AstBinaryOp,
         parent_expr_op: AstBinaryOp,
@@ -179,7 +222,15 @@ impl Warning {
             }
         };
 
-        let mut diag = Diagnostic::warning_at_location(warning, parent_expr_loc);
+        let kind = if parent_expr_op.family() == AstBinaryOpFamily::Logical {
+            WarningKind::LogicalOpParentheses
+        } else if parent_expr_op.family() == AstBinaryOpFamily::Bitwise {
+            WarningKind::BitwiseOpParentheses
+        } else {
+            WarningKind::Parentheses
+        };
+
+        let mut diag = Diagnostic::warning_at_location(kind, warning, parent_expr_loc);
         diag.add_location(child_expr_loc);
 
         let note = format!(
@@ -198,13 +249,16 @@ impl Warning {
     }
 
     /// Emits a warning that the result of an assignment is used as a condition without parentheses.
+    ///
+    /// -Wparentheses
     pub fn assignment_in_condition_missing_parens(
         assignment_expr_loc: SourceLocation,
         assignment_operator_loc: SourceLocation,
         driver: &mut Driver,
     ) {
+        let kind = WarningKind::Parentheses;
         let warning = "The result of an assignment is used as a condition; add parentheses to clarify intent";
-        let mut diag = Diagnostic::warning_at_location(warning.to_string(), assignment_operator_loc);
+        let mut diag = Diagnostic::warning_at_location(kind, warning.to_string(), assignment_operator_loc);
 
         {
             let note = "Add parentheses around the assignment expression to silence this warning.";
@@ -241,9 +295,9 @@ impl Warning {
         b_loc: SourceLocation,
         driver: &mut Driver,
     ) {
-        // TODO: Enable this warning even without '-Wall'.
+        let kind = WarningKind::CompareDistinctPointerTypes;
         let warning = format!("Comparison of different pointer types ('{a}' and '{b}')");
-        let mut diag = Diagnostic::warning_at_location(warning, cmp_loc);
+        let mut diag = Diagnostic::warning_at_location(kind, warning, cmp_loc);
         diag.add_location(a_loc);
         diag.add_location(b_loc);
         driver.add_diagnostic(diag);
@@ -260,9 +314,9 @@ impl Warning {
         int_loc: SourceLocation,
         driver: &mut Driver,
     ) {
-        // TODO: Enable this warning even without '-Wall'.
+        let kind = WarningKind::PointerIntegerCompare;
         let warning = format!("Comparison between pointer type '{ptr_type}' and integer type '{int_type}'");
-        let mut diag = Diagnostic::warning_at_location(warning, cmp_loc);
+        let mut diag = Diagnostic::warning_at_location(kind, warning, cmp_loc);
         diag.add_location(ptr_loc);
         diag.add_location(int_loc);
         driver.add_diagnostic(diag);
@@ -278,9 +332,9 @@ impl Warning {
         int_loc: SourceLocation,
         driver: &mut Driver,
     ) {
-        // TODO: Enable this warning even without '-Wall'.
+        let kind = WarningKind::PointerToIntCast;
         let warning = format!("Cast to smaller integer type '{int_type}' from pointer '{ptr_type}'");
-        let mut diag = Diagnostic::warning_at_location(warning, cmp_loc);
+        let mut diag = Diagnostic::warning_at_location(kind, warning, cmp_loc);
         diag.add_location(int_loc);
 
         let ptr_bits = ptr_type.bits();
@@ -293,11 +347,11 @@ impl Warning {
     ///
     /// -Wnon-literal-null-conversion
     pub fn expression_interpreted_as_null_ptr_constant(loc: SourceLocation, ptr_type: &AstType, driver: &mut Driver) {
-        // TODO: Enable this warning even without '-Wall'.
+        let kind = WarningKind::NonLiteralNullConversion;
         let warning = format!(
             "Expression evaluates to zero and is interpreted as a null pointer constant (of type '{ptr_type}')"
         );
-        driver.add_diagnostic(Diagnostic::warning_at_location(warning, loc));
+        driver.add_diagnostic(Diagnostic::warning_at_location(kind, warning, loc));
     }
 
     /// Emits a warning that a ternary condition's consequent and alternative types do not match.
@@ -311,9 +365,9 @@ impl Warning {
         b_loc: SourceLocation,
         driver: &mut Driver,
     ) {
-        // TODO: Enable this warning even without '-Wall'.
+        let kind = WarningKind::ConditionalTypeMismatch;
         let warning = format!("Type mismatch in conditional expression ('{a}' and '{b}')");
-        let mut diag = Diagnostic::warning_at_location(warning, ternary_loc);
+        let mut diag = Diagnostic::warning_at_location(kind, warning, ternary_loc);
         diag.add_location(a_loc);
         diag.add_location(b_loc);
         driver.add_diagnostic(diag);
@@ -330,16 +384,16 @@ impl Warning {
         b_loc: SourceLocation,
         driver: &mut Driver,
     ) {
-        // TODO: Enable this warning even without '-Wall'.
+        let kind = WarningKind::PointerTypeMismatch;
         let warning = format!("Pointer type mismatch ('{a}' and '{b}')");
-        let mut diag = Diagnostic::warning_at_location(warning, expr_loc);
+        let mut diag = Diagnostic::warning_at_location(kind, warning, expr_loc);
         diag.add_location(a_loc);
         diag.add_location(b_loc);
         driver.add_diagnostic(diag);
     }
 
     /// Emits a warning that there are too many elements in the initializer list for the given `variable_type`.
-    /// 
+    ///
     /// -Wexcess-initializers
     pub fn too_many_elements_for_initializer(variable_type: &AstType, loc: SourceLocation, driver: &mut Driver) {
         let type_description = if variable_type.is_scalar() {
@@ -350,8 +404,9 @@ impl Warning {
             "aggregate type"
         };
 
+        let kind = WarningKind::ExcessInitializers;
         let warning = format!("Too many elements in initializer list for {type_description} '{variable_type}'");
-        let mut diag = Diagnostic::warning_at_location(warning, loc);
+        let mut diag = Diagnostic::warning_at_location(kind, warning, loc);
 
         let note = if variable_type.is_scalar() {
             "The variable is initialized with the first element and the remainder is ignored."
@@ -366,11 +421,12 @@ impl Warning {
     }
 
     /// Emits a warning that an initializer string is too long for a char array.
-    /// 
+    ///
     /// -Wexcess-initializers
     pub fn initializer_string_too_long_for_array(array_type: &AstType, loc: SourceLocation, driver: &mut Driver) {
+        let kind = WarningKind::ExcessInitializers;
         let warning = format!("Initializer string is too long for array of type '{array_type}'");
-        let mut diag = Diagnostic::warning_at_location(warning, loc);
+        let mut diag = Diagnostic::warning_at_location(kind, warning, loc);
 
         if let AstType::Array { count, .. } = array_type {
             let note = format!("The array is initialized with the first {count} characters from the string.");
@@ -381,32 +437,35 @@ impl Warning {
     }
 
     /// Emits a warning that a subobject initializer is missing braces.
-    /// 
+    ///
     /// -Wmissing-braces
     pub fn missing_braces_around_sub_object(loc: SourceLocation, driver: &mut Driver) {
+        let kind = WarningKind::MissingBraces;
         let warning = "Initialization of sub-object is missing braces".to_string();
-        driver.add_diagnostic(Diagnostic::warning_at_location(warning, loc));
+        driver.add_diagnostic(Diagnostic::warning_at_location(kind, warning, loc));
     }
 
     /// Emits a warning that there are too many braces around an initializer list for a scalar type.
-    /// 
+    ///
     /// -Wmany-braces-around-scalar-init
     pub fn too_many_braces_for_scalar_initializer(loc: SourceLocation, driver: &mut Driver) {
+        let kind = WarningKind::ManyBracesAroundScalarInit;
         let warning = "Too many braces around scalar initializer".to_string();
 
         let braces_loc = SourceLocation { column: loc.column + 1, length: loc.length - 1, ..loc };
         let open_brace_loc = SourceLocation { length: 1, ..loc };
 
-        let mut diag = Diagnostic::warning_at_location(warning, open_brace_loc);
+        let mut diag = Diagnostic::warning_at_location(kind, warning, open_brace_loc);
         diag.add_location(braces_loc);
         driver.add_diagnostic(diag);
     }
 
     /// Emits a warning that an array subscript index is out of bounds.
-    /// 
+    ///
     /// -Warray-bounds
     pub fn array_index_out_of_bounds(index: i32, array_type: &AstType, loc: SourceLocation, driver: &mut Driver) {
+        let kind = WarningKind::ArrayBounds;
         let warning = format!("Array index {index} is out of bounds for the array of type '{array_type}'");
-        driver.add_diagnostic(Diagnostic::warning_at_location(warning, loc));
+        driver.add_diagnostic(Diagnostic::warning_at_location(kind, warning, loc));
     }
 }

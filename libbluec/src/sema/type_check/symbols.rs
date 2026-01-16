@@ -11,7 +11,7 @@ use crate::ICE;
 use crate::compiler_driver::Driver;
 use crate::compiler_driver::diagnostics::Diagnostic;
 use crate::compiler_driver::errors::{Error, RedefineErr};
-use crate::compiler_driver::warnings::Warning;
+use crate::compiler_driver::Warning;
 use crate::parser::AstStorageClassSpecifierOption;
 use crate::parser::symbol::SymbolKind;
 use crate::parser::{

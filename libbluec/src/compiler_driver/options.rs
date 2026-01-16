@@ -2,6 +2,8 @@
 //
 //! The `options` module defines the compiler driver's options.
 
+use super::WarningKind;
+
 use std::collections::HashSet;
 
 /// Options that control the compiler driver's behavior.
@@ -22,8 +24,8 @@ pub struct DriverOptions {
     /// Libraries to link with.
     pub link_libs: Vec<String>,
 
-    /// Enable warnings.
-    pub warnings_enabled: bool,
+    /// Enable all warnings.
+    pub enable_all_warnings: bool,
 
     /// Treat warnings as errors.
     pub warnings_as_errors: bool,
@@ -54,6 +56,8 @@ pub struct DriverOptions {
 
     /// Flags which were passed on the command-line as '-f<flag>'.
     pub flags: HashSet<String>,
+
+    enabled_warnings: HashSet<WarningKind>,
 }
 
 /// A compiler driver flag specified on the command-line as '-f<flag>'.
@@ -61,5 +65,21 @@ pub struct DriverFlag;
 
 impl DriverFlag {
     pub const PRINT_TERSE: &'static str = "print-terse";
-    pub const PRINT_NO_SOURCE_LOC:  &'static str = "print-no-source-loc";
+    pub const PRINT_NO_SOURCE_LOC: &'static str = "print-no-source-loc";
+}
+
+impl DriverOptions {
+    /// Creates the driver options with default warnings enabled.
+    pub fn with_default_warnings() -> Self {
+        DriverOptions { enabled_warnings: WarningKind::enabled_by_default(), ..Default::default() }
+    }
+
+    /// Is the given warning enabled?
+    pub fn is_warning_enabled(&self, kind: WarningKind) -> bool {
+        if self.enable_all_warnings {
+            return true;
+        }
+
+        self.enabled_warnings.contains(&kind)
+    }
 }

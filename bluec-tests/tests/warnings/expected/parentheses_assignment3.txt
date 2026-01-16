@@ -1,5 +1,5 @@
 warning: The result of an assignment is used as a condition; add parentheses to clarify
-         intent
+         intent [-Wparentheses]
    |
    |     } while (a = b += c);
    |                ^

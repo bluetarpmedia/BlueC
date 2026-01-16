@@ -1,4 +1,5 @@
 warning: Array index -1 is out of bounds for the array of type 'long [4]'
+         [-Warray-bounds]
    |
    | long *ptr = &x[4 - 5];
    |                  ^

@@ -1,22 +1,22 @@
-warning: Variable 'c' is unused
+warning: Variable 'c' is unused [-Wunused-variable]
    |
    | static int c = 0;
    |            ^
    |
 
-warning: Function 'foo' is unused
+warning: Function 'foo' is unused [-Wunused-function]
    |
    | static int foo(void) {
    |            ^^^
    |
 
-warning: Locally defined type alias 'MyInt' is unused
+warning: Locally defined type alias 'MyInt' is unused [-Wunused-local-typedef]
    |
    |     typedef int MyInt;
    |                 ^^^^^
    |
 
-warning: Variable 'f' is unused
+warning: Variable 'f' is unused [-Wunused-variable]
    |
    |     int f = 0;
    |         ^

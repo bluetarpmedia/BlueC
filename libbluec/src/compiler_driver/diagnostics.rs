@@ -1,6 +1,8 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 //
-//! The diagnostics module defines errors and warnings emitted by the compiler driver.
+//! The `diagnostics` module defines errors and warnings emitted by the compiler driver.
+
+use super::WarningKind;
 
 use crate::lexer::SourceLocation;
 
@@ -20,7 +22,7 @@ pub struct Diagnostic {
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum DiagnosticKind {
     Error,
-    Warning,
+    Warning(WarningKind),
 }
 
 /// A note that can be attached to a diagnostic.
@@ -57,8 +59,14 @@ impl Diagnostic {
     }
 
     /// Creates a new warning diagnostic with the given message and source code location.
-    pub fn warning_at_location(message: String, loc: SourceLocation) -> Self {
-        Self { kind: DiagnosticKind::Warning, message, locations: vec![loc], notes: None }
+    pub fn warning_at_location(kind: WarningKind, message: String, loc: SourceLocation) -> Self {
+        let message = if kind == WarningKind::None {
+            message
+        } else {
+            format!("{message} [-W{}]", kind)
+        };
+
+        Self { kind: DiagnosticKind::Warning(kind), message, locations: vec![loc], notes: None }
     }
 
     /// Consumes the diagnostic and returns an equivalent with its kind set to `DiagnosticKind:Error`.
@@ -149,7 +157,7 @@ impl<W: Write> Printer<W> {
     fn print(&mut self, diagnostic: &Diagnostic) {
         let prefix = match diagnostic.kind {
             DiagnosticKind::Error => "error: ",
-            DiagnosticKind::Warning => "warning: ",
+            DiagnosticKind::Warning(_) => "warning: ",
         };
 
         if self.terse {

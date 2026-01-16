@@ -1,4 +1,4 @@
-warning: Initialization of sub-object is missing braces
+warning: Initialization of sub-object is missing braces [-Wmissing-braces]
    |
    | int arr[3][3] = {7};
    |                  ^

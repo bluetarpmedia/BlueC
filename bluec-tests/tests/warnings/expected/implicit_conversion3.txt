@@ -1,5 +1,5 @@
 warning: Implicit conversion from 'unsigned long' to 'int' loses precision and changes
-         signedness
+         signedness [-Wsign-conversion]
    |
    |     int b = a;
    |             ^

@@ -1,4 +1,4 @@
-warning: Type alias declaration is missing the alias name
+warning: Type alias declaration is missing the alias name [-Wmissing-declarations]
    |
    | typedef int;
    | ^^^^^^^^^^^

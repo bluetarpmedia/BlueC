@@ -16,7 +16,7 @@ use crate::ICE;
 use crate::compiler_driver::Driver;
 use crate::compiler_driver::diagnostics::Diagnostic;
 use crate::compiler_driver::errors::Error;
-use crate::compiler_driver::warnings::Warning;
+use crate::compiler_driver::Warning;
 use crate::parser;
 use crate::parser::{
     AstAssignmentOp, AstBinaryOp, AstBlock, AstBlockItem, AstConstantValue, AstDeclaration, AstExpression,
@@ -1501,7 +1501,7 @@ fn evaluate_static_storage_scalar_initializer(
 
         let loc = chk.metadata.get_source_span_as_loc(&full_expr.node_id).unwrap();
 
-        Warning::implicit_literal_conversion(
+        Warning::constant_conversion(
             &constant_value_type,
             &full_expr_type,
             &old_value,

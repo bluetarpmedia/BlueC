@@ -8,7 +8,7 @@ use crate::ICE;
 use crate::compiler_driver::Driver;
 use crate::compiler_driver::diagnostics::{Diagnostic, SourceIdentifier};
 use crate::compiler_driver::errors::Error;
-use crate::compiler_driver::warnings::Warning;
+use crate::compiler_driver::Warning;
 use crate::lexer::SourceLocation;
 use crate::parser::{AstBasicTypeSpecifier, AstDeclarator, AstDeclaratorKind, AstDeclaredType, AstType};
 

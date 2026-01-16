@@ -9,7 +9,7 @@ use super::type_resolution;
 
 use crate::ICE;
 use crate::compiler_driver::Driver;
-use crate::compiler_driver::warnings::Warning;
+use crate::compiler_driver::Warning;
 use crate::parser::{
     AstAddressConstant, AstBinaryOp, AstConstantFp, AstConstantInteger, AstConstantValue, AstDeclaredType,
     AstExpression, AstFloatLiteralKind, AstFullExpression, AstIntegerLiteralKind, AstMetadata, AstNodeId,

@@ -1,4 +1,4 @@
-warning: Duplicate 'signed' specifier has no effect
+warning: Duplicate 'signed' specifier has no effect [-Wduplicate-decl-specifier]
    |
    |     signed int signed a = 1;
    |                ^^^^^^

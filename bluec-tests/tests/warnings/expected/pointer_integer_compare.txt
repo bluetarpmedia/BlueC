@@ -1,4 +1,5 @@
 warning: Comparison between pointer type 'int *' and integer type 'unsigned long'
+         [-Wpointer-integer-compare]
    |
    |     return ptr == ul;
    |            ~~~ ^^ ~~

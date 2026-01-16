@@ -8,7 +8,7 @@ use super::super::type_conversion;
 
 use crate::ICE;
 use crate::compiler_driver::Driver;
-use crate::compiler_driver::warnings::Warning;
+use crate::compiler_driver::Warning;
 use crate::lexer::SourceLocation;
 use crate::parser;
 use crate::parser::{AstDeclaredType, AstExpression, AstNodeId, AstType, AstUnaryOp};
@@ -244,5 +244,5 @@ fn emit_implicit_literal_conversion_warning(
         ICE!("Unhandled type");
     };
 
-    Warning::implicit_literal_conversion(old_type, new_type, &old_value_str, &new_value_str, sign_change, loc, driver);
+    Warning::constant_conversion(old_type, new_type, &old_value_str, &new_value_str, sign_change, loc, driver);
 }

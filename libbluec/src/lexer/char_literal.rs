@@ -9,6 +9,7 @@ use std::iter::Peekable;
 
 use crate::ICE;
 use crate::compiler_driver::diagnostics::Diagnostic;
+use crate::compiler_driver::WarningKind;
 
 /// Makes a token for a character literal.
 ///
@@ -68,7 +69,7 @@ pub fn make_char_literal(line_lexer: &mut LineLexer) -> Result<Token, ()> {
     if values.len() > 4 {
         let warning = "Character literal is too long; the last 4 chars are taken as the value.".to_string();
         let loc = SourceLocation::new(line_lexer.line_no(), start_col, literal.len());
-        line_lexer.driver().add_diagnostic(Diagnostic::warning_at_location(warning, loc));
+        line_lexer.driver().add_diagnostic(Diagnostic::warning_at_location(WarningKind::None, warning, loc));
     }
 
     // If the char literal contains a hex and/or octal escape sequence then (like gcc/clang) we just take the
@@ -159,7 +160,8 @@ where
                     } else {
                         let warning = format!("Unknown escape sequence '\\{ch}'");
                         let loc = SourceLocation::new(line_lexer.line_no(), literal_start_col + ch_idx, 2);
-                        line_lexer.driver().add_diagnostic(Diagnostic::warning_at_location(warning, loc));
+                        let diag = Diagnostic::warning_at_location(WarningKind::None, warning, loc);
+                        line_lexer.driver().add_diagnostic(diag);
 
                         ch as u32
                     }

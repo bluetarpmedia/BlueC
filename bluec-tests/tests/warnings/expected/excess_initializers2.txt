@@ -1,4 +1,5 @@
 warning: Too many elements in initializer list for array type 'int [3]'
+         [-Wexcess-initializers]
    |
    |     int arr[3] = {1, 2, 3, 4};
    |                  ^^^^^^^^^^^^

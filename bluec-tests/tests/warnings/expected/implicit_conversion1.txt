@@ -1,4 +1,5 @@
 warning: Implicit conversion from 'int' to 'short' loses precision
+         [-Wimplicit-int-conversion]
    |
    |     short b = a;
    |               ^

@@ -1,4 +1,5 @@
 warning: Implicit conversion from 'int' to 'short' changes value from 65536 to 0
+         [-Wconstant-conversion]
    |
    | short a = 65536;
    |           ^^^^^

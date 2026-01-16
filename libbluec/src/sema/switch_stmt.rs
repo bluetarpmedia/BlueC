@@ -9,7 +9,7 @@ use super::visitor;
 use crate::ICE;
 use crate::compiler_driver::Driver;
 use crate::compiler_driver::diagnostics::Diagnostic;
-use crate::compiler_driver::warnings::Warning;
+use crate::compiler_driver::Warning;
 use crate::parser;
 use crate::parser::{AstConstantValue, AstFunction, AstStatement};
 
@@ -76,12 +76,17 @@ pub fn validate_switch_statements(ast_root: &mut parser::AstRoot, chk: &mut Type
                             if constant_value != old_constant_value {
                                 let old_value = old_constant_value.to_string();
                                 let new_value = constant_value.to_string();
+                                let sign_change =
+                                    (old_constant_value.has_negative_value() && !constant_value.has_negative_value()) ||
+                                    (!old_constant_value.has_negative_value() && constant_value.has_negative_value());
+
                                 let loc = chk.metadata.get_source_span_as_loc(&constant_expr.node_id).unwrap();
                                 Warning::implicit_switch_case_conversion(
                                     &case_data_type,
                                     switch_data_type,
                                     &old_value,
                                     &new_value,
+                                    sign_change,
                                     loc,
                                     driver,
                                 );

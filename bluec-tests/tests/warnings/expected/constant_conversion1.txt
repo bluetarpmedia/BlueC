@@ -1,5 +1,5 @@
 warning: Implicit conversion from 'long long' to 'unsigned short' changes signedness and
-         value from 100000 to 34464
+         value from 100000 to 34464 [-Wconstant-conversion]
    |
    | unsigned short a = 100000LL;
    |                    ^^^^^^^^

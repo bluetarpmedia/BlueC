@@ -1,4 +1,5 @@
 warning: Comparison of different pointer types ('int *' and 'unsigned int *')
+         [-Wcompare-distinct-pointer-types]
    |
    |     return x == y;
    |            ~ ^^ ~

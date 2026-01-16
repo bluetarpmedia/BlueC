@@ -132,45 +132,33 @@ impl Parser {
 
         // Does an option exist with the given key and value? E.g. for '-Wall', key is 'W' and value is 'all'.
         let is_option_set = |options: &HashMap<String, Vec<String>>, key: &str, value: &str| -> bool {
-            if let Some(values) = options.get(key) {
-                values.iter().any(|v| v == value)
-            } else {
-                false
-            }
+            if let Some(values) = options.get(key) { values.iter().any(|v| v == value) } else { false }
         };
 
         let output_file = self.options.remove("o").and_then(|vec| vec.into_iter().next());
-        let warnings_enabled = is_option_set(&self.options, "W", "all");
+        let enable_all_warnings = is_option_set(&self.options, "W", "all");
         let warnings_as_errors = is_option_set(&self.options, "W", "error");
 
-        let generate_object_file = is_flag_set("c");
-        let only_create_asm_file = is_flag_set("S");
-        let lex = is_flag_set("lex");
-        let parse = is_flag_set("parse");
-        let validate = is_flag_set("validate");
-        let codegen = is_flag_set("codegen");
-        let print_ast = is_flag_set("print-ast");
-        let print_typechecked_ast = is_flag_set("print-tast");
-        let print_ir = is_flag_set("print-ir");
+        let mut options = DriverOptions::with_default_warnings();
 
-        DriverOptions {
-            preprocessor_defns,
-            generate_object_file,
-            output_file,
-            link_obj_files,
-            link_libs,
-            warnings_enabled,
-            warnings_as_errors,
-            only_create_asm_file,
-            lex,
-            parse,
-            validate,
-            codegen,
-            print_ast,
-            print_typechecked_ast,
-            print_ir,
-            flags: self.f_flags,
-        }
+        options.preprocessor_defns = preprocessor_defns;
+        options.generate_object_file = is_flag_set("c");
+        options.output_file = output_file;
+        options.link_obj_files = link_obj_files;
+        options.link_libs = link_libs;
+        options.enable_all_warnings = enable_all_warnings;
+        options.warnings_as_errors = warnings_as_errors;
+        options.only_create_asm_file = is_flag_set("S");
+        options.lex = is_flag_set("lex");
+        options.parse = is_flag_set("parse");
+        options.validate = is_flag_set("validate");
+        options.codegen = is_flag_set("codegen");
+        options.print_ast = is_flag_set("print-ast");
+        options.print_typechecked_ast = is_flag_set("print-tast");
+        options.print_ir = is_flag_set("print-ir");
+        options.flags = self.f_flags;
+
+        options
     }
 }
 

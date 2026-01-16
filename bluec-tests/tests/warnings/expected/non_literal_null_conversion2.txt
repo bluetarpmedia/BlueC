@@ -1,5 +1,5 @@
 warning: Expression evaluates to zero and is interpreted as a null pointer constant (of
-         type 'int *')
+         type 'int *') [-Wnon-literal-null-conversion]
    |
    |     int *a = (5 / 5) - 1;
    |                      ^

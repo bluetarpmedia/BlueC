@@ -1,4 +1,4 @@
-warning: Duplicate 'typedef' specifier has no effect
+warning: Duplicate 'typedef' specifier has no effect [-Wduplicate-decl-specifier]
    |
    | typedef typedef int MyInt;
    |         ^^^^^^^

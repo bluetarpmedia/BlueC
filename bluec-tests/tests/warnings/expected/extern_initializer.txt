@@ -1,5 +1,5 @@
 warning: 'extern' variable has an initializer, which makes it a variable definition.
-         Remove 'extern' since it has no effect.
+         Remove 'extern' since it has no effect. [-Wextern-initializer]
    |
    | extern int i = 1;
    | ^^^^^^

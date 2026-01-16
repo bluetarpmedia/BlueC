@@ -1,4 +1,4 @@
-warning: Declaration does not declare anything
+warning: Declaration does not declare anything [-Wmissing-declarations]
    |
    |     unsigned int;
    |     ^^^^^^^^^^^^

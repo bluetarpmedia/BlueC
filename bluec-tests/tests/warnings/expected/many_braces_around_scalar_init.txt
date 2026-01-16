@@ -1,16 +1,16 @@
-warning: Too many braces around scalar initializer
+warning: Too many braces around scalar initializer [-Wmany-braces-around-scalar-init]
    |
    |     int a = {{}};
    |             ^~~~
    |
 
-warning: Too many braces around scalar initializer
+warning: Too many braces around scalar initializer [-Wmany-braces-around-scalar-init]
    |
    |     int b = {{{1}}};
    |              ^~~~~
    |
 
-warning: Too many braces around scalar initializer
+warning: Too many braces around scalar initializer [-Wmany-braces-around-scalar-init]
    |
    |     int b = {{{1}}};
    |             ^~~~~~~

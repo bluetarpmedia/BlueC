@@ -27,7 +27,7 @@ mod tests;
 
 use crate::compiler_driver;
 use crate::compiler_driver::diagnostics::SourceIdentifier;
-use crate::compiler_driver::warnings::Warning;
+use crate::compiler_driver::Warning;
 use crate::ir;
 use crate::parser;
 

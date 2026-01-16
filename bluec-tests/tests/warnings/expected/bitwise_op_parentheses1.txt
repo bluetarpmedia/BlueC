@@ -1,4 +1,4 @@
-warning: '^' used within '|' without parentheses
+warning: '^' used within '|' without parentheses [-Wbitwise-op-parentheses]
    |
    |     if (a ^ b | c) {
    |           ~   ^
@@ -10,7 +10,7 @@ note: Add parentheses around the '^' expression to clarify the precedence of
    |           ^
    |
 
-warning: '&' used within '|' without parentheses
+warning: '&' used within '|' without parentheses [-Wbitwise-op-parentheses]
    |
    |     if (a & b | c) {
    |           ~   ^
@@ -22,7 +22,7 @@ note: Add parentheses around the '&' expression to clarify the precedence of
    |           ^
    |
 
-warning: '&' used within '^' without parentheses
+warning: '&' used within '^' without parentheses [-Wbitwise-op-parentheses]
    |
    |     if (a & b ^ c) {
    |           ~   ^
@@ -34,7 +34,7 @@ note: Add parentheses around the '&' expression to clarify the precedence of
    |           ^
    |
 
-warning: '^' used within '|' without parentheses
+warning: '^' used within '|' without parentheses [-Wbitwise-op-parentheses]
     |
     |     if (a | b ^ c) {
     |           ^   ~
@@ -46,7 +46,7 @@ note: Add parentheses around the '^' expression to clarify the precedence of
     |               ^
     |
 
-warning: '&' used within '|' without parentheses
+warning: '&' used within '|' without parentheses [-Wbitwise-op-parentheses]
     |
     |     if (a | b & c) {
     |           ^   ~
@@ -58,7 +58,7 @@ note: Add parentheses around the '&' expression to clarify the precedence of
     |               ^
     |
 
-warning: '&' used within '^' without parentheses
+warning: '&' used within '^' without parentheses [-Wbitwise-op-parentheses]
     |
     |     if (a ^ b & c) {
     |           ^   ~

@@ -1,6 +1,6 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 //
-//! The parser module parses the stream of tokens produced by the lexer and produces an AST of the C code.
+//! The `parser` module parses the stream of tokens produced by the lexer and produces an AST of the C code.
 //!
 //! We use a recursive descent parser except when parsing binary operations, where we use precedence climbing instead.
 //! The parser performs identifier resolution. This allows us to solve the "typedef-name: identifier" ambiguity problem.
