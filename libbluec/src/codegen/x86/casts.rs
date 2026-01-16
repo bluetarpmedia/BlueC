@@ -60,7 +60,7 @@ pub fn fp_to_signed_integer(src: &BtValue, dst: &BtValue, asm: &mut Vec<AsmInstr
     let src = generator.translate_bt_value_to_asm_operand(src);
     let dst = generator.translate_bt_value_to_asm_operand(dst);
 
-    // TODO: Add a compiler driver flag to check if the value was out-of-range for the signed/unsigned integer.
+    // Future: Add a compiler driver flag to check if the value was out-of-range for the signed/unsigned integer.
     //      See `stmxcsr` and the Invalid Operation flag (first bit).
 
     match dst_type {

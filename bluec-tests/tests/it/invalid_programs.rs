@@ -22,5 +22,5 @@ fn compile_source_file_and_expect_diagnostics(source_filename: &str) {
     assert!(driver_result.is_err_and(|e| e == DriverError::CompilerFailed));
     assert!(driver.has_error_diagnostics());
 
-    // TODO: Once error printing is stabilised, print to a file and compare against an expected result.
+    // Future: Once error printing is stabilised, print to a file and compare against an expected result.
 }

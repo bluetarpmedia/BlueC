@@ -343,7 +343,7 @@ fn typecheck_statement(stmt: &mut AstStatement, chk: &mut TypeChecker, driver: &
 
             match init {
                 AstForInitializer::Declaration(declarations) => {
-                    // TODO: C standard specifies only objects of automatic/register storage can be declared
+                    // Future: C standard specifies only objects of automatic/register storage can be declared
                     // in a for loop declaration, but gcc/clang only warn about this with '-std=c99 -pedantic'.
                     typecheck_declarations(declarations, chk, driver)?;
                 }

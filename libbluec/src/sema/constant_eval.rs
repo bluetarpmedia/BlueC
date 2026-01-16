@@ -18,7 +18,7 @@ use crate::parser::{
 
 use std::convert::TryFrom;
 
-// TODO: sizeof, _Alignof
+// Future: sizeof, _Alignof
 
 /// The context to use for constant expression evaluation.
 pub struct ConstantEvalContext<'a, 'b> {
