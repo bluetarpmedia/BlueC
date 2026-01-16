@@ -111,13 +111,13 @@ fn print_variable_initializer(init: &AstVariableInitializer, metadata: Option<&A
         AstVariableInitializer::Scalar(full_expr) => print_full_expression(full_expr, metadata, level),
 
         AstVariableInitializer::Aggregate { node_id, init } => {
-            let indent = make_indent(level + 1);
+            let indent = make_indent(level);
             print!("{indent}Aggregate");
             print_node_type(node_id, metadata);
             println!();
 
             for i in init {
-                print_variable_initializer(i, metadata, level + 2);
+                print_variable_initializer(i, metadata, level + 1);
             }
 
             println!("{}|", make_close_indent(level + 1));
@@ -704,6 +704,37 @@ fn print_expression(expr: &AstExpression, metadata: Option<&AstMetadata>, level:
             print!("{indent}Identifier(name=\"{}\", unique=\"{}\")", name, unique_name);
             print_node_type(node_id, metadata);
             println!();
+        }
+
+        AstExpression::CharLiteral { node_id, literal, value } => {
+            print!("{indent}CharLiteral({literal} [{value}])");
+            print_node_type(node_id, metadata);
+            println!();
+        }
+
+        AstExpression::StringLiteral { node_id, literals, ascii } => {
+            let ascii_joined = ascii.join("");
+
+            if literals.len() == 1 {
+                let literal = &literals[0];
+                print!("{indent}StringLiteral({literal} [\"{ascii_joined}\"])");
+                print_node_type(node_id, metadata);
+                println!();
+            } else {
+                println!("{indent}StringLiteral");
+
+                let indent1 = make_indent(level + 1);
+                println!("{indent1}literals:");
+
+                let indent2 = make_indent(level + 2);
+                for lit in literals {
+                    println!("{indent2}{lit}");
+                }
+
+                print!("{indent1}evaluated: \"{ascii_joined}\"");
+                print_node_type(node_id, metadata);
+                println!();
+            }
         }
 
         AstExpression::IntegerLiteral { node_id, literal, literal_base, value, kind } => {

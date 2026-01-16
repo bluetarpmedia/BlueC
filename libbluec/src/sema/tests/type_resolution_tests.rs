@@ -312,7 +312,7 @@ fn parse_and_resolve_types(driver: &mut compiler_driver::Driver, source: &str) -
     }
     let mut ast_root = parsed.unwrap();
 
-    let (mut symbols, _) = type_check::type_check(&mut ast_root, parser.metadata, driver);
+    let (mut symbols, ..) = type_check::type_check(&mut ast_root, parser.metadata, driver);
 
     let decls = ast_root.0;
     let types = decls

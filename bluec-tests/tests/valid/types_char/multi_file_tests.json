@@ -1,0 +1,20 @@
+[
+    {
+        "test_case": "types_char_multi_char_arguments",
+        "filenames": [
+            "multi/char_arguments.c", "multi/char_arguments_client.c"
+        ]
+    },
+    {
+        "test_case": "types_char_multi_global_char",
+        "filenames": [
+            "multi/global_char.c", "multi/global_char_client.c"
+        ]
+    },
+    {
+        "test_case": "types_char_multi_return_char",
+        "filenames": [
+            "multi/return_char.c", "multi/return_char_client.c"
+        ]
+    }
+]

@@ -9,11 +9,12 @@
 //! Sema also performs integer literal promotion, where a Cast expression containing an IntegerLiteral expression is
 //! replaced with a new IntegerLiteral expression of the desired type (where possible).
 
+pub mod constant_eval;
+pub mod constant_table;
 pub mod symbol_table;
 pub mod type_conversion;
 pub mod type_resolution;
 
-mod constant_eval;
 mod expr;
 mod labels;
 mod literal_promotion;
@@ -40,7 +41,7 @@ pub fn semantic_analysis(
     // Type checking
     //      This is the main part of semantic analysis.
     //
-    let (symbols, metadata) = type_check::type_check(&mut ast_root, metadata, driver);
+    let (symbols, constants, mut metadata) = type_check::type_check(&mut ast_root, metadata, driver);
 
     // TODO: Remove this, and make sure subsequent passes can fail silently if type info is not available.
     // This allows us to emit more diagnostics.
@@ -61,12 +62,6 @@ pub fn semantic_analysis(
     //      Verify that label names are unique and goto targets are valid in each function.
     //
     labels::validate_labels(&mut ast_root, driver, &metadata);
-
-    // Validate switch statements
-    //      Verify that switch cases have unique constant values.
-    //
-    let mut metadata = metadata;
-    switch_stmt::validate_switch_statements(&mut ast_root, &mut metadata, driver);
 
     // Numeric literal promotion
     literal_promotion::promote_integer_literals(&mut ast_root, &mut metadata);
@@ -90,5 +85,5 @@ pub fn semantic_analysis(
     }
 
     // Pass the validated AST to the IR translaton stage.
-    ir::translate(driver, ast_root, metadata, symbols);
+    ir::translate(driver, ast_root, metadata, symbols, constants);
 }

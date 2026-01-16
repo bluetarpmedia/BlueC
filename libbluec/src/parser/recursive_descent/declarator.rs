@@ -7,7 +7,7 @@ use super::literal;
 use super::peek;
 use super::utils;
 use super::{AstDeclarator, AstDeclaratorKind, AstDeclaredType, AstExpression, AstIdentifier};
-use super::{ParseError, ParseResult, Parser, add_error};
+use super::{ParseError, ParseResult, Parser, add_error, add_error_at_eof};
 
 use crate::ICE;
 use crate::compiler_driver::Driver;
@@ -53,6 +53,8 @@ fn parse_declarator_recursively(
     let start_decl_loc = parser.token_stream.peek_next_source_location().ok_or(ParseError)?;
 
     let kind = match parser.token_stream.peek_next_token() {
+        // Identifier
+        //
         Some(tok) if tok.is_identifier() => {
             let identifier_token = parser.token_stream.take_token().unwrap();
             let identifier = identifier_token.get_identifier().unwrap();
@@ -72,6 +74,8 @@ fn parse_declarator_recursively(
             AstDeclaratorKind::Ident(AstIdentifier::new(identifier, identifier_token.location))
         }
 
+        // Pointer
+        //
         Some(tok) if tok.has_type(TokenType::Multiply) => {
             _ = parser.token_stream.take_token();
 
@@ -94,11 +98,15 @@ fn parse_declarator_recursively(
             }
         }
 
+        // Array
+        //
         Some(tok) if tok.has_type(TokenType::OpenSqBracket) => {
             let size = parse_array_size(parser, driver)?;
             AstDeclaratorKind::AbstractArray { size }
         }
 
+        // Function
+        //
         Some(tok) if tok.has_type(TokenType::OpenParen) => {
             _ = parser.token_stream.take_token();
 
@@ -172,7 +180,7 @@ fn parse_declarator_recursively(
 
 /// Parses a function's parameters.
 fn parse_function_parameters(parser: &mut Parser, driver: &mut Driver) -> ParseResult<Vec<AstDeclaredType>> {
-    if parser.token_stream.next_token_has_type(TokenType::make_identifier("void")) {
+    if parser.token_stream.next_token_has_type(TokenType::new_identifier("void")) {
         _ = parser.token_stream.take_token();
         return Ok(Vec::new());
     }
@@ -226,13 +234,40 @@ fn parse_array_size(parser: &mut Parser, driver: &mut Driver) -> ParseResult<usi
     let size = if parser.token_stream.next_token_has_type(TokenType::CloseSqBracket) {
         0
     } else {
-        let literal = literal::parse_integer_literal(parser, driver)?;
+        // TODO: Allow constant expression for array declaration, e.g. int arr[10 + 1];
+        
+        // The array size can be an integer literal or a char literal (which evaluates to 'int').
+        if let Some(peek_next_token) = parser.token_stream.peek_next_token() {
+            match peek_next_token.token_type {
+                TokenType::IntegerLiteral { .. } => {
+                    let literal = literal::parse_integer_literal(parser, driver)?;
 
-        let AstExpression::IntegerLiteral { value, .. } = literal else {
-            ICE!("Should have parsed an IntegerLiteral");
-        };
+                    let AstExpression::IntegerLiteral { value, .. } = literal else {
+                        ICE!("Should have parsed an IntegerLiteral");
+                    };
 
-        value as usize
+                    value as usize
+                }
+
+                TokenType::CharLiteral { .. } => {
+                    let literal = literal::parse_char_literal(parser, driver)?;
+
+                    let AstExpression::CharLiteral { value, .. } = literal else {
+                        ICE!("Should have parsed a CharLiteral");
+                    };
+
+                    value as usize
+                }
+
+                _ => {
+                    add_error(driver, "Expected an integer constant", peek_next_token.location);
+                    return Err(ParseError);
+                }
+            }
+        } else {
+            add_error_at_eof(parser, driver, "Expected an integer constant");
+            return Err(ParseError);
+        }
     };
 
     _ = utils::expect_token(TokenType::CloseSqBracket, parser, driver)?;

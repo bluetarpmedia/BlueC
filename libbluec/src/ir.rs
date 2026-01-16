@@ -2,8 +2,8 @@
 //
 //! The `ir` module is responsible for lowering the C AST into the "BlueTac" intermediate representation (IR).
 //!
-//! BlueTac is a custom three-address code (TAC) IR for the BlueC compiler.
-//! In the future, we'll add a Static Single Assignment (SSA) constraint.
+//! BlueTac is a custom high-level three-address code (TAC) IR for the BlueC compiler.
+//! In the future, we'll add a lower-level IR in SSA form.
 
 mod bluetac;
 mod label_maker;
@@ -16,27 +16,29 @@ mod tests;
 use crate::codegen;
 use crate::compiler_driver;
 use crate::parser;
+use crate::sema::constant_table::ConstantTable;
 use crate::sema::symbol_table::SymbolTable;
 
 pub use bluetac::{
     BtBinaryOp, BtConstantValue, BtDefinition, BtFunctionDefn, BtInstruction, BtLabelIdentifier, BtRoot,
-    BtStaticStorageVariable, BtSwitchCase, BtType, BtUnaryOp, BtValue,
+    BtStaticConstant, BtStaticStorageVariable, BtSwitchCase, BtType, BtUnaryOp, BtValue, BtStaticStorageInitializer,
 };
 
-/// Translates the C AST produced by the parser into BlueTac intermediate representation (IR), and then passes
+/// Lowers the C AST produced by the parser into BlueTac intermediate representation (IR), and then passes
 /// the generated IR to the codegen stage.
 pub fn translate(
     driver: &mut compiler_driver::Driver,
     ast: parser::AstRoot,
     metadata: parser::AstMetadata,
     symbols: SymbolTable,
+    constants: ConstantTable,
 ) {
-    let (bt_root, symbols) = translator::translate_ast_to_ir(ast, metadata, symbols);
+    let (bt_root, symbols, constants) = translator::translate_ast_to_ir(ast, metadata, symbols, constants, driver);
 
     if driver.options().print_ir {
-        printer::print(&bt_root, &symbols);
+        printer::print(&bt_root, &symbols, &constants);
         return;
     }
 
-    codegen::codegen(driver, bt_root, symbols);
+    codegen::codegen(driver, bt_root, symbols, constants);
 }

@@ -7,18 +7,79 @@ use super::utils;
 use super::{AstExpression, AstFloatLiteralKind, AstIntegerLiteralKind, AstNodeId};
 use super::{ParseError, ParseResult, Parser, add_error};
 
+use crate::ICE;
 use crate::compiler_driver::{Driver, warnings::Warning};
-use crate::internal_error;
 use crate::lexer;
 use crate::lexer::SourceLocation;
 use crate::parser::meta;
 
+/// Parses a character literal.
+pub fn parse_char_literal(parser: &mut Parser, driver: &mut Driver) -> ParseResult<AstExpression> {
+    let token = utils::expect_literal_token(parser, driver, utils::LiteralKind::Char)?;
+
+    let lexer::TokenType::CharLiteral { literal, value } = token.token_type else {
+        ICE!("Expected character literal");
+    };
+
+    let node_id = AstNodeId::new();
+    parser.metadata.add_source_span(node_id, meta::AstNodeSourceSpan::from_source_location(&token.location));
+
+    Ok(AstExpression::CharLiteral { node_id, literal, value })
+}
+
+/// Parses a string literal.
+///
+/// Adjacent string literal tokens are concatenated into one expression.
+///
+/// ```c
+/// char *str = "this" "is" "joined";   --->   "thisisjoined"
+/// ```
+pub fn parse_string_literal(parser: &mut Parser, driver: &mut Driver) -> ParseResult<AstExpression> {
+    let is_string_literal =
+        |tok: &lexer::Token| -> bool { matches!(tok.token_type, lexer::TokenType::StringLiteral { .. }) };
+
+    let mut literals = Vec::new();
+    let mut ascii = Vec::new();
+    let mut start_loc = None;
+
+    // Take all of the adjacent string literal tokens and concatenate them
+    //
+    while parser.token_stream.peek_next_token().is_some_and(is_string_literal) {
+        let token = utils::expect_literal_token(parser, driver, utils::LiteralKind::String)?;
+
+        let lexer::TokenType::StringLiteral { literal: this_lit, ascii: mut this_ascii } = token.token_type else {
+            ICE!("Expected string literal");
+        };
+
+        literals.push(this_lit);
+
+        // Concatenate the evaluated strings
+        if ascii.is_empty() {
+            ascii = this_ascii;
+        } else {
+            ascii.append(&mut this_ascii);
+        }
+
+        if start_loc.is_none() {
+            start_loc = Some(token.location);
+        }
+    }
+
+    let start_loc = start_loc.ok_or(ParseError)?;
+    let end_loc = parser.token_stream.prev_token_source_location().ok_or(ParseError)?;
+
+    let node_id = AstNodeId::new();
+    parser.metadata.add_source_span(node_id, meta::AstNodeSourceSpan::from_source_location_pair(&start_loc, &end_loc));
+
+    Ok(AstExpression::StringLiteral { node_id, literals, ascii })
+}
+
 /// Parses an integer literal.
 pub fn parse_integer_literal(parser: &mut Parser, driver: &mut Driver) -> ParseResult<AstExpression> {
-    let token = utils::expect_numeric_literal_token(parser, driver, utils::NumericLiteralKind::Integer)?;
+    let token = utils::expect_literal_token(parser, driver, utils::LiteralKind::Integer)?;
 
     let lexer::TokenType::IntegerLiteral { literal, base, suffix } = token.token_type else {
-        internal_error::ICE("Expected integer literal");
+        ICE!("Expected integer literal");
     };
 
     // Convert the literal string into a u64.
@@ -39,7 +100,8 @@ pub fn parse_integer_literal(parser: &mut Parser, driver: &mut Driver) -> ParseR
         lexer::NumericLiteralBase::Binary => utils::bin_to_u64(&literal).map_err(|_parse_int_err| {
             add_error(driver, "Integer literal is too large to be represented in any integer type", token.location);
         }),
-    }.map_err(|_| ParseError)?;
+    }
+    .map_err(|_| ParseError)?;
 
     let kind = match suffix {
         Some(suffix) => match suffix {
@@ -88,17 +150,17 @@ pub fn parse_integer_literal(parser: &mut Parser, driver: &mut Driver) -> ParseR
     };
 
     let node_id = AstNodeId::new();
-    parser.metadata.add_source_span(node_id, meta::AstNodeSourceSpanMetadata::from_source_location(&token.location));
+    parser.metadata.add_source_span(node_id, meta::AstNodeSourceSpan::from_source_location(&token.location));
 
     Ok(AstExpression::IntegerLiteral { node_id, literal, literal_base: base.as_int(), value, kind })
 }
 
 /// Parses a floating-point literal.
 pub fn parse_float_literal(parser: &mut Parser, driver: &mut Driver) -> ParseResult<AstExpression> {
-    let token = utils::expect_numeric_literal_token(parser, driver, utils::NumericLiteralKind::Float)?;
+    let token = utils::expect_literal_token(parser, driver, utils::LiteralKind::Float)?;
 
     let lexer::TokenType::FloatLiteral { literal, base, suffix } = token.token_type else {
-        internal_error::ICE("Expected floating-point literal");
+        ICE!("Expected floating-point literal");
     };
 
     // Convert the literal string into an f64.
@@ -116,7 +178,7 @@ pub fn parse_float_literal(parser: &mut Parser, driver: &mut Driver) -> ParseRes
             },
             None => parse_hex_float_literal_as_f64(&literal, token.location, driver),
         },
-        _ => internal_error::ICE("Invalid base for float literal"),
+        _ => ICE!("Invalid base for float literal"),
     }?;
 
     let kind = match suffix {
@@ -128,29 +190,33 @@ pub fn parse_float_literal(parser: &mut Parser, driver: &mut Driver) -> ParseRes
     };
 
     let node_id = AstNodeId::new();
-    parser.metadata.add_source_span(node_id, meta::AstNodeSourceSpanMetadata::from_source_location(&token.location));
+    parser.metadata.add_source_span(node_id, meta::AstNodeSourceSpan::from_source_location(&token.location));
 
     Ok(AstExpression::FloatLiteral { node_id, literal, literal_base: base.as_int(), value, kind })
 }
 
 #[cfg(feature = "hex-float-literal")]
 fn parse_hex_float_literal_as_f64(literal: &str, literal_loc: SourceLocation, driver: &mut Driver) -> ParseResult<f64> {
-    hex_float::parse_as_f64(literal).map_err(|parse_hex_float_err| match parse_hex_float_err {
-        hex_float::ParseHexFloatErr::OutOfRange => {
-            add_error(driver, "Floating-point constant is too large for type 'double'", literal_loc)
-        }
-        _ => add_error(driver, "Cannot parse floating-point literal", literal_loc),
-    }).map_err(|_| ParseError)
+    hex_float::parse_as_f64(literal)
+        .map_err(|parse_hex_float_err| match parse_hex_float_err {
+            hex_float::ParseHexFloatErr::OutOfRange => {
+                add_error(driver, "Floating-point constant is too large for type 'double'", literal_loc)
+            }
+            _ => add_error(driver, "Cannot parse floating-point literal", literal_loc),
+        })
+        .map_err(|_| ParseError)
 }
 
 #[cfg(feature = "hex-float-literal")]
 fn parse_hex_float_literal_as_f32(literal: &str, literal_loc: SourceLocation, driver: &mut Driver) -> ParseResult<f32> {
-    hex_float::parse_as_f32(literal).map_err(|parse_hex_float_err| match parse_hex_float_err {
-        hex_float::ParseHexFloatErr::OutOfRange => {
-            add_error(driver, "Floating-point constant is too large for type 'float'", literal_loc)
-        }
-        _ => add_error(driver, "Cannot parse floating-point literal", literal_loc),
-    }).map_err(|_| ParseError)
+    hex_float::parse_as_f32(literal)
+        .map_err(|parse_hex_float_err| match parse_hex_float_err {
+            hex_float::ParseHexFloatErr::OutOfRange => {
+                add_error(driver, "Floating-point constant is too large for type 'float'", literal_loc)
+            }
+            _ => add_error(driver, "Cannot parse floating-point literal", literal_loc),
+        })
+        .map_err(|_| ParseError)
 }
 
 #[cfg(not(feature = "hex-float-literal"))]

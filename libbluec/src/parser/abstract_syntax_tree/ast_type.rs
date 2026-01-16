@@ -10,10 +10,13 @@ use crate::ICE;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AstType {
     Void,
+    Char, // Signed in our implementation
+    SignedChar,
     Short,
     Int,
     Long,
     LongLong,
+    UnsignedChar,
     UnsignedShort,
     UnsignedInt,
     UnsignedLong,
@@ -86,6 +89,15 @@ impl AstType {
         matches!(self, AstType::Array { .. })
     }
 
+    /// Is this type an array of a character type?
+    pub fn is_character_array(&self) -> bool {
+        if let AstType::Array { element_type, .. } = self {
+            matches!(element_type.as_ref(), AstType::Char | AstType::SignedChar | AstType::UnsignedChar)
+        } else {
+            false
+        }
+    }
+
     /// Is this type a function pointer type?
     ///
     /// A function pointer is a pointer whose referent is a function. In other words, there is only one level of
@@ -124,7 +136,10 @@ impl AstType {
     pub fn is_integer(&self) -> bool {
         matches!(
             self,
-            AstType::Short
+            AstType::Char
+                | AstType::SignedChar
+                | AstType::UnsignedChar
+                | AstType::Short
                 | AstType::UnsignedShort
                 | AstType::Int
                 | AstType::UnsignedInt
@@ -140,10 +155,28 @@ impl AstType {
         matches!(self, AstType::Float | AstType::Double | AstType::LongDouble)
     }
 
+    /// Is this type a character type?
+    pub fn is_character(&self) -> bool {
+        matches!(self, AstType::Char | AstType::SignedChar | AstType::UnsignedChar)
+    }
+
+    /// Gets the type's inner-most scalar type.
+    /// 
+    /// For an aggregate type, recurses into the type until a scalar type is found.
+    /// 
+    /// AstType::AstType { AstType::AstType { AstType::Char } }   --->  AstType::Char
+    pub fn get_innermost_scalar_type(&self) -> &AstType {
+        match self {
+            AstType::Array { element_type, .. } => element_type.get_innermost_scalar_type(),
+            _ => self
+        }
+    }
+
     /// The size of this type in bits.
     pub fn bits(&self) -> usize {
         match self {
             AstType::Void => 0,
+            AstType::Char | AstType::SignedChar | AstType::UnsignedChar => 8,
             AstType::Short | AstType::UnsignedShort => 16,
             AstType::Int | AstType::UnsignedInt => 32,
             AstType::Long | AstType::UnsignedLong => 64,
@@ -158,14 +191,21 @@ impl AstType {
 
     /// Is this type a signed integer?
     pub fn is_signed_integer(&self) -> bool {
-        matches!(self, AstType::Short | AstType::Int | AstType::Long | AstType::LongLong)
+        matches!(
+            self,
+            AstType::Char | AstType::SignedChar | AstType::Short | AstType::Int | AstType::Long | AstType::LongLong
+        )
     }
 
     /// Is this type an unsigned integer?
     pub fn is_unsigned_integer(&self) -> bool {
         matches!(
             self,
-            AstType::UnsignedShort | AstType::UnsignedInt | AstType::UnsignedLong | AstType::UnsignedLongLong
+            AstType::UnsignedChar
+                | AstType::UnsignedShort
+                | AstType::UnsignedInt
+                | AstType::UnsignedLong
+                | AstType::UnsignedLongLong
         )
     }
 
@@ -180,6 +220,7 @@ impl AstType {
     /// Precondition: `self.is_integer() == true`
     pub fn to_unsigned(self) -> Self {
         match self {
+            AstType::Char | AstType::SignedChar | AstType::UnsignedChar => AstType::UnsignedChar,
             AstType::Short | AstType::UnsignedShort => AstType::UnsignedShort,
             AstType::Int | AstType::UnsignedInt => AstType::UnsignedInt,
             AstType::Long | AstType::UnsignedLong => AstType::UnsignedLong,
@@ -267,9 +308,11 @@ impl AstType {
     pub fn can_hold_value(&self, value: u64) -> bool {
         match self {
             AstType::Void => false,
+            AstType::Char | AstType::SignedChar => i8::try_from(value).is_ok(),
             AstType::Short => i16::try_from(value).is_ok(),
             AstType::Int => i32::try_from(value).is_ok(),
             AstType::Long | AstType::LongLong => i64::try_from(value).is_ok(),
+            AstType::UnsignedChar => u8::try_from(value).is_ok(),
             AstType::UnsignedShort => u16::try_from(value).is_ok(),
             AstType::UnsignedInt => u32::try_from(value).is_ok(),
             AstType::UnsignedLong | AstType::UnsignedLongLong => true,
@@ -289,21 +332,24 @@ impl AstType {
     ///
     /// If the type is an integral type with a rank lower than 'int' then the type is consumed and replaced with
     /// `AstType::Int`. Otherwise, the existing type is returned unchanged.
+    /// 
+    /// Returns a tuple of the type and a boolean value indicating whether or not it was promoted.
     ///
     /// The C standard specifies that smaller integer types should be promoted to 'unsigned int' if their values
     /// cannot fit inside 'int', but in all mainstream implementations (including this one) all smaller integer types,
     /// both signed and unsigned, can fit into 'int'.
-    pub fn promote_if_rank_lower_than_int(self) -> Self {
+    pub fn promote_if_rank_lower_than_int(self) -> (Self, bool) {
         if !self.is_integer() || self.integer_rank() >= AstType::Int.integer_rank() {
-            return self;
+            return (self, false);
         }
 
-        AstType::Int
+        (AstType::Int, true)
     }
 
     /// The rank of the integer type. Types that fit larger values have a higher rank.
     fn integer_rank(&self) -> usize {
         match self {
+            AstType::Char | AstType::SignedChar | AstType::UnsignedChar => 2,
             AstType::Short | AstType::UnsignedShort => 3,
             AstType::Int | AstType::UnsignedInt => 4,
             AstType::Long | AstType::UnsignedLong => 5,
@@ -385,10 +431,13 @@ fn to_c_declarator_recursive(ty: &AstType, current: String) -> String {
         //      `int <current declarator buffer>`
         //
         AstType::Void             => format!("void{}",               prefix_with_space(&current)),
+        AstType::Char             => format!("char{}",               prefix_with_space(&current)),
+        AstType::SignedChar       => format!("signed char{}",        prefix_with_space(&current)),
         AstType::Short            => format!("short{}",              prefix_with_space(&current)),
         AstType::Int              => format!("int{}",                prefix_with_space(&current)),
         AstType::Long             => format!("long{}",               prefix_with_space(&current)),
         AstType::LongLong         => format!("long long{}",          prefix_with_space(&current)),
+        AstType::UnsignedChar     => format!("unsigned char{}",      prefix_with_space(&current)),
         AstType::UnsignedShort    => format!("unsigned short{}",     prefix_with_space(&current)),
         AstType::UnsignedInt      => format!("unsigned int{}",       prefix_with_space(&current)),
         AstType::UnsignedLong     => format!("unsigned long{}",      prefix_with_space(&current)),

@@ -5,8 +5,8 @@
 
 use std::collections::HashMap;
 
+use crate::ICE;
 use super::ast::{AsmConstantId, AsmLabelName};
-use crate::internal_error;
 use crate::ir;
 
 #[derive(Debug)]
@@ -26,7 +26,7 @@ impl AsmLabelMaker {
         let (func_idx, _) = self.next_function_local_id;
 
         if func_idx == usize::MAX {
-            internal_error::ICE("Exhausted AsmLabelMaker function indices");
+            ICE!("Exhausted AsmLabelMaker function indices");
         }
 
         self.next_function_local_id = (func_idx + 1, 0);
@@ -48,7 +48,7 @@ impl AsmLabelMaker {
         let (func_idx, local_idx) = self.next_function_local_id;
 
         if local_idx == usize::MAX {
-            internal_error::ICE("Exhausted AsmLabelMaker local indices for function");
+            ICE!("Exhausted AsmLabelMaker local indices for function");
         }
 
         self.next_function_local_id = (func_idx, local_idx + 1);

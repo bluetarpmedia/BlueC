@@ -55,6 +55,8 @@ fn array_declarators() {
     assert!(is_array(parse("zero[0]"), 0));
     assert!(is_array(parse("one[1]"), 1));
     assert!(is_array(parse("two[2]"), 2));
+    assert!(is_array(parse("char_lit_as_size['A']"), 65));
+    assert!(is_array(parse("char_lit_as_size['\\n']"), 10));
     assert!(is_array(parse("(eleven[11])"), 11));
     assert!(is_array(parse("((fifteen[15]))"), 15));
 
@@ -62,6 +64,8 @@ fn array_declarators() {
     assert!(is_2d_array(parse("y[0][4]"), 4, 0));
     assert!(is_2d_array(parse("coords[3][4]"), 4, 3));
     assert!(is_3d_array(parse("lots[22][33][44]"), 44, 33, 22));
+    assert!(is_3d_array(parse("lits['A']['B']['C']"), 67, 66, 65));
+    assert!(is_3d_array(parse("hex_lits['\\xA']['\\xB']['\\xFF']"), 255, 11, 10));
 }
 
 #[test]

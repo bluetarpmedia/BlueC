@@ -96,6 +96,12 @@ fn float_literals() {
 }
 
 #[test]
+fn string_literal() {
+    verify_expr_evaluates_to_string(r#" "test" "#, Some("test"));
+    verify_expr_evaluates_to_string(r#" "test" "hello" "#, Some("testhello"));
+}
+
+#[test]
 fn bitwise_not() {
     verify_expr_evaluates_to_i32("~100", Some(-101));
     verify_expr_evaluates_to_i32("~-101", Some(100));
@@ -240,10 +246,17 @@ fn ternary_expressions() {
 
 #[test]
 fn casts() {
+    verify_expr_evaluates_to_i8("(char)-1", Some(-1));
+    verify_expr_evaluates_to_i8("(char)8589934592", Some(0));
+    verify_expr_evaluates_to_i8("(char)-1.0", Some(-1));
+    verify_expr_evaluates_to_i8("(char)1.0", Some(1));
+    verify_expr_evaluates_to_i8("(char)(int)(long)-1", Some(-1));
+
     verify_expr_evaluates_to_i16("(short)-1", Some(-1));
     verify_expr_evaluates_to_i16("(short)8589934592", Some(0));
     verify_expr_evaluates_to_i16("(short)-1.0", Some(-1));
     verify_expr_evaluates_to_i16("(short)1.0", Some(1));
+    verify_expr_evaluates_to_i16("(short)(int)(long)-1", Some(-1));
 
     verify_expr_evaluates_to_u16("(unsigned short)8589934592", Some(0));
     verify_expr_evaluates_to_u16("(unsigned short)-3.0", Some(0)); // This would be UB at runtime
@@ -257,6 +270,7 @@ fn casts() {
     verify_expr_evaluates_to_i32("(int)-0.123", Some(0));
     verify_expr_evaluates_to_i32("(int)0.123", Some(0));
     verify_expr_evaluates_to_i32("(int)5.0", Some(5));
+    verify_expr_evaluates_to_i32("(int)(short)(long)-1", Some(-1));
 
     verify_expr_evaluates_to_u32("(unsigned int)0", Some(0));
     verify_expr_evaluates_to_u32("(unsigned int)-1", Some(4294967295));
@@ -271,6 +285,7 @@ fn casts() {
     verify_expr_evaluates_to_i64("(long)8589934592 + 1", Some(8589934593));
     verify_expr_evaluates_to_i64("(long)-99.99", Some(-99));
     verify_expr_evaluates_to_i64("(long)99.99", Some(99));
+    verify_expr_evaluates_to_i64("(long)(short)(char)-1", Some(-1));
 
     verify_expr_evaluates_to_u64("(unsigned long)0", Some(0));
     verify_expr_evaluates_to_u64("(unsigned long)100", Some(100));
@@ -368,6 +383,11 @@ fn pointer_initializer() {
         "static int* ptr = 10 - 10;",
         "static int* ptr = (5 / 5) - 1;",
         "static int value = 0; static int* ptr = &value;",
+        "static long arr[4] = {1, 2, 3, 4}; static long* ptr = arr;",
+        "static long arr[4] = {1, 2, 3, 4}; static long* ptr = &arr[2];",
+        "static long arr[4] = {1, 2, 3, 4}; static long* ptr = &arr[4] - 4;",
+        "static double arr[4] = {1., 2., 3., 4.}; static double (*ptr)[4] = &arr;",
+        "static long arr[4] = {1, 2, 3, 4}; static int *ptr = (int*)&arr[1];",
     ];
 
     for case in valid_cases {
@@ -386,7 +406,8 @@ fn pointer_initializer() {
         "static int* ptr = 1;",
         "static int* ptr = 10 - 9;",
         "static int* ptr = (5 / 5);",
-        "static int value = 0; static int* ptr = &value + &value;",
+        "static float arr[4]; static int *ptr = arr;",
+        "static float arr[4]; static float *ptr = &arr;",
         "static int *p1; static int *p2 = p1;",
     ];
 
@@ -403,6 +424,75 @@ fn pointer_initializer() {
     }
 }
 
+#[test]
+fn pointer_arithmetic() {
+    let valid_cases = vec![
+        "static int a = 1; static int *ptr = 10 + &a - 10;",
+        "static float arr[3] = {11, 22, 33}; static float *ptr = &arr[0] + 1;",
+        "static float arr[3] = {11, 22, 33}; static float *ptr = &arr[0] + 1;",
+        "static float arr[3] = {11, 22, 33}; static float *ptr = 1 + &arr[0] + 1;",
+        "static long arr[4] = {1, 2, 3, 4}; static long diff = &arr[4] - &arr[0];",
+    ];
+
+    for case in valid_cases {
+        let mut driver = compiler_driver::Driver::for_testing();
+        let mut parser = make_parser(&mut driver, case);
+        let ast_root = recursive_descent::parse_translation_unit(&mut parser, &mut driver);
+        assert!(!driver.has_error_diagnostics());
+
+        let mut ast_root = ast_root.unwrap();
+
+        _ = type_check::type_check(&mut ast_root, parser.metadata, &mut driver);
+        assert!(!driver.has_error_diagnostics());
+    }
+
+    let invalid_cases = vec![
+        "static int x[1]; static int* ptr = &x[0] + 1.0;",
+        "static int x[1]; static int* ptr = 1.0f + &x[0];",
+        "static int x[1]; static float y[1]; static int* ptr = &x[0] + &y[0];",
+        "static int x[1]; static float y[1]; static long diff = &x[0] - &y[0];",
+        "static int value = 0; static int* ptr = &value + &value;",
+    ];
+
+    for case in invalid_cases {
+        let mut driver = compiler_driver::Driver::for_testing();
+        let mut parser = make_parser(&mut driver, case);
+        let ast_root = recursive_descent::parse_translation_unit(&mut parser, &mut driver);
+        assert!(!driver.has_error_diagnostics()); // Should parse okay
+
+        let mut ast_root = ast_root.unwrap();
+
+        _ = type_check::type_check(&mut ast_root, parser.metadata, &mut driver);
+        assert!(driver.has_error_diagnostics());
+    }
+}
+
+
+fn verify_expr_evaluates_to_i8(expression_source_code: &str, expected: Option<i8>) {
+    let value = evaluate_expr(expression_source_code);
+
+    if expected.is_none() {
+        assert_eq!(value, None);
+        return;
+    }
+
+    let Some(AstConstantValue::Integer(const_integer)) = value else {
+        assert!(value.is_some(), "Expression '{expression_source_code}' did not evaluate to Integer");
+        panic!();
+    };
+
+    match const_integer {
+        AstConstantInteger::Char(value) => {
+            assert_eq!(expected, Some(value));
+        }
+        _ => assert!(
+            false,
+            "Expression '{expression_source_code}' evaluated to {} {const_integer}",
+            const_integer.get_ast_type()
+        ),
+    }
+}
+
 fn verify_expr_evaluates_to_i16(expression_source_code: &str, expected: Option<i16>) {
     let value = evaluate_expr(expression_source_code);
 
@@ -412,7 +502,7 @@ fn verify_expr_evaluates_to_i16(expression_source_code: &str, expected: Option<i
     }
 
     let Some(AstConstantValue::Integer(const_integer)) = value else {
-        assert!(value.is_some(), "Expression '{expression_source_code}' did not evaluate");
+        assert!(value.is_some(), "Expression '{expression_source_code}' did not evaluate to Integer");
         panic!();
     };
 
@@ -437,7 +527,7 @@ fn verify_expr_evaluates_to_u16(expression_source_code: &str, expected: Option<u
     }
 
     let Some(AstConstantValue::Integer(const_integer)) = value else {
-        assert!(value.is_some(), "Expression '{expression_source_code}' did not evaluate");
+        assert!(value.is_some(), "Expression '{expression_source_code}' did not evaluate to Integer");
         panic!();
     };
 
@@ -462,7 +552,7 @@ fn verify_expr_evaluates_to_i32(expression_source_code: &str, expected: Option<i
     }
 
     let Some(AstConstantValue::Integer(const_integer)) = value else {
-        assert!(value.is_some(), "Expression '{expression_source_code}' did not evaluate");
+        assert!(value.is_some(), "Expression '{expression_source_code}' did not evaluate to Integer");
         panic!();
     };
 
@@ -487,7 +577,7 @@ fn verify_expr_evaluates_to_u32(expression_source_code: &str, expected: Option<u
     }
 
     let Some(AstConstantValue::Integer(const_integer)) = value else {
-        assert!(value.is_some(), "Expression '{expression_source_code}' did not evaluate");
+        assert!(value.is_some(), "Expression '{expression_source_code}' did not evaluate to Integer");
         panic!();
     };
 
@@ -512,7 +602,7 @@ fn verify_expr_evaluates_to_i64(expression_source_code: &str, expected: Option<i
     }
 
     let Some(AstConstantValue::Integer(const_integer)) = value else {
-        assert!(value.is_some(), "Expression '{expression_source_code}' did not evaluate");
+        assert!(value.is_some(), "Expression '{expression_source_code}' did not evaluate to Integer");
         panic!();
     };
 
@@ -537,7 +627,7 @@ fn verify_expr_evaluates_to_u64(expression_source_code: &str, expected: Option<u
     }
 
     let Some(AstConstantValue::Integer(const_integer)) = value else {
-        assert!(value.is_some(), "Expression '{expression_source_code}' did not evaluate");
+        assert!(value.is_some(), "Expression '{expression_source_code}' did not evaluate to Integer");
         panic!();
     };
 
@@ -562,7 +652,7 @@ fn verify_expr_evaluates_to_f64(expression_source_code: &str, expected: Option<f
     }
 
     let Some(AstConstantValue::Fp(constant_fp)) = value else {
-        assert!(value.is_some(), "Expression '{expression_source_code}' did not evaluate");
+        assert!(value.is_some(), "Expression '{expression_source_code}' did not evaluate to Fp");
         panic!();
     };
 
@@ -587,7 +677,7 @@ fn verify_expr_evaluates_to_f32(expression_source_code: &str, expected: Option<f
     }
 
     let Some(AstConstantValue::Fp(constant_fp)) = value else {
-        assert!(value.is_some(), "Expression '{expression_source_code}' did not evaluate");
+        assert!(value.is_some(), "Expression '{expression_source_code}' did not evaluate to Fp");
         panic!();
     };
 
@@ -601,6 +691,23 @@ fn verify_expr_evaluates_to_f32(expression_source_code: &str, expected: Option<f
             constant_fp.get_ast_type()
         ),
     }
+}
+
+fn verify_expr_evaluates_to_string(expression_source_code: &str, expected: Option<&str>) {
+    let value = evaluate_expr(expression_source_code);
+
+    if expected.is_none() {
+        assert_eq!(value, None);
+        return;
+    }
+
+    let Some(AstConstantValue::String { ascii, .. }) = value else {
+        assert!(value.is_some(), "Expression '{expression_source_code}' did not evaluate to String");
+        panic!();
+    };
+
+    let ascii_joined = ascii.join("");
+    assert_eq!(ascii_joined, expected.unwrap())
 }
 
 fn evaluate_expr<'a>(expression_source_code: &str) -> Option<AstConstantValue> {
@@ -626,7 +733,9 @@ fn evaluate_expr<'a>(expression_source_code: &str) -> Option<AstConstantValue> {
     assert!(expr.is_ok(), "Did not parse {}", expression_source_code);
     let expr = expr.unwrap();
 
-    constant_eval::evaluate_constant_full_expr(&expr, None)
+    let mut chk = type_check::checker::TypeChecker::default();
+    let ctx = constant_eval::ConstantEvalContext::from_type_checker(&mut chk, &mut driver);
+    constant_eval::evaluate_constant_full_expr(&expr, ctx)
 }
 
 

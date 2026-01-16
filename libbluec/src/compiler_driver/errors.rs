@@ -389,6 +389,12 @@ impl Error {
 
         driver.add_diagnostic(diag);
     }
+
+    /// Emits an error that an array cannot be initialized with a string literal.
+    pub fn cannot_initialize_array_with_string_literal(array_type: &AstType, loc: SourceLocation, driver: &mut Driver) {
+        let err = format!("Cannot initialize an array of type '{array_type}' with a string literal.");
+        driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
+    }
 }
 
 fn arithmetic_type_description(arith_type: &AstType) -> &str {

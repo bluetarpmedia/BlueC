@@ -90,7 +90,7 @@ pub fn generate_instruction(
 
                 vec![AsmInstruction::Mov {
                     asm_type: dst_asm_type,
-                    src: AsmOperand::Imm(cmp_nan_result),
+                    src: AsmOperand::from_i32(cmp_nan_result),
                     dst: dst_operand.clone(),
                 }]
             };
@@ -188,7 +188,7 @@ fn translate_division(
         asm_instructions.push(AsmInstruction::IDiv { asm_type, operand: divisor });
     } else {
         // Zero out RDX/EDX/DX
-        asm_instructions.push(AsmInstruction::Mov { asm_type, src: AsmOperand::Imm(0), dst: rdx_reg.clone() });
+        asm_instructions.push(AsmInstruction::Mov { asm_type, src: AsmOperand::from_u64(0), dst: rdx_reg.clone() });
 
         asm_instructions.push(AsmInstruction::Div { asm_type, operand: divisor });
     }

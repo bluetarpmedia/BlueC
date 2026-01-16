@@ -10,10 +10,7 @@ use crate::ICE;
 use crate::ir;
 
 /// Copies function parameters from calling-convention HW registers or the stack into pseudo-registers.
-pub fn copy_params_into_pseudo_registers(
-    bt_func: &ir::BtFunctionDefn,
-    asm_instructions: &mut Vec<AsmInstruction>,
-) {
+pub fn copy_params_into_pseudo_registers(bt_func: &ir::BtFunctionDefn, asm_instructions: &mut Vec<AsmInstruction>) {
     // Get the source operands where the function parameters are located
     let src_operands = classify_params_iter(bt_func.params.iter().map(|(bt_type, _)| bt_type.clone()));
 
@@ -54,7 +51,7 @@ pub fn generate_function_call(
         asm.push(AsmInstruction::Binary {
             op: AsmBinaryOp::Sub,
             asm_type: AsmType::QuadWord,
-            src: AsmOperand::Imm(stack_padding),
+            src: AsmOperand::from_u64(stack_padding),
             dst: AsmOperand::Reg(HwRegister::RSP),
         });
     }
@@ -87,7 +84,7 @@ pub fn generate_function_call(
 
         match arg_operand {
             // Immediate and HW registers can be pushed
-            AsmOperand::Imm(_) | AsmOperand::Reg(_) => asm.push(AsmInstruction::Push(arg_operand)),
+            AsmOperand::Imm { .. } | AsmOperand::Reg(_) => asm.push(AsmInstruction::Push(arg_operand)),
 
             // Pseudo-registers of type QuadWord or FpDouble can be pushed (since they're 8 bytes long)
             AsmOperand::Pseudo(_) if matches!(asm_type, AsmType::QuadWord | AsmType::FpDouble) => {
@@ -115,7 +112,7 @@ pub fn generate_function_call(
     // Call the function
     let designator_operand = generator.translate_bt_value_to_asm_operand(designator);
     asm.push(AsmInstruction::Call(designator_operand));
-    
+
     // Deallocate any stack space we created to restore the stack pointer
     let bytes_to_free = (stack_arg_count * 8) as u64 + stack_padding;
     if bytes_to_free != 0 {
@@ -123,7 +120,7 @@ pub fn generate_function_call(
         asm.push(AsmInstruction::Binary {
             op: AsmBinaryOp::Add,
             asm_type: AsmType::QuadWord,
-            src: AsmOperand::Imm(bytes_to_free),
+            src: AsmOperand::from_u64(bytes_to_free),
             dst: AsmOperand::Reg(HwRegister::RSP),
         });
     }

@@ -20,8 +20,8 @@ use super::symbols::AsmSymbol;
 use super::symbols::AsmSymbolTable;
 
 use crate::ICE;
-use crate::codegen::constant_table::{ConstantTable, UnsignedValue};
 use crate::ir;
+use crate::sema::constant_table::{ConstantTable, ConstantValue, UnsignedValue};
 use crate::sema::symbol_table::SymbolTable;
 use crate::sema::type_conversion;
 
@@ -30,43 +30,42 @@ use std::collections::HashMap;
 /// The x86_64 code generator which lowers the BlueTac IR into an x86_64 AST.
 pub struct Generator {
     pub symbols: SymbolTable,
-    pub constant_table: ConstantTable,
+    pub constants: ConstantTable,
     pub labels: AsmLabelMaker,
 }
 
 impl Generator {
     /// Creates a new generator and takes ownership of the Parser's symbol table.
-    pub fn new(symbols: SymbolTable) -> Self {
-        Self { symbols, constant_table: ConstantTable::default(), labels: AsmLabelMaker::new() }
+    pub fn new(symbols: SymbolTable, constants: ConstantTable) -> Self {
+        Self { symbols, constants, labels: AsmLabelMaker::new() }
     }
 
     /// Transforms an IR `BtValue` into an `AsmOperand`.
     pub fn translate_bt_value_to_asm_operand(&mut self, value: &ir::BtValue) -> AsmOperand {
         match value {
             ir::BtValue::Constant(const_value) => match const_value {
-                ir::BtConstantValue::Int16(value) => AsmOperand::Imm(*value as u64),
-                ir::BtConstantValue::Int32(value) => AsmOperand::Imm(*value as u64),
-                ir::BtConstantValue::Int64(value) => AsmOperand::Imm(*value as u64),
-                ir::BtConstantValue::UInt16(value) => AsmOperand::Imm(*value as u64),
-                ir::BtConstantValue::UInt32(value) => AsmOperand::Imm(*value as u64),
-                ir::BtConstantValue::UInt64(value) => AsmOperand::Imm(*value),
+                ir::BtConstantValue::Int8(value) => AsmOperand::from_i8(*value),
+                ir::BtConstantValue::Int16(value) => AsmOperand::from_i16(*value),
+                ir::BtConstantValue::Int32(value) => AsmOperand::from_i32(*value),
+                ir::BtConstantValue::Int64(value) => AsmOperand::from_i64(*value),
+                ir::BtConstantValue::UInt8(value) => AsmOperand::from_u8(*value),
+                ir::BtConstantValue::UInt16(value) => AsmOperand::from_u16(*value),
+                ir::BtConstantValue::UInt32(value) => AsmOperand::from_u32(*value),
+                ir::BtConstantValue::UInt64(value) => AsmOperand::from_u64(*value),
 
                 ir::BtConstantValue::Float32(value) => {
                     const ALIGNMENT: usize = 4;
-                    let constant_id = AsmConstantId(self.constant_table.add_f32(*value, ALIGNMENT));
+                    let constant_id = AsmConstantId::from(self.constants.add_f32(*value, ALIGNMENT));
                     let constant_lbl = self.labels.make_constant_label(constant_id);
-                    AsmOperand::Data(constant_lbl.to_string())
+                    AsmOperand::Data { symbol: constant_lbl.to_string(), relative: 0 }
                 }
 
                 ir::BtConstantValue::Float64(value) => {
                     const ALIGNMENT: usize = 8;
-                    let constant_id = AsmConstantId(self.constant_table.add_f64(*value, ALIGNMENT));
+                    let constant_id = AsmConstantId::from(self.constants.add_f64(*value, ALIGNMENT));
                     let constant_lbl = self.labels.make_constant_label(constant_id);
-                    AsmOperand::Data(constant_lbl.to_string())
+                    AsmOperand::Data { symbol: constant_lbl.to_string(), relative: 0 }
                 }
-
-                ir::BtConstantValue::AddressConstant { .. } => ICE!("AddressConstant used as operand"),
-                ir::BtConstantValue::ZeroBytes(_) => ICE!("ZeroBytes used as operand"),
             },
             ir::BtValue::Variable(name) => AsmOperand::Pseudo(name.clone()),
         }
@@ -74,14 +73,14 @@ impl Generator {
 }
 
 /// Generates an x86_64 assembly AST of the given IR.
-pub fn generate_asm(bt_root: &ir::BtRoot, symbols: SymbolTable) -> (AsmRoot, AsmSymbolTable) {
+pub fn generate_asm(bt_root: ir::BtRoot, symbols: SymbolTable, constants: ConstantTable) -> (AsmRoot, AsmSymbolTable) {
     // Transform the IR definitions into Asm definitions.
     //
-    let mut generator = Generator::new(symbols);
+    let mut generator = Generator::new(symbols, constants);
 
-    let bt_definitions = &bt_root.0;
+    let bt_definitions = bt_root.0;
     let mut asm_definitions = bt_definitions
-        .iter()
+        .into_iter()
         .map(|bt_defn| match bt_defn {
             ir::BtDefinition::Function(bt_func) => {
                 AsmDefinition::Function(generate_asm_function(bt_func, &mut generator))
@@ -89,6 +88,10 @@ pub fn generate_asm(bt_root: &ir::BtRoot, symbols: SymbolTable) -> (AsmRoot, Asm
 
             ir::BtDefinition::StaticVariable(bt_static_var) => {
                 AsmDefinition::StaticVariable(generate_asm_static_storage_variable(bt_static_var))
+            }
+
+            ir::BtDefinition::StaticConstant(bt_static_constant) => {
+                AsmDefinition::StaticConstant(generate_asm_static_constant(bt_static_constant, &generator.constants))
             }
         })
         .collect::<Vec<AsmDefinition>>();
@@ -99,7 +102,7 @@ pub fn generate_asm(bt_root: &ir::BtRoot, symbols: SymbolTable) -> (AsmRoot, Asm
 
     // Add the constant table entries to the back-end symbol table and to the list of definitions.
     //
-    let constants = generator.constant_table.get_constants();
+    let constants = generator.constants.get_float_constants();
     asm_definitions.reserve(constants.len());
 
     for constant_entry in constants {
@@ -109,7 +112,7 @@ pub fn generate_asm(bt_root: &ir::BtRoot, symbols: SymbolTable) -> (AsmRoot, Asm
         };
 
         let constant = AsmConstant {
-            label: generator.labels.make_constant_label(AsmConstantId(constant_entry.index)),
+            label: generator.labels.make_constant_label(AsmConstantId::from(constant_entry.index)),
             alignment: constant_entry.alignment,
             value: imm,
         };
@@ -143,53 +146,62 @@ pub fn generate_asm(bt_root: &ir::BtRoot, symbols: SymbolTable) -> (AsmRoot, Asm
     (AsmRoot(asm_definitions), asm_symbols)
 }
 
-fn generate_asm_function(bt_func: &ir::BtFunctionDefn, generator: &mut Generator) -> AsmFunction {
+fn generate_asm_function(bt_func: ir::BtFunctionDefn, generator: &mut Generator) -> AsmFunction {
     let mut asm_instructions = Vec::new();
 
     generator.labels.reset_for_new_function();
 
     // Copy function parameters from calling-convention HW registers into pseudo-registers
     //
-    functions::copy_params_into_pseudo_registers(bt_func, &mut asm_instructions);
+    functions::copy_params_into_pseudo_registers(&bt_func, &mut asm_instructions);
 
     generate_asm_instructions(&bt_func.instructions, &mut asm_instructions, generator);
     AsmFunction { name: bt_func.name.clone(), is_global: bt_func.is_global, instructions: asm_instructions }
 }
 
-fn generate_asm_static_storage_variable(bt_static_var: &ir::BtStaticStorageVariable) -> AsmStaticStorageVariable {
+fn generate_asm_static_storage_variable(bt_static_var: ir::BtStaticStorageVariable) -> AsmStaticStorageVariable {
     let init_value = bt_static_var
         .init_value
-        .iter()
-        .map(|constant_val| match constant_val {
-            ir::BtConstantValue::ZeroBytes(size) => AsmConstantInitializer::ZeroBytes(*size),
-            ir::BtConstantValue::Int16(value) => AsmConstantInitializer::Imm16 { value: *value as u16, signed: true },
-            ir::BtConstantValue::Int32(value) => AsmConstantInitializer::Imm32 { value: *value as u32, signed: true },
-            ir::BtConstantValue::Int64(value) => AsmConstantInitializer::Imm64 { value: *value as u64, signed: true },
-            ir::BtConstantValue::UInt16(value) => AsmConstantInitializer::Imm16 { value: *value, signed: false },
-            ir::BtConstantValue::UInt32(value) => AsmConstantInitializer::Imm32 { value: *value, signed: false },
-            ir::BtConstantValue::UInt64(value) => AsmConstantInitializer::Imm64 { value: *value, signed: false },
-            ir::BtConstantValue::Float32(value) => {
-                let value = value.to_bits();
-                AsmConstantInitializer::Imm32 { value, signed: false }
+        .into_iter()
+        .map(|init| match init {
+            ir::BtStaticStorageInitializer::Constant(constant_value) => match constant_value {
+                ir::BtConstantValue::Int8(value) => AsmConstantInitializer::Imm8 { value: value as u8, signed: true },
+                ir::BtConstantValue::Int16(value) => {
+                    AsmConstantInitializer::Imm16 { value: value as u16, signed: true }
+                }
+                ir::BtConstantValue::Int32(value) => {
+                    AsmConstantInitializer::Imm32 { value: value as u32, signed: true }
+                }
+                ir::BtConstantValue::Int64(value) => {
+                    AsmConstantInitializer::Imm64 { value: value as u64, signed: true }
+                }
+                ir::BtConstantValue::UInt8(value) => AsmConstantInitializer::Imm8 { value, signed: false },
+                ir::BtConstantValue::UInt16(value) => AsmConstantInitializer::Imm16 { value, signed: false },
+                ir::BtConstantValue::UInt32(value) => AsmConstantInitializer::Imm32 { value, signed: false },
+                ir::BtConstantValue::UInt64(value) => AsmConstantInitializer::Imm64 { value, signed: false },
+                ir::BtConstantValue::Float32(value) => {
+                    let value = value.to_bits();
+                    AsmConstantInitializer::Imm32 { value, signed: false }
+                }
+                ir::BtConstantValue::Float64(value) => {
+                    let value = value.to_bits();
+                    AsmConstantInitializer::Imm64 { value, signed: false }
+                }
+            },
+            ir::BtStaticStorageInitializer::ZeroBytes(count) => AsmConstantInitializer::ZeroBytes(count),
+            ir::BtStaticStorageInitializer::String { ascii } => {
+                let byte_count = ascii.len();
+                let value = ascii.join("");
+                AsmConstantInitializer::AsciiString { value, byte_count }
             }
-            ir::BtConstantValue::Float64(value) => {
-                let value = value.to_bits();
-                AsmConstantInitializer::Imm64 { value, signed: false }
-            }
-            ir::BtConstantValue::AddressConstant { symbol } => {
-                AsmConstantInitializer::AddressConstant { object: symbol.clone() }
+            ir::BtStaticStorageInitializer::AddressOf { object, byte_offset } => {
+                AsmConstantInitializer::AddressOf { object, byte_offset }
             }
         })
         .collect();
 
-    // If an array's byte size is >= 16 then its alignment is 16. Otherwise its alignment is its element type size.
-    let alignment = if let ir::BtType::Array { element_type, count } = &bt_static_var.data_type {
-        let element_type_bytes = element_type.bits() / 8;
-        let array_size_bytes = element_type_bytes * count;
-        if array_size_bytes >= 16 { 16 } else { element_type_bytes }
-    } else {
-        bt_static_var.data_type.bits() / 8
-    };
+    let asm_type = AsmType::from(bt_static_var.data_type.clone());
+    let alignment = asm_type.alignment_bytes();
 
     AsmStaticStorageVariable {
         name: bt_static_var.name.clone(),
@@ -197,6 +209,32 @@ fn generate_asm_static_storage_variable(bt_static_var: &ir::BtStaticStorageVaria
         alignment,
         init_value,
     }
+}
+
+fn generate_asm_static_constant(bt_static_constant: ir::BtStaticConstant, constants: &ConstantTable) -> AsmConstant {
+    let (value, alignment) = match constants.get_constant_value_by_index(bt_static_constant.index) {
+        ConstantValue::String { value } => {
+            let ir::BtType::Array { element_type, count } = &bt_static_constant.data_type else {
+                ICE!("Invalid BtType for constant string");
+            };
+
+            debug_assert!(matches!(element_type.as_ref(), ir::BtType::Int8 | ir::BtType::UInt8));
+
+            let alignment = if *count >= 16 { 16 } else { 1 };
+
+            (AsmConstantInitializer::AsciiString { value: value.clone(), byte_count: *count }, alignment)
+        }
+
+        ConstantValue::StringArray { values, .. } => {
+            (AsmConstantInitializer::AsciiStringArray { values: values.clone() }, 1)
+        }
+
+        _ => todo!(),
+    };
+
+    let label = AsmLabelName(bt_static_constant.name);
+
+    AsmConstant { label, alignment, value }
 }
 
 fn generate_asm_instructions(
@@ -251,16 +289,43 @@ fn generate_asm_instructions(
                 let src_operand = generator.translate_bt_value_to_asm_operand(src);
                 let dst_operand = generator.translate_bt_value_to_asm_operand(dst);
 
-                // Some assemblers will warn when using an 8-byte immediate with a MOV to a DoubleWord register,
-                // so to avoid that we'll truncate the immediate ourselves.
-                let src_operand = if let AsmOperand::Imm(immediate) = src_operand {
-                    AsmOperand::Imm(type_conversion::convert_u64_to_i32(immediate) as u64)
-                } else {
-                    src_operand
-                };
-
                 // The truncation asm type is the `dst` operand type, i.e. what we're copying into.
                 let asm_type = dst.get_type(&generator.symbols).into();
+
+                // If the source operand is an immediate value then we'll truncate it ourselves first.
+                //      Some assemblers will warn about using immediate values that are too large, e.g. using
+                //      an 8-byte immediate with a `movl` to a 32-bit DWORD register.
+                //
+                let src_operand = match asm_type {
+                    AsmType::Byte => {
+                        if let AsmOperand::Imm { value, bits, .. } = src_operand
+                            && bits > 8
+                        {
+                            AsmOperand::from_i8(type_conversion::convert_u64_to_i8(value))
+                        } else {
+                            src_operand
+                        }
+                    }
+                    AsmType::Word => {
+                        if let AsmOperand::Imm { value, bits, .. } = src_operand
+                            && bits > 16
+                        {
+                            AsmOperand::from_i16(type_conversion::convert_u64_to_i16(value))
+                        } else {
+                            src_operand
+                        }
+                    }
+                    AsmType::DoubleWord => {
+                        if let AsmOperand::Imm { value, bits, .. } = src_operand
+                            && bits > 32
+                        {
+                            AsmOperand::from_i32(type_conversion::convert_u64_to_i32(value))
+                        } else {
+                            src_operand
+                        }
+                    }
+                    _ => src_operand,
+                };
 
                 asm_instructions.push(AsmInstruction::Mov { asm_type, src: src_operand, dst: dst_operand });
             }
@@ -452,8 +517,8 @@ fn generate_asm_instructions(
 
                 // If the index is a constant (immediate value) then we can calculate `index * scale` at compile-time
                 // and use base-relative addressing.
-                if let AsmOperand::Imm(constant_index) = &index {
-                    let constant_index = *constant_index as i32;
+                if let AsmOperand::Imm { value, .. } = &index {
+                    let constant_index = *value as i32;
                     let scale = *scale as i32;
                     let relative = constant_index * scale;
                     let memory = AsmOperand::Memory { base: HwRegister::RAX, relative };
@@ -476,7 +541,7 @@ fn generate_asm_instructions(
                         asm_instructions.push(AsmInstruction::Binary {
                             op: AsmBinaryOp::Mul,
                             asm_type: AsmType::QuadWord,
-                            src: AsmOperand::Imm(*scale as u64),
+                            src: AsmOperand::from_u64(*scale as u64),
                             dst: AsmOperand::hw_reg(HwRegister::RBX, AsmType::QuadWord),
                         });
 
@@ -631,7 +696,7 @@ fn replace_pseudo_operand(
     // Don't add it to the `pseudo_stack_map`; that's only for pseudo operands we replace with stack variables.
     //
     if *is_static {
-        *operand = AsmOperand::Data(name.clone());
+        *operand = AsmOperand::Data { symbol: name.clone(), relative: 0 };
         return stack_addr;
     };
 
@@ -685,7 +750,7 @@ fn allocate_stack_space(function: &mut AsmFunction, stack_space: usize) {
         AsmInstruction::Binary {
             op: AsmBinaryOp::Sub,
             asm_type: AsmType::QuadWord,
-            src: AsmOperand::Imm(bytes_to_allocate),
+            src: AsmOperand::from_u64(bytes_to_allocate),
             dst: AsmOperand::Reg(HwRegister::RSP),
         },
     );

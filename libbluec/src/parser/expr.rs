@@ -41,7 +41,7 @@ pub fn parse_full_expression(parser: &mut Parser, driver: &mut Driver) -> ParseR
     let node_id = AstNodeId::new();
     parser
         .metadata
-        .add_source_span(node_id, meta::AstNodeSourceSpanMetadata::from_source_location_pair(&start_loc, &end_loc));
+        .add_source_span(node_id, meta::AstNodeSourceSpan::from_source_location_pair(&start_loc, &end_loc));
 
     Ok(AstFullExpression { node_id, expr })
 }
@@ -153,7 +153,7 @@ fn parse_assignment_expression(
     let rhs = parse_expression_with_precedence(parser, driver, precedence)?;
 
     let node_id = AstNodeId::new();
-    parser.metadata.add_source_span(node_id, meta::AstNodeSourceSpanMetadata::from_source_location(op_loc));
+    parser.metadata.add_source_span(node_id, meta::AstNodeSourceSpan::from_source_location(op_loc));
 
     let computation_node_id = AstNodeId::new(); // No source location needed; this is for the typechecker
     Ok(AstExpression::Assignment { node_id, computation_node_id, op, lhs: Box::new(lhs), rhs: Box::new(rhs) })
@@ -170,7 +170,7 @@ fn parse_ternary_expression(
     let loc = parser.token_stream.prev_token_source_location().unwrap();
 
     let node_id = AstNodeId::new();
-    parser.metadata.add_source_span(node_id, meta::AstNodeSourceSpanMetadata::from_source_location(&loc));
+    parser.metadata.add_source_span(node_id, meta::AstNodeSourceSpan::from_source_location(&loc));
 
     let consequent = parse_expression(parser, driver)?; // Note: precedence == 0
 
@@ -207,7 +207,7 @@ fn parse_binary_expression(
     driver: &mut Driver,
 ) -> ParseResult<AstExpression> {
     let node_id = AstNodeId::new();
-    parser.metadata.add_source_span(node_id, meta::AstNodeSourceSpanMetadata::from_source_location(op_loc));
+    parser.metadata.add_source_span(node_id, meta::AstNodeSourceSpan::from_source_location(op_loc));
 
     let rhs = parse_expression_with_precedence(parser, driver, rhs_precedence)?;
 
@@ -240,7 +240,7 @@ pub fn parse_unary_expression(parser: &mut Parser, driver: &mut Driver) -> Parse
             _ => parse_postfix_expression(parser, driver),
         }
     } else {
-        add_error_at_eof(parser, driver, "Expected expression".into());
+        add_error_at_eof(parser, driver, "Expected expression");
         Err(ParseError)
     }
 }
@@ -280,7 +280,7 @@ fn parse_cast_expression(parser: &mut Parser, driver: &mut Driver) -> ParseResul
     let target_type = AstDeclaredType::unresolved(basic_type, None, declarator);
 
     let node_id = AstNodeId::new();
-    parser.metadata.add_source_span(node_id, meta::AstNodeSourceSpanMetadata::from_source_location(&open_paren_loc));
+    parser.metadata.add_source_span(node_id, meta::AstNodeSourceSpan::from_source_location(&open_paren_loc));
 
     Ok(AstExpression::Cast { node_id, target_type, expr: Box::new(expr_to_cast) })
 }
@@ -340,6 +340,8 @@ fn parse_primary_expression(parser: &mut Parser, driver: &mut Driver) -> ParseRe
 
         match peek_next_token_type {
             // Literals
+            lexer::TokenType::CharLiteral { .. } => literal::parse_char_literal(parser, driver),
+            lexer::TokenType::StringLiteral { .. } => literal::parse_string_literal(parser, driver),
             lexer::TokenType::IntegerLiteral { .. } => literal::parse_integer_literal(parser, driver),
             lexer::TokenType::FloatLiteral { .. } => literal::parse_float_literal(parser, driver),
 
@@ -355,7 +357,7 @@ fn parse_primary_expression(parser: &mut Parser, driver: &mut Driver) -> ParseRe
             }
         }
     } else {
-        add_error_at_eof(parser, driver, "Expected expression".into());
+        add_error_at_eof(parser, driver, "Expected expression");
         Err(ParseError)
     }
 }
@@ -407,7 +409,7 @@ fn parse_function_call_arguments(
     let args_node_id = AstNodeId::new();
     parser.metadata.add_source_span(
         args_node_id,
-        meta::AstNodeSourceSpanMetadata::from_source_location_pair(&args_start_loc, &args_end_loc),
+        meta::AstNodeSourceSpan::from_source_location_pair(&args_start_loc, &args_end_loc),
     );
 
     Ok((args, args_node_id))
@@ -430,7 +432,7 @@ fn parse_array_subscript_expression(
     // Set the source location as the '[' token. (Diagnostics can add the other expressions as locations.)
     parser.metadata.add_source_span(
         node_id,
-        meta::AstNodeSourceSpanMetadata::from_source_location(&open_sq_bracket_loc),
+        meta::AstNodeSourceSpan::from_source_location(&open_sq_bracket_loc),
     );
 
     Ok(AstExpression::Subscript { node_id, expr1: Box::new(expr), expr2: Box::new(subscript_expr) })
@@ -454,7 +456,7 @@ fn parse_identifier_expression(parser: &mut Parser, driver: &mut Driver) -> Pars
 
     parser
         .metadata
-        .add_source_span(node_id, meta::AstNodeSourceSpanMetadata::from_source_location(&identifier_token.location));
+        .add_source_span(node_id, meta::AstNodeSourceSpan::from_source_location(&identifier_token.location));
 
     // Identifier resolution
     let unique_name = resolve_identifier(name, identifier_token.location, parser, driver)?;

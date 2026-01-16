@@ -12,6 +12,7 @@ mod ast_literals;
 mod ast_operators;
 mod ast_type;
 mod ast_unique_name;
+mod ast_variable_declaration;
 
 pub use self::ast_attributes::*;
 pub use self::ast_basic_type::*;
@@ -23,6 +24,7 @@ pub use self::ast_literals::*;
 pub use self::ast_operators::*;
 pub use self::ast_type::*;
 pub use self::ast_unique_name::*;
+pub use self::ast_variable_declaration::*;
 
 /// The root of the AST, representing the file scope of the translation unit.
 #[derive(Debug)]
@@ -45,43 +47,6 @@ impl AstDeclaration {
             AstDeclaration::TypeAlias(alias_decl) => alias_decl.decl.get_declared_type(),
         }
     }
-}
-
-/// A variable declaration with optional definition.
-///
-/// The `is_declaration_only` field specifies whether the variable is a declaration only, or if it's a declaration and
-/// definition. A variable can be defined even if there is no `init_expr`, e.g. in file scope or a static variable
-/// declaration in block scope. In both of those cases, the variable is a definition but has no initializer, and
-/// will get a default value of zero.
-///
-/// If `is_declaration_only` is true, then the declaration only introduces the variable's name and type, and does not
-/// allocate any storage for it. For example, `extern int i;` or `struct Foo;`.
-///
-/// Note that `extern int i = 3;` is a definition and the `extern` is ignored (and a warning is emitted).
-///
-/// If the `initializer` expression can be evaluated at compile-time (i.e. it's a constant expression) then the result
-/// of its evaluation is stored in `init_constant_eval`. The sema stage is responsible for this evaluation. The
-/// evaluation is a `Vec` because a static storage variable of array type may have more than one initializer value.
-/// Scalar types will only have one value.
-#[derive(Debug)]
-pub struct AstVariableDeclaration {
-    pub node_id: AstNodeId,
-    pub is_declaration_only: bool,
-    pub is_file_scope: bool,
-    pub declared_type: AstDeclaredType,
-    pub ident: AstIdentifier,
-    pub unique_name: AstUniqueName,
-    pub initializer: Option<AstVariableInitializer>,
-    pub init_constant_eval: Vec<AstConstantValue>,
-    pub linkage: AstLinkage,
-    pub storage: AstStorageDuration,
-}
-
-/// A variable initializer.
-#[derive(Debug)]
-pub enum AstVariableInitializer {
-    Scalar(AstFullExpression),
-    Aggregate { node_id: AstNodeId, init: Vec<AstVariableInitializer> },
 }
 
 /// A function declaration with optional definition.
@@ -263,6 +228,16 @@ pub enum AstExpression {
         name: String,
         unique_name: AstUniqueName,
     },
+    CharLiteral {
+        node_id: AstNodeId,
+        literal: String,
+        value: i32,
+    },
+    StringLiteral {
+        node_id: AstNodeId,
+        literals: Vec<String>, // Adjacent string literal tokens are concatenated
+        ascii: Vec<String>,
+    },
     // Numeric literals are parsed as non-negative. A unary negate operator appears in the AST as a UnaryOperation,
     // and is later translated into a negative integer/float value after parsing.
     IntegerLiteral {
@@ -306,6 +281,8 @@ impl AstExpression {
             AstExpression::Subscript { node_id, .. } => *node_id,
             AstExpression::Cast { node_id, .. } => *node_id,
             AstExpression::Identifier { node_id, .. } => *node_id,
+            AstExpression::CharLiteral { node_id, .. } => *node_id,
+            AstExpression::StringLiteral { node_id, .. } => *node_id,
             AstExpression::IntegerLiteral { node_id, .. } => *node_id,
             AstExpression::FloatLiteral { node_id, .. } => *node_id,
         }
@@ -313,7 +290,18 @@ impl AstExpression {
 
     /// Is the AST expression an l-value?
     pub fn is_lvalue(&self) -> bool {
-        matches!(self, AstExpression::Identifier { .. } | AstExpression::Deref { .. } | AstExpression::Subscript { .. })
+        matches!(
+            self,
+            AstExpression::Identifier { .. }
+                | AstExpression::Deref { .. }
+                | AstExpression::Subscript { .. }
+                | AstExpression::StringLiteral { .. }
+        )
+    }
+
+    /// Is the AST expression a string literal?
+    pub fn is_string_literal(&self) -> bool {
+        matches!(self, AstExpression::StringLiteral { .. })
     }
 
     /// Is the AST expression an integer literal?

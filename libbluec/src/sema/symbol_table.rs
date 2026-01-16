@@ -88,6 +88,19 @@ impl SymbolAttributes {
             is_file_scope_typedef: is_at_file_scope,
         }
     }
+
+    /// Creates symbol attributes for a constant.
+    pub fn constant(loc: SourceLocation) -> Self {
+        Self {
+            declared_name: String::new(), // The declared name is the same as its unique name
+            kind: SymbolKind::Constant,
+            definition: Definition::None,
+            linkage: AstLinkage::Internal,
+            storage_duration: AstStorageDuration::Static,
+            decl_loc: loc,
+            is_file_scope_typedef: false,
+        }
+    }
 }
 
 /// Metadata about a symbol.

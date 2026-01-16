@@ -37,11 +37,18 @@ impl AsmSymbolTable {
                     let asm_type = AsmType::from(bt_type);
                     Some((unique_name.to_string(), AsmSymbol::Object { asm_type, is_static, is_constant }))
                 }
+                parser::symbol::SymbolKind::Constant => {
+                    let is_static = true;
+                    let is_constant = true;
+                    let bt_type = BtType::from(symbol.data_type);
+                    let asm_type = AsmType::from(bt_type);
+                    Some((unique_name.to_string(), AsmSymbol::Object { asm_type, is_static, is_constant }))
+                }
                 parser::symbol::SymbolKind::Function => {
                     let is_defined = symbol.is_defined();
                     Some((unique_name.to_string(), AsmSymbol::Function { is_defined }))
                 }
-                _ => None,
+                parser::symbol::SymbolKind::TypeAlias => None,
             })
             .collect();
 

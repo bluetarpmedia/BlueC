@@ -160,7 +160,7 @@ pub fn parse_labeled_statement(parser: &mut Parser, driver: &mut Driver) -> Pars
     let node_id = AstNodeId::new();
     parser.metadata.add_source_span(
         node_id,
-        meta::AstNodeSourceSpanMetadata::from_source_location_pair(&label_token.location, &colon_token_loc),
+        meta::AstNodeSourceSpan::from_source_location_pair(&label_token.location, &colon_token_loc),
     );
 
     Ok(AstStatement::Labeled { node_id, label_name: label_name.clone(), stmt: Box::new(stmt) })
@@ -182,7 +182,7 @@ pub fn parse_null_statement(parser: &mut Parser, driver: &mut Driver) -> ParseRe
 /// <if_stmt> ::= "if" "(" <controlling_expr> ")" <statement> [ "else" <statement> ]
 /// ```
 pub fn parse_if_statement(parser: &mut Parser, driver: &mut Driver) -> ParseResult<AstStatement> {
-    _ = utils::expect_token(lexer::TokenType::make_identifier("if"), parser, driver)?;
+    _ = utils::expect_token(lexer::TokenType::new_identifier("if"), parser, driver)?;
     _ = utils::expect_token(lexer::TokenType::OpenParen, parser, driver)?;
     let controlling_expr = expr::parse_full_expression(parser, driver)?;
     let right_paren_loc = utils::expect_token(lexer::TokenType::CloseParen, parser, driver)?;
@@ -209,7 +209,7 @@ pub fn parse_if_statement(parser: &mut Parser, driver: &mut Driver) -> ParseResu
     //             else           <-- Does this `else` belong to the first or second `if`? Should be second.
     //                 return 0;
     //
-    let else_stmt = if parser.token_stream.next_token_has_type(lexer::TokenType::make_identifier("else")) {
+    let else_stmt = if parser.token_stream.next_token_has_type(lexer::TokenType::new_identifier("else")) {
         let else_token = parser.token_stream.take_token().ok_or(ParseError)?;
         let else_token_loc = else_token.location;
 
@@ -233,7 +233,7 @@ pub fn parse_if_statement(parser: &mut Parser, driver: &mut Driver) -> ParseResu
 /// <switch_stmt> ::= "switch" "(" <controlling_expr> ")" <statement>
 /// ```
 pub fn parse_switch_statement(parser: &mut Parser, driver: &mut Driver) -> ParseResult<AstStatement> {
-    _ = utils::expect_token(lexer::TokenType::make_identifier("switch"), parser, driver)?;
+    _ = utils::expect_token(lexer::TokenType::new_identifier("switch"), parser, driver)?;
     _ = utils::expect_token(lexer::TokenType::OpenParen, parser, driver)?;
     let controlling_expr = expr::parse_full_expression(parser, driver)?;
     _ = utils::expect_token(lexer::TokenType::CloseParen, parser, driver)?;
@@ -251,7 +251,7 @@ pub fn parse_switch_statement(parser: &mut Parser, driver: &mut Driver) -> Parse
 /// <case_stmt> ::= "case" <constant_expr> ":" <statement>
 /// ```
 pub fn parse_switch_case_statement(parser: &mut Parser, driver: &mut Driver) -> ParseResult<AstStatement> {
-    let case_token_loc = utils::expect_token(lexer::TokenType::make_identifier("case"), parser, driver)?;
+    let case_token_loc = utils::expect_token(lexer::TokenType::new_identifier("case"), parser, driver)?;
 
     // Sema: Validate that a case statement is always inside a switch statement.
     let switch_node_id = parser.current_enclosing_switch_statement_id();
@@ -298,7 +298,7 @@ pub fn parse_switch_case_statement(parser: &mut Parser, driver: &mut Driver) -> 
 /// <default_stmt> ::= "default" ":" <statement>
 /// ````
 pub fn parse_switch_default_statement(parser: &mut Parser, driver: &mut Driver) -> ParseResult<AstStatement> {
-    let default_token_loc = utils::expect_token(lexer::TokenType::make_identifier("default"), parser, driver)?;
+    let default_token_loc = utils::expect_token(lexer::TokenType::new_identifier("default"), parser, driver)?;
 
     // Sema: Validate that a default statement is always inside a switch statement.
     let switch_node_id = parser.current_enclosing_switch_statement_id();
@@ -329,7 +329,7 @@ pub fn parse_switch_default_statement(parser: &mut Parser, driver: &mut Driver) 
 /// <while_stmt> ::= "while" "(" <controlling_expr> ")" <statement>
 /// ```
 pub fn parse_while_statement(parser: &mut Parser, driver: &mut Driver) -> ParseResult<AstStatement> {
-    _ = utils::expect_token(lexer::TokenType::make_identifier("while"), parser, driver)?;
+    _ = utils::expect_token(lexer::TokenType::new_identifier("while"), parser, driver)?;
     let open_paren_loc = utils::expect_token(lexer::TokenType::OpenParen, parser, driver)?;
 
     if !peek::is_expression(parser, driver) {
@@ -354,13 +354,13 @@ pub fn parse_while_statement(parser: &mut Parser, driver: &mut Driver) -> ParseR
 /// <do_while_stmt> ::= "do" <statement> "while" "(" <controlling_expr> ")"
 /// ```
 pub fn parse_do_while_statement(parser: &mut Parser, driver: &mut Driver) -> ParseResult<AstStatement> {
-    _ = utils::expect_token(lexer::TokenType::make_identifier("do"), parser, driver)?;
+    _ = utils::expect_token(lexer::TokenType::new_identifier("do"), parser, driver)?;
 
     // Loop body
     let node_id = AstNodeId::new();
     let body = parser.with_enclosing_statement(EnclosingStatement::Loop(node_id), |p| parse_statement(p, driver))?;
 
-    _ = utils::expect_token(lexer::TokenType::make_identifier("while"), parser, driver)?;
+    _ = utils::expect_token(lexer::TokenType::new_identifier("while"), parser, driver)?;
     let open_paren_loc = utils::expect_token(lexer::TokenType::OpenParen, parser, driver)?;
 
     if !peek::is_expression(parser, driver) {
@@ -383,7 +383,7 @@ pub fn parse_do_while_statement(parser: &mut Parser, driver: &mut Driver) -> Par
 /// ```
 pub fn parse_for_statement(parser: &mut Parser, driver: &mut Driver) -> ParseResult<AstStatement> {
     parser.with_new_scope(|parser| {
-        _ = utils::expect_token(lexer::TokenType::make_identifier("for"), parser, driver)?;
+        _ = utils::expect_token(lexer::TokenType::new_identifier("for"), parser, driver)?;
         _ = utils::expect_token(lexer::TokenType::OpenParen, parser, driver)?;
 
         // Optional initializer: may be a declaration or an expression, or nothing.
@@ -450,7 +450,7 @@ pub fn parse_for_statement(parser: &mut Parser, driver: &mut Driver) -> ParseRes
 /// <break_stmt> ::= "break" ";"
 /// ```
 pub fn parse_break_statement(parser: &mut Parser, driver: &mut Driver) -> ParseResult<AstStatement> {
-    let break_token_loc = utils::expect_token(lexer::TokenType::make_identifier("break"), parser, driver)?;
+    let break_token_loc = utils::expect_token(lexer::TokenType::new_identifier("break"), parser, driver)?;
 
     let enclosing_stmt_node_id = match parser.current_enclosing_statement() {
         Some(EnclosingStatementChain::Loop { loop_node_id, parent_switch_id: _ }) => Some(loop_node_id),
@@ -476,7 +476,7 @@ pub fn parse_break_statement(parser: &mut Parser, driver: &mut Driver) -> ParseR
 /// <continue_stmt> ::= "continue" ";"
 /// ```
 pub fn parse_continue_statement(parser: &mut Parser, driver: &mut Driver) -> ParseResult<AstStatement> {
-    let continue_token_loc = utils::expect_token(lexer::TokenType::make_identifier("continue"), parser, driver)?;
+    let continue_token_loc = utils::expect_token(lexer::TokenType::new_identifier("continue"), parser, driver)?;
 
     let loop_node_id = match parser.current_enclosing_statement() {
         Some(EnclosingStatementChain::Loop { loop_node_id, parent_switch_id: _ }) => Some(loop_node_id),
@@ -502,7 +502,7 @@ pub fn parse_continue_statement(parser: &mut Parser, driver: &mut Driver) -> Par
 /// <goto_stmt> ::= "goto" <identifier> ";"
 /// ```
 pub fn parse_goto_statement(parser: &mut Parser, driver: &mut Driver) -> ParseResult<AstStatement> {
-    let goto_token_loc = utils::expect_token(lexer::TokenType::make_identifier("goto"), parser, driver)?;
+    let goto_token_loc = utils::expect_token(lexer::TokenType::new_identifier("goto"), parser, driver)?;
     let label_token = utils::expect_identifier(parser, driver)?;
     utils::expect_end_of_statement(parser, driver, "Expected `;` after goto statement")?;
 
@@ -516,7 +516,7 @@ pub fn parse_goto_statement(parser: &mut Parser, driver: &mut Driver) -> ParseRe
     let node_id = AstNodeId::new();
     parser.metadata.add_source_span(
         node_id,
-        meta::AstNodeSourceSpanMetadata::from_source_location_pair(&goto_token_loc, &label_token.location),
+        meta::AstNodeSourceSpan::from_source_location_pair(&goto_token_loc, &label_token.location),
     );
 
     Ok(AstStatement::Goto { node_id, label_name: label_name.clone() })
@@ -528,7 +528,7 @@ pub fn parse_goto_statement(parser: &mut Parser, driver: &mut Driver) -> ParseRe
 /// <return_stmt> ::= "return" <expr> ";"
 /// ```
 pub fn parse_return_statement(parser: &mut Parser, driver: &mut Driver) -> ParseResult<AstStatement> {
-    _ = utils::expect_token(lexer::TokenType::make_identifier("return"), parser, driver)?;
+    _ = utils::expect_token(lexer::TokenType::new_identifier("return"), parser, driver)?;
     let expr = expr::parse_full_expression(parser, driver)?;
     utils::expect_end_of_statement(parser, driver, "Expected `;` after return statement")?;
     Ok(AstStatement::Return(expr))

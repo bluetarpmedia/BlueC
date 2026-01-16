@@ -59,44 +59,54 @@ pub fn expect_identifier(parser: &mut Parser, driver: &mut Driver) -> ParseResul
             }
         }
         None => {
-            add_error_at_eof(parser, driver, "Expected identifier.".into());
+            add_error_at_eof(parser, driver, "Expected identifier.");
             Err(ParseError)
         }
     }
 }
 
-/// The kind of numeric literal.
+/// The kind of literal.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub enum NumericLiteralKind {
+pub enum LiteralKind {
+    Char,
+    String,
     Integer,
     Float,
 }
 
-/// Returns the next token if it's a numeric literal.
-pub fn expect_numeric_literal_token(
+/// Returns the next token if it's a literal of the given type.
+pub fn expect_literal_token(
     parser: &mut Parser,
     driver: &mut Driver,
-    expected: NumericLiteralKind,
+    expected: LiteralKind,
 ) -> ParseResult<lexer::Token> {
     match parser.token_stream.take_token() {
         Some(token) => {
-            if expected == NumericLiteralKind::Integer
+            if expected == LiteralKind::Char
+                && let lexer::TokenType::CharLiteral { .. } = token.token_type
+            {
+                Ok((*token).clone())
+            } else if expected == LiteralKind::String
+                && let lexer::TokenType::StringLiteral { .. } = token.token_type
+            {
+                Ok((*token).clone())
+            } else if expected == LiteralKind::Integer
                 && let lexer::TokenType::IntegerLiteral { .. } = token.token_type
             {
                 Ok((*token).clone())
-            } else if expected == NumericLiteralKind::Float
+            } else if expected == LiteralKind::Float
                 && let lexer::TokenType::FloatLiteral { .. } = token.token_type
             {
                 Ok((*token).clone())
             } else {
-                let err = format!("Expected integer literal instead of `{}`", token.token_type);
+                let err = format!("Expected literal instead of `{}`", token.token_type);
                 let loc = token.location;
                 driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
                 Err(ParseError)
             }
         }
         None => {
-            add_error_at_eof(parser, driver, "Expected integer literal.".into());
+            add_error_at_eof(parser, driver, "Expected literal.");
             Err(ParseError)
         }
     }

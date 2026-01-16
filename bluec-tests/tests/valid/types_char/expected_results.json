@@ -1,0 +1,9 @@
+[
+    {"filename": "types_char_array_string_initializer_excess_nested_static.c", "exit_code": 1},
+    {"filename": "types_char_array_string_initializer_excess_nested.c", "exit_code": 1},
+    {"filename": "types_char_array_string_initializer_excess_static.c", "exit_code": 1},
+    {"filename": "types_char_array_string_initializer_excess.c", "exit_code": 1},
+    {"filename": "types_char_return_char_constant.c", "exit_code": 99},
+    {"filename": "types_char_simple_string.c", "exit_code": 108},
+    {"filename": "types_char_simple.c", "exit_code": 99}
+]

@@ -24,16 +24,22 @@ fn ast_type_bits() {
 
 #[test]
 fn ast_type_integer_promotion() {
-    assert_eq!(AstType::Short.promote_if_rank_lower_than_int(), AstType::Int);
-    assert_eq!(AstType::UnsignedShort.promote_if_rank_lower_than_int(), AstType::Int);
+    assert_eq!(AstType::Char.promote_if_rank_lower_than_int(), (AstType::Int, true));
+    assert_eq!(AstType::SignedChar.promote_if_rank_lower_than_int(), (AstType::Int, true));
+    assert_eq!(AstType::UnsignedChar.promote_if_rank_lower_than_int(), (AstType::Int, true));
+    assert_eq!(AstType::Short.promote_if_rank_lower_than_int(), (AstType::Int, true));
+    assert_eq!(AstType::UnsignedShort.promote_if_rank_lower_than_int(), (AstType::Int, true));
 
     // No change
-    assert_eq!(AstType::Int.promote_if_rank_lower_than_int(), AstType::Int);
-    assert_eq!(AstType::Long.promote_if_rank_lower_than_int(), AstType::Long);
-    assert_eq!(AstType::LongLong.promote_if_rank_lower_than_int(), AstType::LongLong);
-    assert_eq!(AstType::UnsignedInt.promote_if_rank_lower_than_int(), AstType::UnsignedInt);
-    assert_eq!(AstType::UnsignedLong.promote_if_rank_lower_than_int(), AstType::UnsignedLong);
-    assert_eq!(AstType::UnsignedLongLong.promote_if_rank_lower_than_int(), AstType::UnsignedLongLong);
+    assert_eq!(AstType::Void.promote_if_rank_lower_than_int(), (AstType::Void, false));
+    assert_eq!(AstType::Float.promote_if_rank_lower_than_int(), (AstType::Float, false));
+    assert_eq!(AstType::Double.promote_if_rank_lower_than_int(), (AstType::Double, false));
+    assert_eq!(AstType::Int.promote_if_rank_lower_than_int(), (AstType::Int, false));
+    assert_eq!(AstType::Long.promote_if_rank_lower_than_int(), (AstType::Long, false));
+    assert_eq!(AstType::LongLong.promote_if_rank_lower_than_int(), (AstType::LongLong, false));
+    assert_eq!(AstType::UnsignedInt.promote_if_rank_lower_than_int(), (AstType::UnsignedInt, false));
+    assert_eq!(AstType::UnsignedLong.promote_if_rank_lower_than_int(), (AstType::UnsignedLong, false));
+    assert_eq!(AstType::UnsignedLongLong.promote_if_rank_lower_than_int(), (AstType::UnsignedLongLong, false));
 }
 
 #[test]

@@ -10,14 +10,14 @@ use std::io::Cursor;
 #[test]
 fn lex_one_line_program() {
     let expected = vec![
-        Token::without_location(TokenType::make_identifier("int")),
-        Token::without_location(TokenType::make_identifier("main")),
+        Token::without_location(TokenType::new_identifier("int")),
+        Token::without_location(TokenType::new_identifier("main")),
         Token::without_location(TokenType::OpenParen),
-        Token::without_location(TokenType::make_identifier("void")),
+        Token::without_location(TokenType::new_identifier("void")),
         Token::without_location(TokenType::CloseParen),
         Token::without_location(TokenType::OpenBrace),
-        Token::without_location(TokenType::make_identifier("return")),
-        Token::without_location(TokenType::make_int_literal("1")),
+        Token::without_location(TokenType::new_identifier("return")),
+        Token::without_location(TokenType::new_int_literal("1")),
         Token::without_location(TokenType::Semicolon),
         Token::without_location(TokenType::CloseBrace),
     ];
@@ -28,18 +28,18 @@ fn lex_one_line_program() {
 #[test]
 fn lex_program() {
     let expected = vec![
-        Token::without_location(TokenType::make_identifier("int")),
-        Token::without_location(TokenType::make_identifier("main")),
+        Token::without_location(TokenType::new_identifier("int")),
+        Token::without_location(TokenType::new_identifier("main")),
         Token::without_location(TokenType::OpenParen),
-        Token::without_location(TokenType::make_identifier("void")),
+        Token::without_location(TokenType::new_identifier("void")),
         Token::without_location(TokenType::CloseParen),
         Token::without_location(TokenType::OpenBrace),
-        Token::without_location(TokenType::make_identifier("return")),
+        Token::without_location(TokenType::new_identifier("return")),
         Token::without_location(TokenType::Minus),
         Token::without_location(TokenType::OpenParen),
-        Token::without_location(TokenType::make_int_literal("3")),
+        Token::without_location(TokenType::new_int_literal("3")),
         Token::without_location(TokenType::Multiply),
-        Token::without_location(TokenType::make_int_literal("4")),
+        Token::without_location(TokenType::new_int_literal("4")),
         Token::without_location(TokenType::CloseParen),
         Token::without_location(TokenType::Semicolon),
         Token::without_location(TokenType::CloseBrace),

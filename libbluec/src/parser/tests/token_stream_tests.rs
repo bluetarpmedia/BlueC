@@ -10,7 +10,7 @@ fn peek_and_take() {
         Token::without_location(TokenType::Minus),
         Token::without_location(TokenType::OpenParen),
         Token::without_location(TokenType::BitwiseNot),
-        Token::without_location(TokenType::make_int_literal("321")),
+        Token::without_location(TokenType::new_int_literal("321")),
         Token::without_location(TokenType::CloseParen),
     ];
 
@@ -49,17 +49,17 @@ fn peek_and_take() {
 
     let (first, second) = stream.peek_next_2_tokens();
     verify_token(first, TokenType::BitwiseNot);
-    verify_token(second, TokenType::make_int_literal("321"));
+    verify_token(second, TokenType::new_int_literal("321"));
 
     verify_token(stream.peek_next_token(), TokenType::BitwiseNot);
     verify_token(stream.take_token(), TokenType::BitwiseNot);
 
     let (first, second) = stream.peek_next_2_tokens();
-    verify_token(first, TokenType::make_int_literal("321"));
+    verify_token(first, TokenType::new_int_literal("321"));
     verify_token(second, TokenType::CloseParen);
 
-    verify_token(stream.peek_next_token(), TokenType::make_int_literal("321"));
-    verify_token(stream.take_token(), TokenType::make_int_literal("321"));
+    verify_token(stream.peek_next_token(), TokenType::new_int_literal("321"));
+    verify_token(stream.take_token(), TokenType::new_int_literal("321"));
 
     let (first, second) = stream.peek_next_2_tokens();
     verify_token(first, TokenType::CloseParen);
@@ -97,12 +97,12 @@ fn peek_next_2_tokens() {
 
     {
         let one_token = vec![
-            Token::without_location(TokenType::make_int_literal("321")),
+            Token::without_location(TokenType::new_int_literal("321")),
         ];
 
         let stream = TokenStream::new(one_token);
         let (first, second) = stream.peek_next_2_tokens();
-        verify_token(first, TokenType::make_int_literal("321"));
+        verify_token(first, TokenType::new_int_literal("321"));
         assert!(second.is_none());
     }
 
@@ -157,7 +157,7 @@ fn peek_and_prev_source_locations() {
         Token::with_location(TokenType::Minus, 1, 1),
         Token::with_location(TokenType::OpenParen, 1, 2),
         Token::with_location(TokenType::BitwiseNot, 1, 3),
-        Token::with_location(TokenType::make_int_literal("321"), 1, 4),
+        Token::with_location(TokenType::new_int_literal("321"), 1, 4),
         Token::with_location(TokenType::CloseParen, 1, 7),
     ];
 
@@ -201,7 +201,7 @@ fn take_if_expected() {
         Token::without_location(TokenType::Minus),
         Token::without_location(TokenType::OpenParen),
         Token::without_location(TokenType::BitwiseNot),
-        Token::without_location(TokenType::make_int_literal("321")),
+        Token::without_location(TokenType::new_int_literal("321")),
         Token::without_location(TokenType::CloseParen),
     ];
 
@@ -219,8 +219,8 @@ fn take_if_expected() {
     let token = stream.take_token_if_expected(TokenType::BitwiseNot);
     verify_token(token, TokenType::BitwiseNot);
 
-    let token = stream.take_token_if_expected(TokenType::make_int_literal("321"));
-    verify_token(token, TokenType::make_int_literal("321"));
+    let token = stream.take_token_if_expected(TokenType::new_int_literal("321"));
+    verify_token(token, TokenType::new_int_literal("321"));
 
     let token = stream.take_token_if_expected(TokenType::CloseParen);
     verify_token(token, TokenType::CloseParen);
@@ -232,46 +232,46 @@ fn take_if_expected() {
 #[test]
 fn move_to_next_statement() {
     let tokens = vec![
-        Token::without_location(TokenType::make_identifier("int")),
-        Token::without_location(TokenType::make_identifier("a")),
+        Token::without_location(TokenType::new_identifier("int")),
+        Token::without_location(TokenType::new_identifier("a")),
         Token::without_location(TokenType::Assignment),
-        Token::without_location(TokenType::make_int_literal("1")),
+        Token::without_location(TokenType::new_int_literal("1")),
         Token::without_location(TokenType::Semicolon),
         //
-        Token::without_location(TokenType::make_identifier("float")),
-        Token::without_location(TokenType::make_identifier("b")),
+        Token::without_location(TokenType::new_identifier("float")),
+        Token::without_location(TokenType::new_identifier("b")),
         Token::without_location(TokenType::Assignment),
-        Token::without_location(TokenType::make_int_literal("2")),
+        Token::without_location(TokenType::new_int_literal("2")),
         Token::without_location(TokenType::Semicolon),
         //
-        Token::without_location(TokenType::make_identifier("int")),
-        Token::without_location(TokenType::make_identifier("c")),
+        Token::without_location(TokenType::new_identifier("int")),
+        Token::without_location(TokenType::new_identifier("c")),
         Token::without_location(TokenType::Assignment),
-        Token::without_location(TokenType::make_int_literal("3")),
+        Token::without_location(TokenType::new_int_literal("3")),
         Token::without_location(TokenType::Semicolon),
         //
         Token::without_location(TokenType::OpenBrace),
-        Token::without_location(TokenType::make_identifier("int")),
-        Token::without_location(TokenType::make_identifier("d")),
+        Token::without_location(TokenType::new_identifier("int")),
+        Token::without_location(TokenType::new_identifier("d")),
         Token::without_location(TokenType::CloseBrace),
     ];
 
     let mut stream = TokenStream::new(tokens);
 
-    verify_token(stream.take_token(), TokenType::make_identifier("int"));
-    verify_token(stream.take_token(), TokenType::make_identifier("a"));
+    verify_token(stream.take_token(), TokenType::new_identifier("int"));
+    verify_token(stream.take_token(), TokenType::new_identifier("a"));
 
     stream.move_to_next_statement();
-    verify_token(stream.take_token(), TokenType::make_identifier("float"));
-    verify_token(stream.take_token(), TokenType::make_identifier("b"));
+    verify_token(stream.take_token(), TokenType::new_identifier("float"));
+    verify_token(stream.take_token(), TokenType::new_identifier("b"));
 
     stream.move_to_next_statement();
-    verify_token(stream.take_token(), TokenType::make_identifier("int"));
-    verify_token(stream.take_token(), TokenType::make_identifier("c"));
+    verify_token(stream.take_token(), TokenType::new_identifier("int"));
+    verify_token(stream.take_token(), TokenType::new_identifier("c"));
 
     stream.move_to_next_statement();
     verify_token(stream.take_token(), TokenType::OpenBrace);
-    verify_token(stream.take_token(), TokenType::make_identifier("int"));
+    verify_token(stream.take_token(), TokenType::new_identifier("int"));
 
     stream.move_to_next_statement();
     verify_token(stream.take_token(), TokenType::CloseBrace);
@@ -280,22 +280,22 @@ fn move_to_next_statement() {
 #[test]
 fn snapshot_and_restore() {
     let tokens = vec![
-        Token::without_location(TokenType::make_identifier("int")),
-        Token::without_location(TokenType::make_identifier("a")),
+        Token::without_location(TokenType::new_identifier("int")),
+        Token::without_location(TokenType::new_identifier("a")),
         Token::without_location(TokenType::Assignment),
-        Token::without_location(TokenType::make_int_literal("1")),
+        Token::without_location(TokenType::new_int_literal("1")),
         Token::without_location(TokenType::Semicolon),
         //
-        Token::without_location(TokenType::make_identifier("float")),
-        Token::without_location(TokenType::make_identifier("b")),
+        Token::without_location(TokenType::new_identifier("float")),
+        Token::without_location(TokenType::new_identifier("b")),
         Token::without_location(TokenType::Assignment),
-        Token::without_location(TokenType::make_int_literal("2")),
+        Token::without_location(TokenType::new_int_literal("2")),
         Token::without_location(TokenType::Semicolon),
         //
-        Token::without_location(TokenType::make_identifier("long")),
-        Token::without_location(TokenType::make_identifier("c")),
+        Token::without_location(TokenType::new_identifier("long")),
+        Token::without_location(TokenType::new_identifier("c")),
         Token::without_location(TokenType::Assignment),
-        Token::without_location(TokenType::make_int_literal("3")),
+        Token::without_location(TokenType::new_int_literal("3")),
         Token::without_location(TokenType::Semicolon),
     ];
 
@@ -313,19 +313,19 @@ fn snapshot_and_restore() {
     assert!(stream.is_eof());
 
     stream.restore(snapshot1);
-    verify_token(stream.take_token(), TokenType::make_identifier("int"));
+    verify_token(stream.take_token(), TokenType::new_identifier("int"));
 
     stream.restore(snapshot2);
-    verify_token(stream.take_token(), TokenType::make_identifier("float"));
+    verify_token(stream.take_token(), TokenType::new_identifier("float"));
 
     stream.restore(snapshot3);
-    verify_token(stream.take_token(), TokenType::make_identifier("long"));
+    verify_token(stream.take_token(), TokenType::new_identifier("long"));
 
     stream.restore(snapshot4);
     assert!(stream.is_eof());
 
     stream.restore(snapshot1);
-    verify_token(stream.take_token(), TokenType::make_identifier("int"));
+    verify_token(stream.take_token(), TokenType::new_identifier("int"));
 }
 
 fn verify_token(token: Option<&lexer::Token>, expected_type: TokenType) {

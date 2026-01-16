@@ -12,7 +12,7 @@ use crate::lexer::{Token, TokenType};
 fn unary_negate_operation() {
     // -5
     let tokens =
-        vec![Token::without_location(TokenType::Minus), Token::without_location(TokenType::make_int_literal("5"))];
+        vec![Token::without_location(TokenType::Minus), Token::without_location(TokenType::new_int_literal("5"))];
     test_expression(tokens, "Negate(5)");
 }
 
@@ -21,7 +21,7 @@ fn unary_bitwise_not_operation() {
     // ~123
     let tokens = vec![
         Token::without_location(TokenType::BitwiseNot),
-        Token::without_location(TokenType::make_int_literal("123")),
+        Token::without_location(TokenType::new_int_literal("123")),
     ];
     test_expression(tokens, "BitwiseNot(123)");
 }
@@ -33,7 +33,7 @@ fn parenthesised_unary_operations() {
         Token::without_location(TokenType::Minus),
         Token::without_location(TokenType::OpenParen),
         Token::without_location(TokenType::BitwiseNot),
-        Token::without_location(TokenType::make_int_literal("321")),
+        Token::without_location(TokenType::new_int_literal("321")),
         Token::without_location(TokenType::CloseParen),
     ];
     test_expression(tokens, "Negate(BitwiseNot(321))");
@@ -43,9 +43,9 @@ fn parenthesised_unary_operations() {
 fn binary_plus_operation() {
     // 1 + 2
     let tokens = vec![
-        Token::without_location(TokenType::make_int_literal("1")),
+        Token::without_location(TokenType::new_int_literal("1")),
         Token::without_location(TokenType::Plus),
-        Token::without_location(TokenType::make_int_literal("2")),
+        Token::without_location(TokenType::new_int_literal("2")),
     ];
     test_expression(tokens, "Add(1,2)");
 }
@@ -54,15 +54,15 @@ fn binary_plus_operation() {
 fn binary_add_subtract() {
     // 1 + 2 - 3 + 4 - 5   --->  (((1 + 2) - 3) + 4) - 5
     let tokens = vec![
-        Token::without_location(TokenType::make_int_literal("1")),
+        Token::without_location(TokenType::new_int_literal("1")),
         Token::without_location(TokenType::Plus),
-        Token::without_location(TokenType::make_int_literal("2")),
+        Token::without_location(TokenType::new_int_literal("2")),
         Token::without_location(TokenType::Minus),
-        Token::without_location(TokenType::make_int_literal("3")),
+        Token::without_location(TokenType::new_int_literal("3")),
         Token::without_location(TokenType::Plus),
-        Token::without_location(TokenType::make_int_literal("4")),
+        Token::without_location(TokenType::new_int_literal("4")),
         Token::without_location(TokenType::Minus),
-        Token::without_location(TokenType::make_int_literal("5")),
+        Token::without_location(TokenType::new_int_literal("5")),
     ];
     test_expression(tokens, "Subtract(Add(Subtract(Add(1,2),3),4),5)");
 }
@@ -71,13 +71,13 @@ fn binary_add_subtract() {
 fn binary_mul_div_rem() {
     // 1 * 2 / 3 % 4   --->  ((1 * 2) / 3) % 4
     let tokens = vec![
-        Token::without_location(TokenType::make_int_literal("1")),
+        Token::without_location(TokenType::new_int_literal("1")),
         Token::without_location(TokenType::Multiply),
-        Token::without_location(TokenType::make_int_literal("2")),
+        Token::without_location(TokenType::new_int_literal("2")),
         Token::without_location(TokenType::Divide),
-        Token::without_location(TokenType::make_int_literal("3")),
+        Token::without_location(TokenType::new_int_literal("3")),
         Token::without_location(TokenType::Remainder),
-        Token::without_location(TokenType::make_int_literal("4")),
+        Token::without_location(TokenType::new_int_literal("4")),
     ];
     test_expression(tokens, "Remainder(Divide(Multiply(1,2),3),4)");
 }
@@ -86,19 +86,19 @@ fn binary_mul_div_rem() {
 fn binary_operations() {
     // 1 + 2 * 3 - 4 / 5 + 6 % 7   --->   ((1 + (2 * 3)) - (4 / 5)) + (6 % 7)
     let tokens = vec![
-        Token::without_location(TokenType::make_int_literal("1")),
+        Token::without_location(TokenType::new_int_literal("1")),
         Token::without_location(TokenType::Plus),
-        Token::without_location(TokenType::make_int_literal("2")),
+        Token::without_location(TokenType::new_int_literal("2")),
         Token::without_location(TokenType::Multiply),
-        Token::without_location(TokenType::make_int_literal("3")),
+        Token::without_location(TokenType::new_int_literal("3")),
         Token::without_location(TokenType::Minus),
-        Token::without_location(TokenType::make_int_literal("4")),
+        Token::without_location(TokenType::new_int_literal("4")),
         Token::without_location(TokenType::Divide),
-        Token::without_location(TokenType::make_int_literal("5")),
+        Token::without_location(TokenType::new_int_literal("5")),
         Token::without_location(TokenType::Plus),
-        Token::without_location(TokenType::make_int_literal("6")),
+        Token::without_location(TokenType::new_int_literal("6")),
         Token::without_location(TokenType::Remainder),
-        Token::without_location(TokenType::make_int_literal("7")),
+        Token::without_location(TokenType::new_int_literal("7")),
     ];
     test_expression(tokens, "Add(Subtract(Add(1,Multiply(2,3)),Divide(4,5)),Remainder(6,7))");
 }
@@ -115,42 +115,42 @@ fn block_with_chain_compound_assignment() {
     // x = a += b *= c -= d /= e += f %= 5   --->  x = (a += (b *= (c -= (d /= (e += (f %= 5)))));
     let tokens = vec![
         Token::without_location(TokenType::OpenBrace),
-        Token::without_location(TokenType::make_identifier("int")),
-        Token::without_location(TokenType::make_identifier("x")),
+        Token::without_location(TokenType::new_identifier("int")),
+        Token::without_location(TokenType::new_identifier("x")),
         Token::without_location(TokenType::Semicolon),
-        Token::without_location(TokenType::make_identifier("int")),
-        Token::without_location(TokenType::make_identifier("a")),
+        Token::without_location(TokenType::new_identifier("int")),
+        Token::without_location(TokenType::new_identifier("a")),
         Token::without_location(TokenType::Semicolon),
-        Token::without_location(TokenType::make_identifier("int")),
-        Token::without_location(TokenType::make_identifier("b")),
+        Token::without_location(TokenType::new_identifier("int")),
+        Token::without_location(TokenType::new_identifier("b")),
         Token::without_location(TokenType::Semicolon),
-        Token::without_location(TokenType::make_identifier("int")),
-        Token::without_location(TokenType::make_identifier("c")),
+        Token::without_location(TokenType::new_identifier("int")),
+        Token::without_location(TokenType::new_identifier("c")),
         Token::without_location(TokenType::Semicolon),
-        Token::without_location(TokenType::make_identifier("int")),
-        Token::without_location(TokenType::make_identifier("d")),
+        Token::without_location(TokenType::new_identifier("int")),
+        Token::without_location(TokenType::new_identifier("d")),
         Token::without_location(TokenType::Semicolon),
-        Token::without_location(TokenType::make_identifier("int")),
-        Token::without_location(TokenType::make_identifier("e")),
+        Token::without_location(TokenType::new_identifier("int")),
+        Token::without_location(TokenType::new_identifier("e")),
         Token::without_location(TokenType::Semicolon),
-        Token::without_location(TokenType::make_identifier("int")),
-        Token::without_location(TokenType::make_identifier("f")),
+        Token::without_location(TokenType::new_identifier("int")),
+        Token::without_location(TokenType::new_identifier("f")),
         Token::without_location(TokenType::Semicolon),
-        Token::without_location(TokenType::make_identifier("x")),
+        Token::without_location(TokenType::new_identifier("x")),
         Token::without_location(TokenType::Assignment),
-        Token::without_location(TokenType::make_identifier("a")),
+        Token::without_location(TokenType::new_identifier("a")),
         Token::without_location(TokenType::AdditionAssignment),
-        Token::without_location(TokenType::make_identifier("b")),
+        Token::without_location(TokenType::new_identifier("b")),
         Token::without_location(TokenType::MultiplyAssignment),
-        Token::without_location(TokenType::make_identifier("c")),
+        Token::without_location(TokenType::new_identifier("c")),
         Token::without_location(TokenType::SubtractionAssignment),
-        Token::without_location(TokenType::make_identifier("d")),
+        Token::without_location(TokenType::new_identifier("d")),
         Token::without_location(TokenType::DivideAssignment),
-        Token::without_location(TokenType::make_identifier("e")),
+        Token::without_location(TokenType::new_identifier("e")),
         Token::without_location(TokenType::AdditionAssignment),
-        Token::without_location(TokenType::make_identifier("f")),
+        Token::without_location(TokenType::new_identifier("f")),
         Token::without_location(TokenType::RemainderAssignment),
-        Token::without_location(TokenType::make_int_literal("5")),
+        Token::without_location(TokenType::new_int_literal("5")),
         Token::without_location(TokenType::Semicolon),
         Token::without_location(TokenType::CloseBrace),
     ];
@@ -206,19 +206,19 @@ fn complex_expression() {
         Token::without_location(TokenType::BitwiseNot),
         Token::without_location(TokenType::OpenParen),
         Token::without_location(TokenType::OpenParen),
-        Token::without_location(TokenType::make_int_literal("1")),
+        Token::without_location(TokenType::new_int_literal("1")),
         Token::without_location(TokenType::Multiply),
-        Token::without_location(TokenType::make_int_literal("2")),
+        Token::without_location(TokenType::new_int_literal("2")),
         Token::without_location(TokenType::CloseParen),
         Token::without_location(TokenType::Divide),
         Token::without_location(TokenType::Minus),
-        Token::without_location(TokenType::make_int_literal("3")),
+        Token::without_location(TokenType::new_int_literal("3")),
         Token::without_location(TokenType::CloseParen),
         Token::without_location(TokenType::Plus),
         Token::without_location(TokenType::OpenParen),
-        Token::without_location(TokenType::make_int_literal("5")),
+        Token::without_location(TokenType::new_int_literal("5")),
         Token::without_location(TokenType::Remainder),
-        Token::without_location(TokenType::make_int_literal("1")),
+        Token::without_location(TokenType::new_int_literal("1")),
         Token::without_location(TokenType::CloseParen),
     ];
     test_expression(tokens, "Add(BitwiseNot(Divide(Multiply(1,2),Negate(3))),Remainder(5,1))");

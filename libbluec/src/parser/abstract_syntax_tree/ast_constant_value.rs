@@ -1,18 +1,29 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 //
-//! The `ast_constant_value` module defines the `AstConstantValue` type.
+//! The `ast_constant_value` module defines `AstConstantValue` and its related types.
 
 use std::fmt;
 
 use crate::ICE;
-use crate::parser::{AstType, AstUniqueName};
+use crate::parser::AstType;
+
+/// A constant value that was either parsed from a literal or was evaluated from a constant expression.
+#[derive(Debug, Clone, PartialEq)]
+pub enum AstConstantValue {
+    Integer(AstConstantInteger),
+    Fp(AstConstantFp),
+    Pointer(AstType, AstAddressConstant),
+    String { ascii: Vec<String> },
+}
 
 /// A constant integer value.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum AstConstantInteger {
+    Char(i8),
     Short(i16),
     Int(i32),
     LongLong(i64),
+    UnsignedChar(u8),
     UnsignedShort(u16),
     UnsignedInt(u32),
     UnsignedLongLong(u64),
@@ -29,42 +40,46 @@ pub enum AstConstantFp {
     Double(f64),
 }
 
-/// A constant initializer expression for a pointer type.
+/// An address constant is a null pointer, a pointer to an object of static storage duration, or a pointer to
+/// a function designator. A string literal has static storage duration so its address can be used as an address
+/// constant.
 #[derive(Debug, Clone, PartialEq)]
-pub enum AstConstantPtrInitializer {
+pub enum AstAddressConstant {
     /// Null pointer constant. `int *p = 0;`.
-    NullPointerConstant,
+    NullPointer,
 
     /// Initialize a pointer by casting from an integer value. `int *p = (int *)123;`.
     CastExpression(u64),
 
-    /// Initialize a pointer with the address of a static storage variable or function.
+    /// Initialize a pointer with the address of an object of static storage duration.
     /// ```c
     /// static int a = 1;
     /// static int *p = &a;
     /// 
+    /// static int arr[4] = {1, 2, 3, 4};
+    /// static int *p = &arr[2];
+    /// static int *p = arr + 2;
+    /// 
+    /// static char *ptr = "Hello";
+    /// ```
+    AddressOfObject { object: String, byte_offset: i32 },
+
+    /// Initialize a function pointer with the address of a function.
+    /// ```c
     /// int get(void) { return 1; }
     /// static int (*fn)(void) = &get;  // or `get` without `&`
     /// ```
-    AddressConstant { symbol: AstUniqueName },
-}
-
-/// An evaluated constant, compile-time value.
-#[derive(Debug, Clone, PartialEq)]
-pub enum AstConstantValue {
-    ZeroBytes(usize),
-    Integer(AstConstantInteger),
-    Fp(AstConstantFp),
-    Pointer(AstType, AstConstantPtrInitializer),
-    // Future: StringLiteral
+    AddressOfFunction(String),
 }
 
 impl fmt::Display for AstConstantInteger {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            AstConstantInteger::Char(value) => write!(f, "{}", value),
             AstConstantInteger::Short(value) => write!(f, "{}", value),
             AstConstantInteger::Int(value) => write!(f, "{}", value),
             AstConstantInteger::LongLong(value) => write!(f, "{}", value),
+            AstConstantInteger::UnsignedChar(value) => write!(f, "{}", value),
             AstConstantInteger::UnsignedShort(value) => write!(f, "{}", value),
             AstConstantInteger::UnsignedInt(value) => write!(f, "{}", value),
             AstConstantInteger::UnsignedLongLong(value) => write!(f, "{}", value),
@@ -84,10 +99,13 @@ impl fmt::Display for AstConstantFp {
 impl fmt::Display for AstConstantValue {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            AstConstantValue::ZeroBytes(size) => write!(f, "ZeroBytes({size})"),
             AstConstantValue::Integer(value) => write!(f, "{value}"),
             AstConstantValue::Fp(value) => write!(f, "{value}"),
             AstConstantValue::Pointer(ty, _) => write!(f, "{ty}"),
+            AstConstantValue::String { ascii } => {
+                let ascii_joined = ascii.join("");
+                write!(f, "String(\"{ascii_joined}\")")
+            }
         }
     }
 }
@@ -96,11 +114,12 @@ impl AstConstantValue {
     /// Gets the AST type of the constant value.
     pub fn get_ast_type(&self) -> AstType {
         match self {
-            AstConstantValue::ZeroBytes(_) => ICE!("ZeroBytes does not have an AstType"),
             AstConstantValue::Integer(constant_integer) => match constant_integer {
+                AstConstantInteger::Char(_) => AstType::Char,
                 AstConstantInteger::Short(_) => AstType::Short,
                 AstConstantInteger::Int(_) => AstType::Int,
                 AstConstantInteger::LongLong(_) => AstType::LongLong,
+                AstConstantInteger::UnsignedChar(_) => AstType::UnsignedChar,
                 AstConstantInteger::UnsignedShort(_) => AstType::UnsignedShort,
                 AstConstantInteger::UnsignedInt(_) => AstType::UnsignedInt,
                 AstConstantInteger::UnsignedLongLong(_) => AstType::UnsignedLongLong,
@@ -110,17 +129,21 @@ impl AstConstantValue {
                 AstConstantFp::Double(_) => AstType::Double,
             },
             AstConstantValue::Pointer(ty, _) => ty.clone(),
+            AstConstantValue::String { ascii } => {
+                AstType::new_array(AstType::Char, ascii.len())
+            }
         }
     }
 
     /// Is the constant value equal to zero?
     pub fn is_zero(&self) -> bool {
         match self {
-            AstConstantValue::ZeroBytes(_) => true,
             AstConstantValue::Integer(constant_integer) => match constant_integer {
+                AstConstantInteger::Char(value) => *value == 0,
                 AstConstantInteger::Short(value) => *value == 0,
                 AstConstantInteger::Int(value) => *value == 0,
                 AstConstantInteger::LongLong(value) => *value == 0,
+                AstConstantInteger::UnsignedChar(value) => *value == 0,
                 AstConstantInteger::UnsignedShort(value) => *value == 0,
                 AstConstantInteger::UnsignedInt(value) => *value == 0,
                 AstConstantInteger::UnsignedLongLong(value) => *value == 0,
@@ -131,15 +154,16 @@ impl AstConstantValue {
                 AstConstantFp::Float(value) => value.is_sign_positive() && *value == 0.0,
                 AstConstantFp::Double(value) => value.is_sign_positive() && *value == 0.0,
             },
-            AstConstantValue::Pointer(_, init) => matches!(init, AstConstantPtrInitializer::NullPointerConstant),
+            AstConstantValue::Pointer(_, init) => matches!(init, AstAddressConstant::NullPointer),
+            AstConstantValue::String { ascii, .. } => ascii.is_empty(),
         }
     }
 
     /// Is the constant value below zero? Always false for unsigned types.
     pub fn has_negative_value(&self) -> bool {
         match self {
-            AstConstantValue::ZeroBytes(_) => false,
             AstConstantValue::Integer(constant_integer) => match constant_integer {
+                AstConstantInteger::Char(value) => *value < 0,
                 AstConstantInteger::Short(value) => *value < 0,
                 AstConstantInteger::Int(value) => *value < 0,
                 AstConstantInteger::LongLong(value) => *value < 0,
@@ -150,6 +174,7 @@ impl AstConstantValue {
                 AstConstantFp::Double(value) => *value < 0.0,
             },
             AstConstantValue::Pointer(..) => false,
+            AstConstantValue::String { .. } => false,
         }
     }
 
@@ -160,11 +185,13 @@ impl AstConstantValue {
         macro_rules! make_cast {
             ($value:expr) => {
                 match cast_to_type {
+                    AstType::Char | AstType::SignedChar => AstConstantValue::Integer(AstConstantInteger::from_value($value as i8)),
                     AstType::Short => AstConstantValue::Integer(AstConstantInteger::from_value($value as i16)),
                     AstType::Int => AstConstantValue::Integer(AstConstantInteger::from_value($value as i32)),
                     AstType::Long | AstType::LongLong => {
                         AstConstantValue::Integer(AstConstantInteger::from_value($value as i64))
                     }
+                    AstType::UnsignedChar => AstConstantValue::Integer(AstConstantInteger::from_value($value as u8)),
                     AstType::UnsignedShort => AstConstantValue::Integer(AstConstantInteger::from_value($value as u16)),
                     AstType::UnsignedInt => AstConstantValue::Integer(AstConstantInteger::from_value($value as u32)),
                     AstType::UnsignedLong | AstType::UnsignedLongLong => {
@@ -180,12 +207,13 @@ impl AstConstantValue {
         }
 
         match self {
-            AstConstantValue::ZeroBytes(_) => ICE!("Cannot cast ZeroBytes"),
             AstConstantValue::Integer(constant_integer) => match constant_integer {
                 // No-op from self to same type
-                AstConstantInteger::Short(_)
+                AstConstantInteger::Char(_)
+                | AstConstantInteger::Short(_)
                 | AstConstantInteger::Int(_)
                 | AstConstantInteger::LongLong(_)
+                | AstConstantInteger::UnsignedChar(_)
                 | AstConstantInteger::UnsignedShort(_)
                 | AstConstantInteger::UnsignedInt(_)
                 | AstConstantInteger::UnsignedLongLong(_)
@@ -194,9 +222,11 @@ impl AstConstantValue {
                     self
                 }
 
+                AstConstantInteger::Char(value) => make_cast!(value),
                 AstConstantInteger::Short(value) => make_cast!(value),
                 AstConstantInteger::Int(value) => make_cast!(value),
                 AstConstantInteger::LongLong(value) => make_cast!(value),
+                AstConstantInteger::UnsignedChar(value) => make_cast!(value),
                 AstConstantInteger::UnsignedShort(value) => make_cast!(value),
                 AstConstantInteger::UnsignedInt(value) => make_cast!(value),
                 AstConstantInteger::UnsignedLongLong(value) => make_cast!(value),
@@ -206,6 +236,7 @@ impl AstConstantValue {
                 AstConstantFp::Double(value) => make_cast!(value),
             },
             AstConstantValue::Pointer(..) => ICE!("Cannot cast AstConstantValue::Pointer"),
+            AstConstantValue::String { .. } => ICE!("Cannot cast AstConstantValue::String"),
         }
     }
 }
@@ -223,9 +254,11 @@ macro_rules! impl_from_trait {
 }
 
 impl_from_trait! {
+    i8 => Char,
     i16 => Short,
     i32 => Int,
     i64 => LongLong,
+    u8 => UnsignedChar,
     u16 => UnsignedShort,
     u32 => UnsignedInt,
     u64 => UnsignedLongLong,
@@ -240,12 +273,28 @@ impl AstConstantInteger {
     /// Gets the AST type of the constant integer value.
     pub fn get_ast_type(&self) -> AstType {
         match self {
+            AstConstantInteger::Char(_) => AstType::Char,
             AstConstantInteger::Short(_) => AstType::Short,
             AstConstantInteger::Int(_) => AstType::Int,
             AstConstantInteger::LongLong(_) => AstType::LongLong,
+            AstConstantInteger::UnsignedChar(_) => AstType::UnsignedChar,
             AstConstantInteger::UnsignedShort(_) => AstType::UnsignedShort,
             AstConstantInteger::UnsignedInt(_) => AstType::UnsignedInt,
             AstConstantInteger::UnsignedLongLong(_) => AstType::UnsignedLongLong,
+        }
+    }
+
+    /// Is the constant integer value equal to zero?
+    pub fn is_zero(&self) -> bool {
+        match self {
+            AstConstantInteger::Char(value) => *value == 0,
+            AstConstantInteger::Short(value) => *value == 0,
+            AstConstantInteger::Int(value) => *value == 0,
+            AstConstantInteger::LongLong(value) => *value == 0,
+            AstConstantInteger::UnsignedChar(value) => *value == 0,
+            AstConstantInteger::UnsignedShort(value) => *value == 0,
+            AstConstantInteger::UnsignedInt(value) => *value == 0,
+            AstConstantInteger::UnsignedLongLong(value) => *value == 0,
         }
     }
 }

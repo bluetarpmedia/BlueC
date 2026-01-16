@@ -240,7 +240,7 @@ pub fn add_error<S: Into<String>>(driver: &mut Driver, error: S, location: Sourc
 ///
 /// The diagnostic will be ignored if the parser is being used in a call to `Parser::disable_diagnostics_during`.
 /// This is a helper function which simplifies the construction of error diagnostics when the parser is at EOF.
-pub fn add_error_at_eof(parser: &Parser, driver: &mut Driver, message: String) {
+pub fn add_error_at_eof<S: Into<String>>(parser: &Parser, driver: &mut Driver, error: S) {
     let mut eof_location: SourceLocation;
 
     if let Some(last_token) = parser.token_stream.last_token() {
@@ -251,5 +251,5 @@ pub fn add_error_at_eof(parser: &Parser, driver: &mut Driver, message: String) {
         eof_location = SourceLocation { line: 1, column: 1, length: 1 };
     }
 
-    driver.add_diagnostic(Diagnostic::error_at_location(message, eof_location));
+    driver.add_diagnostic(Diagnostic::error_at_location(error.into(), eof_location));
 }

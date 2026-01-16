@@ -2,7 +2,7 @@
 //
 //! The `ast_attributes` module defines various AST attribute types.
 
-use crate::internal_error;
+use crate::ICE;
 use crate::lexer;
 
 use std::fmt;
@@ -26,7 +26,7 @@ impl AstNodeId {
         let next_id = NEXT_ID.fetch_add(1, Ordering::SeqCst); // Increments and returns previous value, so `1` is the very first.
 
         if next_id == usize::MAX {
-            internal_error::ICE("Exhausted node ids"); // Technically we have 1 more available but we'll limit ourselves to MAX-1.
+            ICE!("Exhausted node ids"); // Technically we have 1 more available but we'll limit ourselves to MAX-1.
         }
 
         Self(next_id)

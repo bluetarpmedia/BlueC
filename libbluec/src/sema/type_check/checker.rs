@@ -2,6 +2,7 @@
 //
 //! The `checker` module defines `TypeChecker`, which holds mutable state necessary for type checking.
 
+use super::super::constant_table::ConstantTable;
 use super::super::symbol_table::SymbolTable;
 use super::super::type_conversion;
 
@@ -28,6 +29,7 @@ pub struct DeclarationScope {
 pub struct TypeChecker {
     pub metadata: parser::AstMetadata,
     pub symbols: SymbolTable,
+    pub constants: ConstantTable,
     current_func_return_type: Option<AstType>,
     scopes: Vec<DeclarationScope>,
 }
@@ -39,11 +41,17 @@ pub enum CastWarningPolicy {
     NoWarning,
 }
 
+impl Default for TypeChecker {
+    fn default() -> Self {
+        Self::new(parser::AstMetadata::default(), SymbolTable::default(), ConstantTable::default())
+    }
+}
+
 impl TypeChecker {
     /// Creates a new Type Checker.
-    pub fn new(metadata: parser::AstMetadata, symbols: SymbolTable) -> Self {
+    pub fn new(metadata: parser::AstMetadata, symbols: SymbolTable, constants: ConstantTable) -> Self {
         let scopes = vec![DeclarationScope::default()];
-        Self { metadata, symbols, current_func_return_type: None, scopes }
+        Self { metadata, symbols, constants, current_func_return_type: None, scopes }
     }
 
     /// The current declaration scope.

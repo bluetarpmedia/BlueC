@@ -6,6 +6,7 @@ use super::registers::HwRegister;
 
 use crate::ICE;
 use crate::ir::BtType;
+use crate::sema::constant_table::ConstantIndex;
 
 use std::fmt;
 
@@ -33,16 +34,26 @@ impl From<&BtType> for AsmType {
 impl From<BtType> for AsmType {
     fn from(bt_type: BtType) -> Self {
         match bt_type {
+            BtType::Int8 | BtType::UInt8 => AsmType::Byte,
             BtType::Int16 | BtType::UInt16 => AsmType::Word,
             BtType::Int32 | BtType::UInt32 => AsmType::DoubleWord,
             BtType::Int64 | BtType::UInt64 | BtType::Pointer => AsmType::QuadWord,
             BtType::Float32 => AsmType::FpSingle,
             BtType::Float64 => AsmType::FpDouble,
             BtType::Array { element_type, count } => {
-                let size = element_type.bits() / 8 * count;
-                // If an array's size in bytes is >= 16 then its alignment is 16. Otherwise its the element type size.
-                let align = if size >= 16 { 16 } else { element_type.bits() / 8 };
-                AsmType::ByteArray { size, align }
+                // If an array's total size in bytes is >= 16 then its alignment is 16. Otherwise its alignment is
+                // the size of the array's scalar element (e.g. for multidimensional arrays).
+                //
+                let total_size_bytes = (element_type.bits() / 8) * count;
+
+                let align = if total_size_bytes >= 16 {
+                    16
+                } else {
+                    let scalar_type = element_type.get_innermost_scalar_type();
+                    scalar_type.bits() / 8
+                };
+
+                AsmType::ByteArray { size: total_size_bytes, align }
             }
             BtType::Void => ICE!("No AsmType for BtType::Void"),
             BtType::Function => ICE!("No AsmType for BtType::Function"),
@@ -82,7 +93,7 @@ impl AsmType {
     pub fn alignment_bytes(&self) -> usize {
         match self {
             AsmType::ByteArray { align, .. } => *align,
-            _ => self.size_bytes()
+            _ => self.size_bytes(),
         }
     }
 
@@ -94,6 +105,11 @@ impl AsmType {
     /// Is this type a floating-point type?
     pub fn is_floating_point(&self) -> bool {
         matches!(self, AsmType::FpSingle | AsmType::FpDouble)
+    }
+
+    /// Is this type a byte array?
+    pub fn is_byte_array(&self) -> bool {
+        matches!(self, AsmType::ByteArray { .. })
     }
 
     /// Returns the string representing the type that is used in an assembly instruction mnemonic.
@@ -140,6 +156,13 @@ pub struct AsmConstant {
     pub value: AsmConstantInitializer,
 }
 
+impl AsmConstant {
+    /// Is this a string constant?
+    pub fn is_string(&self) -> bool {
+        matches!(self.value, AsmConstantInitializer::AsciiString { .. })
+    }
+}
+
 /// A constant/static initializer value for an `AsmStaticStorageVariable` or `AsmConstant`.
 ///
 /// The assembler doesn't care whether the bits are meant to be interpreted as signed or not, but we track that
@@ -149,10 +172,13 @@ pub struct AsmConstant {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum AsmConstantInitializer {
     ZeroBytes(usize),
+    Imm8 { value: u8, signed: bool },
     Imm16 { value: u16, signed: bool },
     Imm32 { value: u32, signed: bool },
     Imm64 { value: u64, signed: bool },
-    AddressConstant { object: String },
+    AddressOf { object: String, byte_offset: i32 },
+    AsciiString { value: String, byte_count: usize },
+    AsciiStringArray { values: Vec<String> },
 }
 
 impl From<f64> for AsmConstantInitializer {
@@ -168,6 +194,7 @@ impl AsmConstantInitializer {
     pub fn is_zero(&self) -> bool {
         match self {
             AsmConstantInitializer::ZeroBytes(_) => true,
+            AsmConstantInitializer::Imm8 { value, .. } => *value == 0,
             AsmConstantInitializer::Imm16 { value, .. } => *value == 0,
             AsmConstantInitializer::Imm32 { value, .. } => *value == 0,
             AsmConstantInitializer::Imm64 { value, .. } => *value == 0,
@@ -179,21 +206,27 @@ impl AsmConstantInitializer {
     pub fn size_bytes(&self) -> usize {
         match self {
             AsmConstantInitializer::ZeroBytes(size) => *size,
+            AsmConstantInitializer::Imm8 { .. } => 1,
             AsmConstantInitializer::Imm16 { .. } => 2,
             AsmConstantInitializer::Imm32 { .. } => 4,
             AsmConstantInitializer::Imm64 { .. } => 8,
-            AsmConstantInitializer::AddressConstant { .. } => 8,
+            AsmConstantInitializer::AddressOf { .. } => 8,
+            AsmConstantInitializer::AsciiString { byte_count, .. } => *byte_count,
+            AsmConstantInitializer::AsciiStringArray { .. } => todo!(),
         }
     }
 
     /// Gets initializer value's `AsmType`.
     pub fn asm_type(&self) -> AsmType {
         match self {
-            AsmConstantInitializer::ZeroBytes(_) => ICE!("No AsmType for AsmConstantInitializer::ZeroBytes"),
+            AsmConstantInitializer::Imm8 { .. } => AsmType::Byte,
             AsmConstantInitializer::Imm16 { .. } => AsmType::Word,
             AsmConstantInitializer::Imm32 { .. } => AsmType::DoubleWord,
             AsmConstantInitializer::Imm64 { .. } => AsmType::QuadWord,
-            AsmConstantInitializer::AddressConstant { .. } => AsmType::QuadWord,
+            AsmConstantInitializer::AddressOf { .. } => AsmType::QuadWord,
+            AsmConstantInitializer::ZeroBytes(_) => ICE!("No AsmType for AsmConstantInitializer::ZeroBytes"),
+            AsmConstantInitializer::AsciiString { .. } => ICE!("No AsmType for AsmConstantInitializer::AsciiString"),
+            AsmConstantInitializer::AsciiStringArray { .. } => ICE!("No AsmType for AsmConstantInitializer::AsciiStringArray"),
         }
     }
 }
@@ -211,6 +244,12 @@ impl fmt::Display for AsmLabelName {
 /// A constant, represented by an index in the `ConstantTable`.
 #[derive(Debug, Copy, Clone)]
 pub struct AsmConstantId(pub usize);
+
+impl From<ConstantIndex> for AsmConstantId {
+    fn from(value: ConstantIndex) -> Self {
+        AsmConstantId(value.0)
+    }
+}
 
 /// Instructions.
 #[derive(Debug, Clone)]
@@ -280,7 +319,7 @@ pub enum AsmBinaryOp {
 #[derive(Debug, Clone)]
 pub enum AsmOperand {
     /// An immediate value (holds signed/unsigned i16, u16, i32, u32, i64 and u64 values)
-    Imm(u64),
+    Imm { value: u64, bits: usize, signed: bool },
 
     /// A hardware register
     Reg(HwRegister),
@@ -291,8 +330,11 @@ pub enum AsmOperand {
     /// An indexed operand. AT&T `address = (%base, %index, scale)` (or Intel `[base + scale*index]`).
     Indexed { base: HwRegister, index: HwRegister, scale: usize },
 
-    /// A global value stored in the Data section.
-    Data(String),
+    /// A global value stored in the Data or Read-Only Data section that is accessed with RIP-relative addressing.
+    ///
+    /// AT&T: `address = symbol(%rip)` where `symbol` is a .data or .rodata symbol.
+    /// Can have an optional relative offset into the symbol, e.g. `symbol+4(%rip)`.
+    Data { symbol: String, relative: i32 },
 
     /// A function name
     Function(String),
@@ -305,6 +347,46 @@ pub enum AsmOperand {
 }
 
 impl AsmOperand {
+    /// Creates an Immediate operand from an `i8` value.
+    pub fn from_i8(value: i8) -> Self {
+        Self::Imm { value: value as u64, bits: 8, signed: true }
+    }
+
+    /// Creates an Immediate operand from an `i16` value.
+    pub fn from_i16(value: i16) -> Self {
+        Self::Imm { value: value as u64, bits: 16, signed: true }
+    }
+
+    /// Creates an Immediate operand from an `i32` value.
+    pub fn from_i32(value: i32) -> Self {
+        Self::Imm { value: value as u64, bits: 32, signed: true }
+    }
+
+    /// Creates an Immediate operand from an `i64` value.
+    pub fn from_i64(value: i64) -> Self {
+        Self::Imm { value: value as u64, bits: 64, signed: true }
+    }
+
+    /// Creates an Immediate operand from a `u8` value.
+    pub fn from_u8(value: u8) -> Self {
+        Self::Imm { value: value as u64, bits: 8, signed: false }
+    }
+
+    /// Creates an Immediate operand from a `u16` value.
+    pub fn from_u16(value: u16) -> Self {
+        Self::Imm { value: value as u64, bits: 16, signed: false }
+    }
+
+    /// Creates an Immediate operand from a `u32` value.
+    pub fn from_u32(value: u32) -> Self {
+        Self::Imm { value: value as u64, bits: 32, signed: false }
+    }
+
+    /// Creates an Immediate operand from a `u64` value.
+    pub fn from_u64(value: u64) -> Self {
+        Self::Imm { value, bits: 64, signed: false }
+    }
+
     /// Creates a stack address memory operand.
     pub fn stack_address(offset_from_rbp: i32) -> Self {
         AsmOperand::Memory { base: HwRegister::RBP, relative: offset_from_rbp }
@@ -419,15 +501,20 @@ impl AsmOperand {
 
     /// Is this operand an immediate value?
     pub fn is_immediate(&self) -> bool {
-        matches!(self, AsmOperand::Imm(_))
+        matches!(self, AsmOperand::Imm { .. })
     }
 
     /// Is this operand a memory address?
     pub fn is_memory_address(&self) -> bool {
         matches!(
             self,
-            AsmOperand::Memory { .. } | AsmOperand::Indexed { .. } | AsmOperand::Data(_) | AsmOperand::Function(_)
+            AsmOperand::Memory { .. } | AsmOperand::Indexed { .. } | AsmOperand::Data { .. } | AsmOperand::Function(_)
         )
+    }
+
+    /// Is this a data operand? (RIP-relative addressing.)
+    pub fn is_data_operand(&self) -> bool {
+        matches!(self, AsmOperand::Data { .. })
     }
 
     /// Is this operand a HW (general or XMM) register?

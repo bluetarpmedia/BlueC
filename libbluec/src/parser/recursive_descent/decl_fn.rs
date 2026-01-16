@@ -176,7 +176,7 @@ pub fn parse_function(
     })?;
 
     let node_id = AstNodeId::new();
-    parser.metadata.add_source_span(node_id, meta::AstNodeSourceSpanMetadata::from_source_location(&fn_ident.loc));
+    parser.metadata.add_source_span(node_id, meta::AstNodeSourceSpan::from_source_location(&fn_ident.loc));
 
     let ident = fn_ident.clone();
 

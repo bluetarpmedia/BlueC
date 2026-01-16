@@ -10,6 +10,7 @@ pub enum SymbolKind {
     Variable,
     Function,
     TypeAlias,
+    Constant,
 }
 
 impl fmt::Display for SymbolKind {
@@ -18,6 +19,7 @@ impl fmt::Display for SymbolKind {
             SymbolKind::Variable => write!(f, "Variable"),
             SymbolKind::Function => write!(f, "Function"),
             SymbolKind::TypeAlias => write!(f, "Type alias"),
+            SymbolKind::Constant => write!(f, "Constant"),
         }
     }
 }

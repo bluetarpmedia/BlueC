@@ -7,6 +7,7 @@ mod declarator_tests;
 mod expression_tests;
 mod hex_float_tests;
 mod identifier_resolution_tests;
+mod literal_tests;
 mod parser_tests;
 mod token_stream_tests;
 mod type_and_storage_tests;

@@ -23,7 +23,7 @@ where
     debug_assert!(asm_type.is_primitive());
 
     // cmp 0, operand
-    out.push(AsmInstruction::Cmp { asm_type, op1: AsmOperand::Imm(0), op2: operand.clone() });
+    out.push(AsmInstruction::Cmp { asm_type, op1: AsmOperand::from_u64(0), op2: operand.clone() });
 
     out.extend(and_then());
 }

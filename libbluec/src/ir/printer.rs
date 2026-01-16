@@ -4,17 +4,19 @@
 
 use crate::ICE;
 use crate::parser::AstUniqueName;
+use crate::sema::constant_table::ConstantValue;
 use crate::sema::symbol_table::SymbolTable;
 
 use super::*;
 
 /// Prints the BlueTac IR to stdout.
-pub fn print(bt_root: &BtRoot, symbols: &SymbolTable) {
+pub fn print(bt_root: &BtRoot, symbols: &SymbolTable, constants: &ConstantTable) {
     let bt_definitions = &bt_root.0;
     for defn in bt_definitions {
         match defn {
             BtDefinition::Function(function_defn) => print_function(function_defn, symbols),
             BtDefinition::StaticVariable(static_variable) => print_static_storage_variable(static_variable),
+            BtDefinition::StaticConstant(static_constant) => print_static_constant(static_constant, constants),
         }
     }
 }
@@ -81,6 +83,31 @@ fn print_static_storage_variable(variable: &BtStaticStorageVariable) {
     println!();
 }
 
+fn print_static_constant(constant: &BtStaticConstant, constant_table: &ConstantTable) {
+    print!("define internal constant symbol @{} = {} ", constant.name, constant.data_type.to_printer());
+
+    let value = constant_table.get_constant_value_by_index(constant.index);
+
+    match value {
+        ConstantValue::String { value } => println!("\"{value}\""),
+        ConstantValue::StringArray { values, .. } => {
+            let mut first = true;
+            for v in values {
+                if !first {
+                    print!(", ");
+                }
+                print!("\"{v}\"");
+                first = false;
+            }
+            println!();
+        }
+        ConstantValue::F32 { value, alignment } => println!("{value} [align={alignment}]"),
+        ConstantValue::F64 { value, alignment } => println!("{value} [align={alignment}]"),
+    }
+
+    println!();
+}
+
 fn print_instruction(instr: &BtInstruction, symbols: &SymbolTable) {
     match instr {
         BtInstruction::Return(bt_value) => print_return(bt_value, symbols),
@@ -122,10 +149,13 @@ fn print_src_dst_instr(instr: &str, src: &BtValue, dst: &BtValue, symbols: &Symb
     let src_type = get_bt_type(src, symbols).to_printer();
     let dst_type = get_bt_type(dst, symbols).to_printer();
 
+    let src_has_linkage = does_symbol_have_linkage(src, symbols);
+    let src_str = if src_has_linkage { format!("@{src}") } else { format!("{src}") };
+
     if instr.is_empty() {
-        println!("  {dst} = {src_type} {src}");
+        println!("  {dst} = {src_type} {src_str}");
     } else {
-        println!("  {dst} = {instr} {dst_type}, {src_type} {src}");
+        println!("  {dst} = {instr} {dst_type}, {src_type} {src_str}");
     }
 }
 

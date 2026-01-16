@@ -70,6 +70,7 @@ fn resolve_builtin_type_specifiers(
     let type_specifiers = &declared_type.basic_type.0;
 
     let mut void_count = 0;
+    let mut char_count = 0;
     let mut short_count = 0;
     let mut int_count = 0;
     let mut long_count = 0;
@@ -83,6 +84,7 @@ fn resolve_builtin_type_specifiers(
             AstBasicTypeSpecifier::BuiltinType { specifier, loc } => {
                 match specifier.as_str() {
                     "void" => void_count += 1,
+                    "char" => char_count += 1,
                     "short" => short_count += 1,
                     "int" => int_count += 1,
                     "long" => long_count += 1,
@@ -97,6 +99,7 @@ fn resolve_builtin_type_specifiers(
 
                 // These type specifiers cannot be repeated.
                 if void_count > 1
+                    || char_count > 1
                     || short_count > 1
                     || int_count > 1
                     || long_count > 2
@@ -110,14 +113,33 @@ fn resolve_builtin_type_specifiers(
                     sema_err = true;
                 }
 
-                // Double can be combined with 'long' but nothing else.
+                // 'double' can be combined with 'long' but nothing else.
                 if double_count == 1 && type_specifiers.len() > 1 {
-                    let invalid_combination = short_count > 0
+                    let invalid_combination = char_count > 0
+                        || short_count > 0
                         || int_count > 0
                         || long_count > 1
                         || signed_count > 0
                         || unsigned_count > 0
                         || float_count > 0;
+
+                    if invalid_combination {
+                        if let Some(driver) = driver {
+                            let specifier = SourceIdentifier(specifier, *loc);
+                            Error::cannot_combine_type_specifier(specifier, driver);
+                        }
+                        sema_err = true;
+                    }
+                }
+
+                // 'char' can be combined with 'signed' or 'unsigned' but nothing else.
+                //      Allow signed/unsigned to be repeated; we'll warn below.
+                if char_count == 1 && type_specifiers.len() > 1 {
+                    let invalid_combination = short_count > 0
+                        || int_count > 0
+                        || long_count > 0
+                        || float_count > 0
+                        || double_count > 0;
 
                     if invalid_combination {
                         if let Some(driver) = driver {
@@ -164,12 +186,16 @@ fn resolve_builtin_type_specifiers(
         }
     }
 
+    let is_void = void_count == 1;
     let is_fp = float_count > 0 || double_count > 0;
+    let is_char = char_count == 1;
 
-    let ty = if void_count == 1 {
+    let ty = if is_void {
         AstType::Void
     } else if is_fp {
         resolve_fp_data_type(float_count, double_count, long_count)
+    } else if is_char {
+        resolve_char_data_type(char_count, signed_count, unsigned_count)
     } else {
         resolve_integer_data_type(short_count, int_count, long_count, signed_count, unsigned_count)
     };
@@ -183,7 +209,18 @@ fn resolve_fp_data_type(float_count: i32, double_count: i32, long_count: i32) ->
         (0, 1, 0) => AstType::Double,
         (0, 1, 1) => AstType::LongDouble,
         _ => {
-            ICE!("Sema: Invalid floating-point type specifier should have been handled");
+            ICE!("Sema: Invalid floating-point type specifiers should have been handled");
+        }
+    }
+}
+
+fn resolve_char_data_type(char_count: i32, signed_count: i32, unsigned_count: i32) -> AstType {
+    match (char_count, signed_count, unsigned_count) {
+        (1, 0, 0) => AstType::Char,
+        (1, 1, 0) => AstType::SignedChar,
+        (1, 0, 1) => AstType::UnsignedChar,
+        _ => {
+            ICE!("Sema: Invalid 'char' type specifiers should have been handled");
         }
     }
 }
@@ -208,7 +245,7 @@ fn resolve_integer_data_type(
         (0, 0, 0) if signed_count == 1 => AstType::Int,
         (0, 0, 0) if unsigned_count == 1 => AstType::UnsignedInt,
         _ => {
-            ICE!("Sema: Invalid integer type specifier should have been handled");
+            ICE!("Sema: Invalid integer type specifiers should have been handled");
         }
     };
 

@@ -64,12 +64,12 @@ pub fn fp_to_signed_integer(src: &BtValue, dst: &BtValue, asm: &mut Vec<AsmInstr
     //      See `stmxcsr` and the Invalid Operation flag (first bit).
 
     match dst_type {
-        AsmType::Word => {
+        AsmType::Byte | AsmType::Word => {
             let r9_quad = AsmOperand::Reg(HwRegister::R9);
-            let r9_word = AsmOperand::Reg(HwRegister::R9w);
+            let r9_dest = AsmOperand::hw_reg(HwRegister::R9, dst_type); // R9b / R9w
 
             asm.push(AsmInstruction::Cvtfp2si { src_type, dst_type: AsmType::QuadWord, src, dst: r9_quad });
-            asm.push(AsmInstruction::Mov { asm_type: AsmType::Word, src: r9_word, dst });
+            asm.push(AsmInstruction::Mov { asm_type: dst_type, src: r9_dest, dst });
         }
 
         AsmType::DoubleWord | AsmType::QuadWord => asm.push(AsmInstruction::Cvtfp2si { src_type, dst_type, src, dst }),
@@ -92,10 +92,10 @@ pub fn fp_to_unsigned_integer(src: &BtValue, dst: &BtValue, asm: &mut Vec<AsmIns
     let r9_quad = AsmOperand::Reg(HwRegister::R9);
 
     match dst_type {
-        AsmType::Word => {
-            let r9_word = AsmOperand::Reg(HwRegister::R9w);
+        AsmType::Byte | AsmType::Word => {
+            let r9_dest = AsmOperand::hw_reg(HwRegister::R9, dst_type); // R9b / R9w
             asm.push(AsmInstruction::Cvtfp2si { src_type, dst_type: AsmType::QuadWord, src, dst: r9_quad });
-            asm.push(AsmInstruction::Mov { asm_type: AsmType::Word, src: r9_word, dst });
+            asm.push(AsmInstruction::Mov { asm_type: dst_type, src: r9_dest, dst });
         }
 
         AsmType::DoubleWord => {
@@ -109,18 +109,18 @@ pub fn fp_to_unsigned_integer(src: &BtValue, dst: &BtValue, asm: &mut Vec<AsmIns
                 const TWO_POW_63: f32 = 9_223_372_036_854_775_808.0;
                 const ALIGNMENT: usize = 4;
 
-                AsmConstantId(generator.constant_table.add_f32(TWO_POW_63, ALIGNMENT))
+                AsmConstantId::from(generator.constants.add_f32(TWO_POW_63, ALIGNMENT))
             } else if src_type == AsmType::FpDouble {
                 const TWO_POW_63: f64 = 9_223_372_036_854_775_808.0;
                 const ALIGNMENT: usize = 8;
 
-                AsmConstantId(generator.constant_table.add_f64(TWO_POW_63, ALIGNMENT))
+                AsmConstantId::from(generator.constants.add_f64(TWO_POW_63, ALIGNMENT))
             } else {
                 unreachable!();
             };
             
             let two_pow_63_lbl = generator.labels.make_constant_label(two_pow_63_id);
-            let two_pow_63_fp = AsmOperand::Data(two_pow_63_lbl.to_string());
+            let two_pow_63_fp = AsmOperand::Data { symbol: two_pow_63_lbl.to_string(), relative: 0 };
 
             let out_of_range_label = generator.labels.make_function_local_label();
             let end_label = generator.labels.make_function_local_label();
@@ -157,7 +157,7 @@ pub fn fp_to_unsigned_integer(src: &BtValue, dst: &BtValue, asm: &mut Vec<AsmIns
             asm.push(AsmInstruction::Cvtfp2si { src_type, dst_type, src: xmm1, dst: r9_quad.clone() });
 
             // r9 += 2^63
-            let two_pow_63_int = AsmOperand::Imm(9_223_372_036_854_775_808);
+            let two_pow_63_int = AsmOperand::from_u64(9_223_372_036_854_775_808);
             asm.push(AsmInstruction::Mov { asm_type: AsmType::QuadWord, src: two_pow_63_int, dst: r8_quad.clone() });
             asm.push(AsmInstruction::Binary {
                 op: AsmBinaryOp::Add,
@@ -188,12 +188,12 @@ pub fn signed_integer_to_fp(src: &BtValue, dst: &BtValue, asm: &mut Vec<AsmInstr
     let dst = generator.translate_bt_value_to_asm_operand(dst);
 
     match src_type {
-        AsmType::Word => {
-            // Sign-extend the signed word value into a quad.
+        AsmType::Byte | AsmType::Word => {
+            // Sign-extend the signed byte/word value into a quad.
             let r9_quad = AsmOperand::Reg(HwRegister::R9);
             asm.push(AsmInstruction::MovSx { src_type, dst_type: AsmType::QuadWord, src, dst: r9_quad.clone() });
 
-            // Convert to 'double'.
+            // Convert to floating point.
             asm.push(AsmInstruction::Cvtsi2fp { src_type: AsmType::QuadWord, dst_type, src: r9_quad, dst });
         }
 
@@ -215,12 +215,12 @@ pub fn unsigned_integer_to_fp(src: &BtValue, dst: &BtValue, asm: &mut Vec<AsmIns
     let dst = generator.translate_bt_value_to_asm_operand(dst);
 
     match src_type {
-        AsmType::Word | AsmType::DoubleWord => {
-            // Zero-extend the unsigned word/dword into a quad (which we then treat as a signed 64-bit value).
+        AsmType::Byte | AsmType::Word | AsmType::DoubleWord => {
+            // Zero-extend the unsigned byte/word/dword into a quad (which we then treat as a signed 64-bit value).
             let r9_quad = AsmOperand::Reg(HwRegister::R9);
             asm.push(AsmInstruction::MovZx { src_type, dst_type: AsmType::QuadWord, src, dst: r9_quad.clone() });
 
-            // Convert to 'double'.
+            // Convert to floating point.
             asm.push(AsmInstruction::Cvtsi2fp { src_type: AsmType::QuadWord, dst_type, src: r9_quad, dst });
         }
 
@@ -229,16 +229,16 @@ pub fn unsigned_integer_to_fp(src: &BtValue, dst: &BtValue, asm: &mut Vec<AsmIns
             let end_label = generator.labels.make_function_local_label();
 
             // Perform a signed comparison with 0: is the value <= INT64_MAX (2^63 - 1) ?
-            asm.push(AsmInstruction::Cmp { asm_type: src_type, op1: AsmOperand::Imm(0), op2: src.clone() });
+            asm.push(AsmInstruction::Cmp { asm_type: src_type, op1: AsmOperand::from_u64(0), op2: src.clone() });
             asm.push(AsmInstruction::JmpCC { cond_code: ConditionalCode::L, target: out_of_range_label.clone() });
 
-            // If the unsigned src value is <= INT64_MAX  then we can use `cvtsi2sd` directly.
+            // If the unsigned src value is <= INT64_MAX  then we can use `cvtsi2sd/ss` directly.
             asm.push(AsmInstruction::Cvtsi2fp { src_type, dst_type, src: src.clone(), dst: dst.clone() });
             asm.push(AsmInstruction::Jmp { target: end_label.clone() });
 
             // Otherwise we have a bit of work to do.
             //      We divide the unsigned src value by 2 so that it fits inside the range of a signed 64-bit
-            //      value, meaning we can then use the `cvtsi2sd` instruction, and then double the result.
+            //      value, meaning we can then use the `cvtsi2sd/ss` instruction, and then double the result.
             //      However, after dividing the unsigned value by 2, we also need to ensure it is rounded up
             //      or down to the nearest odd value, if the original value was odd.
             //      E.g. we want:
@@ -247,10 +247,10 @@ pub fn unsigned_integer_to_fp(src: &BtValue, dst: &BtValue, asm: &mut Vec<AsmIns
             //           9 / 2 --> 5  (9 / 2 = 4, rounded up because 9 is odd)
             //           7 / 2 --> 3  (7 / 2 = 3, rounded down because 7 is odd)
             //
-            //      We need to round-to-odd because of the potential subsequent 'double' rounding error if the
-            //      integer value cannot be represented exactly as a 'double' (e.g. if it's > 2^53). By rounding
-            //      the halved integer to odd, it means when we use `cvtsi2sd` we'll get the correctly rounded-to
-            //      -nearest 'double' value, and then we can multiply it by 2 to restore the equivalent of the
+            //      We need to round-to-odd because of the potential subsequent floating point rounding error if the
+            //      integer value cannot be represented exactly as floating point (e.g. if it's > 2^53). By rounding
+            //      the halved integer to odd, it means when we use `cvtsi2sd/ss` we'll get the correctly rounded-to
+            //      -nearest floating point value, and then we can multiply it by 2 to restore the equivalent of the
             //      original unsigned value.
             //
             let r8_quad = AsmOperand::Reg(HwRegister::R8);
@@ -273,7 +273,7 @@ pub fn unsigned_integer_to_fp(src: &BtValue, dst: &BtValue, asm: &mut Vec<AsmIns
             asm.push(AsmInstruction::Binary {
                 op: AsmBinaryOp::And,
                 asm_type: src_type,
-                src: AsmOperand::Imm(1),
+                src: AsmOperand::from_u64(1),
                 dst: r8_quad.clone(),
             });
             asm.push(AsmInstruction::Binary {
@@ -283,12 +283,12 @@ pub fn unsigned_integer_to_fp(src: &BtValue, dst: &BtValue, asm: &mut Vec<AsmIns
                 dst: r9_quad.clone(),
             });
 
-            // Convert to 'double'.
+            // Convert to floating point.
             // xmm1 = cvtsi2sd(r9)
             let xmm1 = AsmOperand::Reg(HwRegister::XMM1);
             asm.push(AsmInstruction::Cvtsi2fp { src_type, dst_type, src: r9_quad, dst: xmm1.clone() });
 
-            // Multiply the 'double' value by 2.
+            // Multiply the floating point value by 2.
             // xmm1 += xmm1
             asm.push(AsmInstruction::Binary {
                 op: AsmBinaryOp::Add,

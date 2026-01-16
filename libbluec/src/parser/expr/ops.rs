@@ -25,7 +25,7 @@ pub fn parse_prefix_unary_operation(parser: &mut Parser, driver: &mut Driver) ->
     let node_id = AstNodeId::new();
     parser.metadata.add_source_span(
         node_id,
-        meta::AstNodeSourceSpanMetadata::from_source_location_pair(&unary_op_token.location, &end_loc),
+        meta::AstNodeSourceSpan::from_source_location_pair(&unary_op_token.location, &end_loc),
     );
 
     // We parse dereference and address-of as unary operations but output dedicated AstExpressions for them,
@@ -62,7 +62,7 @@ pub fn parse_postfix_incr_or_decr(
     let node_id = AstNodeId::new();
     parser
         .metadata
-        .add_source_span(node_id, meta::AstNodeSourceSpanMetadata::from_source_location_pair(&unary_op_loc, &end_loc));
+        .add_source_span(node_id, meta::AstNodeSourceSpan::from_source_location_pair(&unary_op_loc, &end_loc));
 
     Ok(AstExpression::UnaryOperation { node_id, op, expr: Box::new(expr) })
 }

@@ -10,10 +10,10 @@ pub mod options;
 pub mod tempfile;
 pub mod warnings;
 
+use crate::ICE;
 use crate::compiler_driver::diagnostics::{DiagnosticKind, Printer};
 use crate::compiler_driver::options::{DriverFlag, DriverOptions};
 use crate::compiler_driver::tempfile::TempFile;
-use crate::internal_error;
 use crate::lexer;
 
 use std::io::{self, Write};
@@ -270,6 +270,7 @@ fn preprocces(
 
         prpr_cmd.arg("-E"); // Preprocess the source file
         prpr_cmd.arg("-P"); // Do not generate line markers
+        prpr_cmd.arg("-w"); // Disable warnings
 
         prpr_cmd.arg(in_source_file);
         prpr_cmd.arg("-o");
@@ -360,7 +361,7 @@ fn create_temp_file_path(source_filename: &str) -> (TempFile, String) {
 
     let temp_file = TempFile::try_create(temp_file_prefix);
     if temp_file.is_none() {
-        internal_error::ICE("Cannot create temporary file path");
+        ICE!("Cannot create temporary file path");
     }
 
     let temp_file = temp_file.unwrap();

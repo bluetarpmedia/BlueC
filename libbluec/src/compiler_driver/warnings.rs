@@ -365,6 +365,21 @@ impl Warning {
         driver.add_diagnostic(diag);
     }
 
+    /// Emits a warning that an initializer string is too long for a char array.
+    /// 
+    /// -Wexcess-initializers
+    pub fn initializer_string_too_long_for_array(array_type: &AstType, loc: SourceLocation, driver: &mut Driver) {
+        let warning = format!("Initializer string is too long for array of type '{array_type}'");
+        let mut diag = Diagnostic::warning_at_location(warning, loc);
+
+        if let AstType::Array { count, .. } = array_type {
+            let note = format!("The array is initialized with the first {count} characters from the string.");
+            diag.add_note(note, None);
+        }
+
+        driver.add_diagnostic(diag);
+    }
+
     /// Emits a warning that a subobject initializer is missing braces.
     /// 
     /// -Wmissing-braces
@@ -385,5 +400,13 @@ impl Warning {
         let mut diag = Diagnostic::warning_at_location(warning, open_brace_loc);
         diag.add_location(braces_loc);
         driver.add_diagnostic(diag);
+    }
+
+    /// Emits a warning that an array subscript index is out of bounds.
+    /// 
+    /// -Warray-bounds
+    pub fn array_index_out_of_bounds(index: i32, array_type: &AstType, loc: SourceLocation, driver: &mut Driver) {
+        let warning = format!("Array index {index} is out of bounds for the array of type '{array_type}'");
+        driver.add_diagnostic(Diagnostic::warning_at_location(warning, loc));
     }
 }

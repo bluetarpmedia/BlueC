@@ -6,18 +6,24 @@
 mod binary_expr;
 mod expr;
 mod unary_expr;
+pub(super) mod utils;
 
 use super::{
-    BtConstantValue, BtDefinition, BtFunctionDefn, BtInstruction, BtRoot, BtStaticStorageVariable, BtSwitchCase,
-    BtType, BtValue,
+    BtConstantValue, BtDefinition, BtFunctionDefn, BtInstruction, BtRoot, BtStaticConstant, BtStaticStorageInitializer,
+    BtStaticStorageVariable, BtSwitchCase, BtType, BtValue,
 };
 
 use super::label_maker::LabelMaker;
+
 use crate::ICE;
+use crate::compiler_driver::Driver;
 use crate::compiler_driver::diagnostics::SourceIdentifier;
 use crate::lexer::SourceLocation;
 use crate::parser;
+use crate::sema::constant_eval;
+use crate::sema::constant_table::{ConstantIndex, ConstantTable};
 use crate::sema::symbol_table::{Definition, SymbolAttributes, SymbolTable};
+use crate::utils::string;
 
 use std::collections::HashMap;
 
@@ -31,6 +37,7 @@ enum EvalExpr {
 pub struct BlueTacTranslator {
     metadata: parser::AstMetadata,
     pub symbols: SymbolTable,
+    pub constants: ConstantTable,
     static_variables: Vec<BtStaticStorageVariable>,
     next_temp_variable_id: (usize, usize),
     label_maker: LabelMaker,
@@ -38,10 +45,11 @@ pub struct BlueTacTranslator {
 
 impl BlueTacTranslator {
     /// Creates a new BlueTac IR translator.
-    pub fn new(metadata: parser::AstMetadata, symbols: SymbolTable) -> Self {
+    pub fn new(metadata: parser::AstMetadata, symbols: SymbolTable, constants: ConstantTable) -> Self {
         Self {
             metadata,
             symbols,
+            constants,
             static_variables: Vec::new(),
             next_temp_variable_id: (0, 0),
             label_maker: LabelMaker::new(),
@@ -67,7 +75,7 @@ impl BlueTacTranslator {
         name: &parser::AstUniqueName,
         is_global: bool,
         data_type: BtType,
-        init_value: Vec<BtConstantValue>,
+        init_value: Vec<BtStaticStorageInitializer>,
     ) {
         self.static_variables.push(BtStaticStorageVariable {
             name: name.to_string(),
@@ -151,8 +159,10 @@ pub fn translate_ast_to_ir(
     ast: parser::AstRoot,
     metadata: parser::AstMetadata,
     symbols: SymbolTable,
-) -> (BtRoot, SymbolTable) {
-    let mut translator = BlueTacTranslator::new(metadata, symbols);
+    constants: ConstantTable,
+    driver: &mut Driver,
+) -> (BtRoot, SymbolTable, ConstantTable) {
+    let mut translator = BlueTacTranslator::new(metadata, symbols, constants);
 
     let mut bt_definitions = ast
         .0
@@ -162,7 +172,7 @@ pub fn translate_ast_to_ir(
                 if func.body.is_none() {
                     None
                 } else {
-                    Some(BtDefinition::Function(translate_function(&mut translator, &func)))
+                    Some(BtDefinition::Function(translate_function(func, &mut translator, driver)))
                 }
             }
 
@@ -172,7 +182,7 @@ pub fn translate_ast_to_ir(
                 }
 
                 let is_global = var_decl.linkage == parser::AstLinkage::External;
-                translate_static_storage_duration_variable(&mut translator, &var_decl, is_global);
+                translate_static_storage_duration_variable(var_decl, is_global, &mut translator);
 
                 None
             }
@@ -184,15 +194,38 @@ pub fn translate_ast_to_ir(
     // Merge the static variable definitions in case we have multiple tentative definitions.
     translator.deduplicate_static_variables();
 
-    let BlueTacTranslator { static_variables, symbols, .. } = translator;
+    let BlueTacTranslator { static_variables, symbols, constants, .. } = translator;
 
     // Insert the static variable definitions at the front
     bt_definitions.splice(0..0, static_variables.into_iter().map(BtDefinition::StaticVariable));
 
-    (BtRoot(bt_definitions), symbols)
+    // Insert the static constants at the front
+    bt_definitions.splice(0..0, make_constants(&symbols, &constants).into_iter().map(BtDefinition::StaticConstant));
+
+    (BtRoot(bt_definitions), symbols, constants)
 }
 
-fn translate_function(translator: &mut BlueTacTranslator, function: &parser::AstFunction) -> BtFunctionDefn {
+fn make_constants(symbols: &SymbolTable, constants: &ConstantTable) -> Vec<BtStaticConstant> {
+    (0..constants.len())
+        .map(|idx| {
+            let constant_index = ConstantIndex(idx);
+            let name = constants.make_const_symbol_name(constant_index);
+            let Some(symbol) = symbols.get(parser::AstUniqueName::new(name.clone())) else {
+                ICE!("Symbol table is missing entry for '{name}'");
+            };
+
+            let data_type = BtType::from(&symbol.data_type);
+
+            BtStaticConstant { name, data_type, index: constant_index }
+        })
+        .collect()
+}
+
+fn translate_function(
+    function: parser::AstFunction,
+    translator: &mut BlueTacTranslator,
+    driver: &mut Driver,
+) -> BtFunctionDefn {
     if function.body.is_none() {
         ICE!("Function '{}' has no body", function.ident);
     }
@@ -201,8 +234,8 @@ fn translate_function(translator: &mut BlueTacTranslator, function: &parser::Ast
 
     let mut instructions = Vec::new();
 
-    let block = function.body.as_ref().unwrap();
-    translate_block(translator, block, &mut instructions);
+    let block = function.body.unwrap();
+    translate_block(block, &mut instructions, translator, driver);
 
     // Place a Return(0) at the very end of every function.
     //
@@ -242,14 +275,15 @@ fn translate_function(translator: &mut BlueTacTranslator, function: &parser::Ast
 }
 
 fn translate_block(
-    translator: &mut BlueTacTranslator,
-    block: &parser::AstBlock,
+    block: parser::AstBlock,
     instructions: &mut Vec<BtInstruction>,
+    translator: &mut BlueTacTranslator,
+    driver: &mut Driver,
 ) {
-    let block_items = &block.0;
+    let block_items = block.0;
     for block_item in block_items {
         match block_item {
-            parser::AstBlockItem::Statement(stmt) => translate_statement(translator, stmt, instructions),
+            parser::AstBlockItem::Statement(stmt) => translate_statement(stmt, instructions, translator, driver),
 
             parser::AstBlockItem::Declaration(decl) => {
                 if let parser::AstDeclaration::Variable(var_decl) = decl {
@@ -261,7 +295,7 @@ fn translate_block(
                     if !var_decl.is_declaration_only && var_decl.storage == parser::AstStorageDuration::Static {
                         if var_decl.linkage == parser::AstLinkage::None {
                             const IS_GLOBAL: bool = false;
-                            translate_static_storage_duration_variable(translator, var_decl, IS_GLOBAL);
+                            translate_static_storage_duration_variable(var_decl, IS_GLOBAL, translator);
                         } else {
                             ICE!("Static variable '{}' at block scope should have no linkage", var_decl.ident);
                         }
@@ -271,10 +305,11 @@ fn translate_block(
                     //
                     else if var_decl.initializer.is_some() {
                         translate_var_declaration(
-                            translator,
-                            &var_decl.unique_name,
-                            &var_decl.initializer,
+                            var_decl.unique_name,
+                            var_decl.initializer,
                             instructions,
+                            translator,
+                            driver,
                         );
                     }
                 }
@@ -284,104 +319,112 @@ fn translate_block(
 }
 
 fn translate_statement(
-    translator: &mut BlueTacTranslator,
-    stmt: &parser::AstStatement,
+    stmt: parser::AstStatement,
     instructions: &mut Vec<BtInstruction>,
+    translator: &mut BlueTacTranslator,
+    driver: &mut Driver,
 ) {
     match stmt {
-        parser::AstStatement::Expression(expr) => translate_expression_statement(translator, expr, instructions),
-        parser::AstStatement::Labeled { node_id: _, label_name, stmt } => {
-            translate_labeled_statement(translator, label_name, stmt, instructions)
+        parser::AstStatement::Expression(expr) => {
+            translate_expression_statement(expr, instructions, translator, driver)
         }
-        parser::AstStatement::Compound(block) => translate_block(translator, block, instructions),
+        parser::AstStatement::Labeled { node_id: _, label_name, stmt } => {
+            translate_labeled_statement(&label_name, *stmt, instructions, translator, driver)
+        }
+        parser::AstStatement::Compound(block) => translate_block(block, instructions, translator, driver),
         parser::AstStatement::Null => (),
 
         // Control statements: Conditional
         parser::AstStatement::If { controlling_expr, then_stmt, else_stmt } => {
-            translate_if_statement(translator, controlling_expr, then_stmt, else_stmt, instructions)
+            translate_if_statement(controlling_expr, *then_stmt, else_stmt, instructions, translator, driver)
         }
 
         parser::AstStatement::Switch { node_id, controlling_expr, body } => {
-            translate_switch_statement(translator, node_id, controlling_expr, body, instructions)
+            translate_switch_statement(node_id, controlling_expr, *body, instructions, translator, driver)
         }
 
         parser::AstStatement::Case { switch_node_id, constant_expr, stmt, .. } => {
             let case_node_id = constant_expr.node_id;
-            translate_switch_case_statement(translator, switch_node_id, &case_node_id, stmt, instructions)
+            translate_switch_case_statement(switch_node_id, case_node_id, *stmt, instructions, translator, driver)
         }
 
         parser::AstStatement::Default { switch_node_id, stmt } => {
-            translate_switch_default_statement(translator, switch_node_id, stmt, instructions)
+            translate_switch_default_statement(switch_node_id, *stmt, instructions, translator, driver)
         }
 
         // Control statements: Loops
         parser::AstStatement::While { node_id, controlling_expr, body } => {
-            translate_while_statement(translator, node_id, controlling_expr, body, instructions)
+            translate_while_statement(node_id, controlling_expr, *body, instructions, translator, driver)
         }
         parser::AstStatement::DoWhile { node_id, body, controlling_expr } => {
-            translate_do_while_statement(translator, node_id, body, controlling_expr, instructions)
+            translate_do_while_statement(node_id, *body, controlling_expr, instructions, translator, driver)
         }
-        parser::AstStatement::For { node_id, init, controlling_expr, post, body } => {
-            translate_for_statement(translator, node_id, init, controlling_expr, post, body, instructions)
+        parser::AstStatement::For { .. } => {
+            translate_for_statement(stmt, instructions, translator, driver)
         }
 
         // Control statements: Jumps
         parser::AstStatement::Break { enclosing_stmt_node_id } => {
-            translate_break_statement(translator, enclosing_stmt_node_id, instructions)
+            translate_break_statement(enclosing_stmt_node_id, instructions, translator, driver)
         }
         parser::AstStatement::Continue { loop_node_id } => {
-            translate_continue_statement(translator, loop_node_id, instructions)
+            translate_continue_statement(loop_node_id, instructions, translator, driver)
         }
         parser::AstStatement::Goto { node_id: _, label_name } => {
-            translate_goto_statement(translator, label_name, instructions)
+            translate_goto_statement(&label_name, instructions, translator, driver)
         }
-        parser::AstStatement::Return(expr) => translate_return_statement(translator, expr, instructions),
+        parser::AstStatement::Return(expr) => translate_return_statement(expr, instructions, translator, driver),
     }
 }
 
 fn translate_return_statement(
-    translator: &mut BlueTacTranslator,
-    expr: &parser::AstFullExpression,
+    expr: parser::AstFullExpression,
     instructions: &mut Vec<BtInstruction>,
+    translator: &mut BlueTacTranslator,
+    _driver: &mut Driver,
 ) {
-    let return_value = expr::translate_full_expression(translator, expr, instructions);
+    let return_value = expr::translate_full_expression(translator, &expr, instructions);
     instructions.push(BtInstruction::Return(return_value));
 }
 
 fn translate_expression_statement(
-    translator: &mut BlueTacTranslator,
-    expr: &parser::AstFullExpression,
+    expr: parser::AstFullExpression,
     instructions: &mut Vec<BtInstruction>,
+    translator: &mut BlueTacTranslator,
+    _driver: &mut Driver,
 ) {
-    expr::translate_full_expression_without_result(translator, expr, instructions);
+    expr::translate_full_expression_without_result(translator, &expr, instructions);
 }
 
 fn translate_goto_statement(
-    translator: &mut BlueTacTranslator,
     label_name: &str,
     instructions: &mut Vec<BtInstruction>,
+    translator: &mut BlueTacTranslator,
+    _driver: &mut Driver,
 ) {
     let label = translator.label_maker.make_user_label(label_name);
     instructions.push(BtInstruction::Jump { target: label });
 }
 
 fn translate_labeled_statement(
-    translator: &mut BlueTacTranslator,
     label_name: &str,
-    stmt: &parser::AstStatement,
+    stmt: parser::AstStatement,
     instructions: &mut Vec<BtInstruction>,
+    translator: &mut BlueTacTranslator,
+    driver: &mut Driver,
 ) {
     let label = translator.label_maker.make_user_label(label_name);
     instructions.push(BtInstruction::Label { id: label });
-    translate_statement(translator, stmt, instructions);
+    translate_statement(stmt, instructions, translator, driver);
 }
 
 fn translate_if_statement(
-    translator: &mut BlueTacTranslator,
-    controlling_expr: &parser::AstFullExpression,
-    then_stmt: &parser::AstStatement,
-    else_stmt: &Option<Box<parser::AstStatement>>,
+    controlling_expr: parser::AstFullExpression,
+    then_stmt: parser::AstStatement,
+    else_stmt: Option<Box<parser::AstStatement>>,
     instructions: &mut Vec<BtInstruction>,
+    translator: &mut BlueTacTranslator,
+    driver: &mut Driver,
 ) {
     let has_else_stmt = else_stmt.is_some();
 
@@ -389,7 +432,7 @@ fn translate_if_statement(
     let end_label = translator.label_maker.make_unique_label("if_end");
 
     // Evaluate the controlling expression
-    let controlling_value = expr::translate_full_expression(translator, controlling_expr, instructions);
+    let controlling_value = expr::translate_full_expression(translator, &controlling_expr, instructions);
 
     if has_else_stmt {
         instructions.push(BtInstruction::JumpIfZero { condition: controlling_value, target: else_label.clone() });
@@ -398,7 +441,7 @@ fn translate_if_statement(
     }
 
     // Then clause
-    translate_statement(translator, then_stmt, instructions);
+    translate_statement(then_stmt, instructions, translator, driver);
 
     if let Some(else_stmt) = else_stmt {
         instructions.push(BtInstruction::Jump { target: end_label.clone() });
@@ -407,7 +450,7 @@ fn translate_if_statement(
         instructions.push(BtInstruction::Label { id: else_label });
 
         // Else clause
-        translate_statement(translator, else_stmt, instructions);
+        translate_statement(*else_stmt, instructions, translator, driver);
     }
 
     // End label
@@ -415,21 +458,22 @@ fn translate_if_statement(
 }
 
 fn translate_switch_statement(
-    translator: &mut BlueTacTranslator,
-    switch_node_id: &parser::AstNodeId,
-    controlling_expr: &parser::AstFullExpression,
-    stmt: &parser::AstStatement,
+    switch_node_id: parser::AstNodeId,
+    controlling_expr: parser::AstFullExpression,
+    stmt: parser::AstStatement,
     instructions: &mut Vec<BtInstruction>,
+    translator: &mut BlueTacTranslator,
+    driver: &mut Driver,
 ) {
     // Evaluate the controlling expression.
     //
     //      We always evaluate the controlling expression, even if there are no case/default labels,
     //      because the expression can have side effects (e.g. assignment).
     //
-    let controlling_value = expr::translate_full_expression(translator, controlling_expr, instructions);
+    let controlling_value = expr::translate_full_expression(translator, &controlling_expr, instructions);
 
-    let has_default_case = translator.metadata.switch_has_default(*switch_node_id);
-    let switch_cases = translator.metadata.get_switch_cases(*switch_node_id);
+    let has_default_case = translator.metadata.switch_has_default(switch_node_id);
+    let switch_cases = translator.metadata.get_switch_cases(switch_node_id);
 
     // If there is no default case and also no case labels then we can ignore the remainder of the switch statement.
     if !has_default_case && switch_cases.is_empty() {
@@ -439,15 +483,18 @@ fn translate_switch_statement(
     let cases: Vec<_> = switch_cases
         .into_iter()
         .map(|(case_value, case_node_id)| BtSwitchCase {
-            value: BtValue::from(parser::AstConstantValue::Integer(case_value)),
-            label: translator.label_maker.make_switch_case_label(switch_node_id, &case_node_id),
+            value: BtValue::from(case_value),
+            label: translator.label_maker.make_switch_case_label(&switch_node_id, &case_node_id),
         })
         .collect();
 
-    let default_label =
-        if has_default_case { Some(translator.label_maker.make_switch_label("default", switch_node_id)) } else { None };
+    let default_label = if has_default_case {
+        Some(translator.label_maker.make_switch_label("default", &switch_node_id))
+    } else {
+        None
+    };
 
-    let break_label = translator.label_maker.make_control_label("break", switch_node_id);
+    let break_label = translator.label_maker.make_control_label("break", &switch_node_id);
 
     // We use a special IR instruction for the switch. Depending on the target, the codegen may choose
     // to use a jump table or a binary tree or a simple series of if-else comparisons. But we can't decide
@@ -460,56 +507,59 @@ fn translate_switch_statement(
     });
 
     // Switch statement body
-    translate_statement(translator, stmt, instructions);
+    translate_statement(stmt, instructions, translator, driver);
 
     // Break/end label
     instructions.push(BtInstruction::Label { id: break_label });
 }
 
 fn translate_switch_case_statement(
-    translator: &mut BlueTacTranslator,
-    switch_node_id: &parser::AstNodeId,
-    case_node_id: &parser::AstNodeId,
-    stmt: &parser::AstStatement,
+    switch_node_id: parser::AstNodeId,
+    case_node_id: parser::AstNodeId,
+    stmt: parser::AstStatement,
     instructions: &mut Vec<BtInstruction>,
+    translator: &mut BlueTacTranslator,
+    driver: &mut Driver,
 ) {
-    let case_label = translator.label_maker.make_switch_case_label(switch_node_id, case_node_id);
+    let case_label = translator.label_maker.make_switch_case_label(&switch_node_id, &case_node_id);
     instructions.push(BtInstruction::Label { id: case_label });
-    translate_statement(translator, stmt, instructions);
+    translate_statement(stmt, instructions, translator, driver);
 }
 
 fn translate_switch_default_statement(
-    translator: &mut BlueTacTranslator,
-    switch_node_id: &parser::AstNodeId,
-    stmt: &parser::AstStatement,
+    switch_node_id: parser::AstNodeId,
+    stmt: parser::AstStatement,
     instructions: &mut Vec<BtInstruction>,
+    translator: &mut BlueTacTranslator,
+    driver: &mut Driver,
 ) {
-    let default_label = translator.label_maker.make_switch_label("default", switch_node_id);
+    let default_label = translator.label_maker.make_switch_label("default", &switch_node_id);
     instructions.push(BtInstruction::Label { id: default_label });
-    translate_statement(translator, stmt, instructions);
+    translate_statement(stmt, instructions, translator, driver);
 }
 
 fn translate_while_statement(
-    translator: &mut BlueTacTranslator,
-    node_id: &parser::AstNodeId,
-    controlling_expr: &parser::AstFullExpression,
-    body: &parser::AstStatement,
+    node_id: parser::AstNodeId,
+    controlling_expr: parser::AstFullExpression,
+    body: parser::AstStatement,
     instructions: &mut Vec<BtInstruction>,
+    translator: &mut BlueTacTranslator,
+    driver: &mut Driver,
 ) {
-    let continue_label = translator.label_maker.make_control_label("continue", node_id);
-    let break_label = translator.label_maker.make_control_label("break", node_id);
+    let continue_label = translator.label_maker.make_control_label("continue", &node_id);
+    let break_label = translator.label_maker.make_control_label("break", &node_id);
 
     // Start of the loop / Continue label
     instructions.push(BtInstruction::Label { id: continue_label.clone() });
 
     // Loop controlling expression
-    let condition_value = expr::translate_full_expression(translator, controlling_expr, instructions);
+    let condition_value = expr::translate_full_expression(translator, &controlling_expr, instructions);
 
     // If false, jump to end / break label
     instructions.push(BtInstruction::JumpIfZero { condition: condition_value, target: break_label.clone() });
 
     // Loop body
-    translate_statement(translator, body, instructions);
+    translate_statement(body, instructions, translator, driver);
 
     // Unconditional jump to start of loop (aka continue label)
     instructions.push(BtInstruction::Jump { target: continue_label });
@@ -519,27 +569,28 @@ fn translate_while_statement(
 }
 
 fn translate_do_while_statement(
-    translator: &mut BlueTacTranslator,
-    node_id: &parser::AstNodeId,
-    body: &parser::AstStatement,
-    controlling_expr: &parser::AstFullExpression,
+    node_id: parser::AstNodeId,
+    body: parser::AstStatement,
+    controlling_expr: parser::AstFullExpression,
     instructions: &mut Vec<BtInstruction>,
+    translator: &mut BlueTacTranslator,
+    driver: &mut Driver,
 ) {
-    let start_label = translator.label_maker.make_control_label("start", node_id);
-    let continue_label = translator.label_maker.make_control_label("continue", node_id);
-    let break_label = translator.label_maker.make_control_label("break", node_id);
+    let start_label = translator.label_maker.make_control_label("start", &node_id);
+    let continue_label = translator.label_maker.make_control_label("continue", &node_id);
+    let break_label = translator.label_maker.make_control_label("break", &node_id);
 
     // Start of the loop
     instructions.push(BtInstruction::Label { id: start_label.clone() });
 
     // Loop body
-    translate_statement(translator, body, instructions);
+    translate_statement(body, instructions, translator, driver);
 
     // Continue label
     instructions.push(BtInstruction::Label { id: continue_label });
 
     // Loop controlling expression
-    let condition_value = expr::translate_full_expression(translator, controlling_expr, instructions);
+    let condition_value = expr::translate_full_expression(translator, &controlling_expr, instructions);
 
     // If true, jump to start of loop
     instructions.push(BtInstruction::JumpIfNotZero { condition: condition_value, target: start_label });
@@ -549,54 +600,61 @@ fn translate_do_while_statement(
 }
 
 fn translate_for_statement(
-    translator: &mut BlueTacTranslator,
-    node_id: &parser::AstNodeId,
-    init: &parser::AstForInitializer,
-    controlling_expr: &Option<parser::AstFullExpression>,
-    post: &Option<parser::AstFullExpression>,
-    body: &parser::AstStatement,
+    stmt: parser::AstStatement,
     instructions: &mut Vec<BtInstruction>,
+    translator: &mut BlueTacTranslator,
+    driver: &mut Driver,
 ) {
-    let start_label = translator.label_maker.make_control_label("start", node_id);
-    let continue_label = translator.label_maker.make_control_label("continue", node_id);
-    let break_label = translator.label_maker.make_control_label("break", node_id);
+    let parser::AstStatement::For { node_id, init, controlling_expr, post, body } = stmt else {
+        ICE!("Expected AstStatement::For");
+    };
+
+    let start_label = translator.label_maker.make_control_label("start", &node_id);
+    let continue_label = translator.label_maker.make_control_label("continue", &node_id);
+    let break_label = translator.label_maker.make_control_label("break", &node_id);
 
     // Initializer
-    match init {
+    match *init {
         parser::AstForInitializer::Declaration(declarations) => {
             for decl in declarations {
                 if let parser::AstDeclaration::Variable(var_decl) = decl {
-                    translate_var_declaration(translator, &var_decl.unique_name, &var_decl.initializer, instructions);
+                    translate_var_declaration(
+                        var_decl.unique_name,
+                        var_decl.initializer,
+                        instructions,
+                        translator,
+                        driver,
+                    );
                 }
             }
         }
-        parser::AstForInitializer::Expression(expr) if expr.is_some() => {
-            expr::translate_full_expression_without_result(translator, expr.as_ref().unwrap(), instructions);
+        parser::AstForInitializer::Expression(full_expr) => {
+            if let Some(full_expr) = full_expr {
+                expr::translate_full_expression_without_result(translator, &full_expr, instructions);
+            }
         }
-        _ => (),
     }
 
     // Start of the loop
     instructions.push(BtInstruction::Label { id: start_label.clone() });
 
     // Loop controlling expression
-    if controlling_expr.is_some() {
-        let condition_value =
-            expr::translate_full_expression(translator, controlling_expr.as_ref().unwrap(), instructions);
+    if let Some(controlling_expr) = controlling_expr {
+        let condition_value = expr::translate_full_expression(translator, &controlling_expr, instructions);
 
         // If false, jump to end / break label
         instructions.push(BtInstruction::JumpIfZero { condition: condition_value, target: break_label.clone() });
     }
 
     // Loop body
-    translate_statement(translator, body, instructions);
+    translate_statement(*body, instructions, translator, driver);
 
     // Continue label
     instructions.push(BtInstruction::Label { id: continue_label });
 
     // Post/update expression
-    if post.is_some() {
-        expr::translate_full_expression_without_result(translator, post.as_ref().unwrap(), instructions);
+    if let Some(post) = post {
+        expr::translate_full_expression_without_result(translator, &post, instructions);
     }
 
     // Unconditional jump to start of loop
@@ -607,55 +665,90 @@ fn translate_for_statement(
 }
 
 fn translate_break_statement(
-    translator: &mut BlueTacTranslator,
-    enclosing_stmt_node_id: &parser::AstNodeId,
+    enclosing_stmt_node_id: parser::AstNodeId,
     instructions: &mut Vec<BtInstruction>,
+    translator: &mut BlueTacTranslator,
+    _driver: &mut Driver,
 ) {
     // Remember: This can break either a switch or a loop.
-    let break_label = translator.label_maker.make_control_label("break", enclosing_stmt_node_id);
+    let break_label = translator.label_maker.make_control_label("break", &enclosing_stmt_node_id);
     instructions.push(BtInstruction::Jump { target: break_label });
 }
 
 fn translate_continue_statement(
-    translator: &mut BlueTacTranslator,
-    loop_node_id: &parser::AstNodeId,
+    loop_node_id: parser::AstNodeId,
     instructions: &mut Vec<BtInstruction>,
+    translator: &mut BlueTacTranslator,
+    _driver: &mut Driver,
 ) {
-    let continue_label = translator.label_maker.make_control_label("continue", loop_node_id);
+    let continue_label = translator.label_maker.make_control_label("continue", &loop_node_id);
     instructions.push(BtInstruction::Jump { target: continue_label });
 }
 
 fn translate_var_declaration(
-    translator: &mut BlueTacTranslator,
-    unique_variable_name: &parser::AstUniqueName,
-    initializer: &Option<parser::AstVariableInitializer>,
+    unique_variable_name: parser::AstUniqueName,
+    initializer: Option<parser::AstVariableInitializer>,
     instructions: &mut Vec<BtInstruction>,
+    translator: &mut BlueTacTranslator,
+    driver: &mut Driver,
 ) {
     if let Some(initializer) = initializer {
         match initializer {
             parser::AstVariableInitializer::Scalar(full_expr) => {
-                let init_result = expr::translate_full_expression(translator, full_expr, instructions);
+                let init_result = expr::translate_full_expression(translator, &full_expr, instructions);
                 let variable = BtValue::Variable(unique_variable_name.to_string());
                 instructions.push(BtInstruction::Copy { src: init_result, dst: variable });
             }
 
-            parser::AstVariableInitializer::Aggregate { .. } => {
-                translate_aggregate_initializer(translator, unique_variable_name, 0, initializer, instructions);
+            parser::AstVariableInitializer::Aggregate { node_id, .. } => {
+                let aggregate_type = translator.get_ast_type_from_node(&node_id).clone();
+
+                // Is this a constant initializer for a character array?
+                if aggregate_type.is_array()
+                    && aggregate_type.get_innermost_scalar_type().is_character()
+                    && utils::is_constant_initializer(&initializer, translator, driver)
+                {
+                    // Create an array of constant string initializers.
+                    let mut strings = Vec::new();
+                    translate_constant_character_array_initializer(initializer, &mut strings, translator, driver);
+
+                    // Merge adjacent null chars (\000).
+                    utils::merge_adjacent_nulls(&mut strings);
+
+                    let dst_ptr = BtValue::Variable(unique_variable_name.to_string());
+
+                    let constant_idx = translator.constants.add_string_array(unique_variable_name, strings);
+                    let constant_name = translator.constants.make_const_symbol_name(constant_idx);
+
+                    // Add the constant to the symbol table
+                    let loc = translator.metadata.get_source_span_as_loc(&node_id).unwrap();
+                    let attrs = SymbolAttributes::constant(loc);
+                    _ = translator.symbols.add(
+                        parser::AstUniqueName::new(constant_name.clone()),
+                        aggregate_type,
+                        attrs,
+                    );
+
+                    let src = BtValue::Variable(constant_name);
+                    instructions.push(BtInstruction::StoreAtOffset { src, dst_ptr, dst_offset: 0 });
+                } else {
+                    translate_aggregate_initializer(&unique_variable_name, 0, initializer, instructions, translator);
+                }
             }
         }
     }
 }
 
 fn translate_aggregate_initializer(
-    translator: &mut BlueTacTranslator,
     unique_variable_name: &parser::AstUniqueName,
     offset: usize,
-    initializer: &parser::AstVariableInitializer,
+    initializer: parser::AstVariableInitializer,
     instructions: &mut Vec<BtInstruction>,
+    translator: &mut BlueTacTranslator,
 ) -> usize {
     match initializer {
         parser::AstVariableInitializer::Scalar(full_expr) => {
-            let src = expr::translate_full_expression(translator, full_expr, instructions);
+            let src = expr::translate_full_expression(translator, &full_expr, instructions);
             let src_type = src.get_type(&translator.symbols);
             debug_assert!(src_type.bits() > 0 && src_type.bits().is_multiple_of(8));
 
@@ -669,7 +762,7 @@ fn translate_aggregate_initializer(
             let mut next_offset = offset;
             for ini in init {
                 next_offset =
-                    translate_aggregate_initializer(translator, unique_variable_name, next_offset, ini, instructions);
+                    translate_aggregate_initializer(unique_variable_name, next_offset, ini, instructions, translator);
             }
 
             next_offset
@@ -677,18 +770,103 @@ fn translate_aggregate_initializer(
     }
 }
 
-fn translate_static_storage_duration_variable(
+fn translate_constant_character_array_initializer(
+    initializer: parser::AstVariableInitializer,
+    strings: &mut Vec<String>,
     translator: &mut BlueTacTranslator,
-    var_decl: &parser::AstVariableDeclaration,
-    is_global: bool,
+    driver: &mut Driver,
 ) {
+    match initializer {
+        parser::AstVariableInitializer::Scalar(full_expr) => {
+            let ctx = constant_eval::ConstantEvalContext::new(
+                &translator.metadata,
+                &mut translator.symbols,
+                &mut translator.constants,
+                driver,
+            );
+
+            let mut push_ascii_char = |char_value: u8| {
+                if strings.is_empty() {
+                    strings.push(String::new());
+                }
+
+                strings.last_mut().unwrap().push_str(&string::to_ascii(char_value as u32));
+            };
+
+            // Evaluate the initializer constant value
+            let constant_value = constant_eval::evaluate_constant_full_expr(&full_expr, ctx);
+
+            match constant_value {
+                Some(constant_value) => match constant_value {
+                    parser::AstConstantValue::Integer(int_value) => match int_value {
+                        v if v.is_zero() => push_ascii_char(0),
+
+                        parser::AstConstantInteger::Char(value) => push_ascii_char(value as u8),
+                        parser::AstConstantInteger::UnsignedChar(value) => push_ascii_char(value),
+
+                        _ => ICE!("Invalid integer constant value '{int_value}' for char array initializer"),
+                    },
+
+                    parser::AstConstantValue::String { ascii } => {
+                        let required_char_count = {
+                            let full_expr_type = translator.get_expression_type(&full_expr.expr);
+                            debug_assert!(full_expr_type.is_character_array());
+                            let parser::AstType::Array { count, .. } = full_expr_type else {
+                                ICE!("Expected AstType::Array");
+                            };
+
+                            *count
+                        };
+
+                        let mut string_init = ascii.join("");
+
+                        // Append any extra NULL chars, if necessary.
+                        debug_assert!(string_init.len() <= required_char_count);
+                        if string_init.len() < required_char_count {
+                            let nulls_to_add = required_char_count - string_init.len();
+                            for _ in 0..nulls_to_add {
+                                string_init.push_str(&string::to_ascii(0));
+                            }
+                        }
+
+                        strings.push(string_init);
+                    }
+
+                    _ => ICE!("Invalid constant value '{constant_value}' for char array initializer"),
+                },
+
+                None => ICE!("Expression is not a constant for char array initializer"),
+            }
+        }
+
+        parser::AstVariableInitializer::Aggregate { init, .. } => {
+            for ini in init {
+                translate_constant_character_array_initializer(ini, strings, translator, driver);
+            }
+        }
+    }
+}
+
+fn translate_static_storage_duration_variable(
+    var_decl: parser::AstVariableDeclaration,
+    is_global: bool,
+    translator: &mut BlueTacTranslator,
+) {
+    let mut init_value = var_decl
+        .init_constant_eval
+        .into_iter()
+        .map(BtStaticStorageInitializer::from)
+        .collect::<Vec<BtStaticStorageInitializer>>();
+
     let data_type: BtType = var_decl.declared_type.resolved_type.as_ref().unwrap().into();
 
-    let mut init_value =
-        var_decl.init_constant_eval.iter().map(|const_val| const_val.clone().into()).collect::<Vec<BtConstantValue>>();
-
     if init_value.is_empty() {
-        init_value = vec![data_type.get_const_default_value()];
+        if let BtType::Array { element_type, count } = &data_type {
+            let zero_count = element_type.bits() / 8 * count;
+            init_value = vec![BtStaticStorageInitializer::ZeroBytes(zero_count)];
+        } else {
+            init_value = vec![BtStaticStorageInitializer::Constant(data_type.get_const_default_value())];
+        }
     }
 
     translator.add_static_storage_duration_variable(&var_decl.unique_name, is_global, data_type, init_value);

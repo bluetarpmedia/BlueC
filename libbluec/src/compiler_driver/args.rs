@@ -7,8 +7,8 @@
 use std::collections::{HashMap, HashSet};
 use std::iter::Peekable;
 
+use crate::ICE;
 use crate::compiler_driver::DriverOptions;
-use crate::internal_error;
 
 /// The command-line argument parser.
 pub struct Parser {
@@ -36,7 +36,7 @@ impl Parser {
     pub fn parse_command_line_args() -> Option<(Vec<String>, DriverOptions)> {
         let args = std::env::args().collect::<Vec<String>>();
         if args.is_empty() {
-            internal_error::ICE("std::env::args should at least return 1 arg for program name");
+            ICE!("std::env::args should at least return 1 arg for program name");
         }
 
         let mut parser = Parser {

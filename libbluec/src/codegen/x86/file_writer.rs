@@ -21,10 +21,12 @@ pub enum AsmSectionDirective {
 
 /// Data definition directives.
 pub enum AsmDataDefinitionDirective {
+    Byte(u8),
     Word(u16),
     DoubleWord(u32), // Aka LongWord
     QuadWord(u64),
-    AddressConstant { object: String },
+    AddressConstant { object: String, byte_offset: i32 },
+    Ascii { string: String, implicit_null: bool },
 }
 
 /// Space filling / storage reservation directives.
@@ -48,15 +50,20 @@ impl AsmFileWriter {
     }
 
     /// Writes a section directive.
-    pub fn write_section_directive(&mut self, directive: AsmSectionDirective) -> Result<()> {
+    pub fn write_section_directive(&mut self, directive: AsmSectionDirective, is_string: bool) -> Result<()> {
         match directive {
             AsmSectionDirective::Bss => self.writeln_with_indent(".bss"),
             AsmSectionDirective::Data => self.writeln_with_indent(".data"),
             AsmSectionDirective::ReadOnlyData { align } => {
                 if cfg!(target_os = "macos") {
-                    match align {
-                        4 | 8 | 16 => self.writeln_with_indent(&format!(".literal{align}")),
-                        _ => ICE!("Invalid ReadOnlyData alignment {align}"),
+                    if is_string {
+                        self.writeln_with_indent(".cstring")
+                    } else {
+                        match align {
+                            1 => self.writeln_with_indent(".const"),
+                            4 | 8 | 16 => self.writeln_with_indent(&format!(".literal{align}")),
+                            _ => ICE!("Invalid ReadOnlyData alignment {align}"),
+                        }
                     }
                 } else {
                     self.writeln_with_indent(".section .rodata")
@@ -68,6 +75,7 @@ impl AsmFileWriter {
 
     /// Writes a `.balign` directive to align on the given byte `alignment` boundary.
     pub fn write_byte_alignment_directive(&mut self, alignment: usize) -> Result<()> {
+        assert!(alignment.is_power_of_two());
         writeln!(self.writer, "{INDENT}.balign {alignment}")
     }
 
@@ -85,6 +93,13 @@ impl AsmFileWriter {
         print_signed: bool,
     ) -> Result<()> {
         match directive {
+            AsmDataDefinitionDirective::Byte(value) => {
+                if print_signed {
+                    writeln!(self.writer, "{INDENT}.byte {}", value as i8)
+                } else {
+                    writeln!(self.writer, "{INDENT}.byte {value}")
+                }
+            }
             AsmDataDefinitionDirective::Word(value) => {
                 if print_signed {
                     writeln!(self.writer, "{INDENT}.word {}", value as i16)
@@ -110,8 +125,28 @@ impl AsmFileWriter {
                     writeln!(self.writer, "{INDENT}.quad {value}    # {value_hex} [{:.}_f64]", value_f64)
                 }
             }
-            AsmDataDefinitionDirective::AddressConstant { object } => {
-                writeln!(self.writer, "{INDENT}.quad {}", make_asm_identifier(&object))
+            AsmDataDefinitionDirective::AddressConstant { object, byte_offset } => {
+                let Some(symbol) = self.symbols.get(&object) else {
+                    ICE!("Symbol '{object}' not found in back-end symbol table");
+                };
+
+                let identifier = if let AsmSymbol::Object { is_constant, .. } = symbol {
+                    if *is_constant { make_asm_local_symbol_label(&object) } else { make_asm_identifier(&object) }
+                } else {
+                    make_asm_identifier(&object)
+                };
+
+                if byte_offset == 0 {
+                    writeln!(self.writer, "{INDENT}.quad {}", identifier)
+                } else if byte_offset > 0 {
+                    writeln!(self.writer, "{INDENT}.quad {} + {byte_offset}", identifier)
+                } else {
+                    writeln!(self.writer, "{INDENT}.quad {} {byte_offset}", identifier)
+                }
+            }
+            AsmDataDefinitionDirective::Ascii { string, implicit_null, .. } => {
+                let directive = if implicit_null { "asciz" } else { "ascii " };
+                writeln!(self.writer, "{INDENT}.{directive} \"{string}\"")
             }
         }
     }
@@ -260,7 +295,7 @@ impl AsmFileWriter {
             AsmInstruction::Label { id } => self.write_local_symbol_label(id),
 
             AsmInstruction::Call(operand) => {
-                if matches!(operand, AsmOperand::Data(_) | AsmOperand::Memory { .. }) {
+                if matches!(operand, AsmOperand::Data { .. } | AsmOperand::Memory { .. }) {
                     self.writeln_with_indent(&format!("callq *{}", self.asm_operand_to_string(operand)))?;
                     return Ok(());
                 }
@@ -334,7 +369,17 @@ impl AsmFileWriter {
 
     fn asm_operand_to_string(&self, operand: &AsmOperand) -> String {
         match operand {
-            AsmOperand::Imm(int) => format!("${}", int),
+            AsmOperand::Imm { value, bits, signed } => match (bits, signed) {
+                (8, true) => format!("${}", *value as i8),
+                (16, true) => format!("${}", *value as i16),
+                (32, true) => format!("${}", *value as i32),
+                (64, true) => format!("${}", *value as i64),
+                (8, false) => format!("${}", *value as u8),
+                (16, false) => format!("${}", *value as u16),
+                (32, false) => format!("${}", *value as u32),
+                (64, false) => format!("${}", *value),
+                _ => ICE!("Invalid AsmOperand::Imm bits {bits} signed {signed}"),
+            },
 
             AsmOperand::Reg(hw_register) => hw_register.to_string(),
 
@@ -355,20 +400,30 @@ impl AsmFileWriter {
                 format!("{}(%rip)", make_asm_identifier(name))
             }
 
-            AsmOperand::Data(name) => {
-                let Some(symbol) = self.symbols.get(name) else {
-                    ICE!("Symbol '{name}' not found in back-end symbol table");
+            AsmOperand::Data { symbol: symbol_name, relative } => {
+                let Some(symbol) = self.symbols.get(symbol_name) else {
+                    ICE!("Symbol '{symbol_name}' not found in back-end symbol table");
                 };
 
                 let AsmSymbol::Object { is_constant, .. } = symbol else {
-                    ICE!("Symbol '{name}' not an AsmSymbol::Object");
+                    ICE!("Symbol '{symbol_name}' not an AsmSymbol::Object");
                 };
 
-                if *is_constant {
-                    format!("{}(%rip)", make_asm_local_symbol_label(name))
+                let offset = if *relative > 0 {
+                    format!("+{relative}")
+                } else if *relative < 0 {
+                    format!("{relative}")
                 } else {
-                    format!("{}(%rip)", make_asm_identifier(name))
-                }
+                    String::new()
+                };
+
+                let identifier = if *is_constant {
+                    make_asm_local_symbol_label(symbol_name)
+                } else {
+                    make_asm_identifier(symbol_name)
+                };
+
+                format!("{identifier}{offset}(%rip)")
             }
 
             AsmOperand::Pseudo(name) => {

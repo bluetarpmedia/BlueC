@@ -74,7 +74,9 @@ fn try_promote_integer_literal(
 
             metadata.set_node_type(*node_id, promote_to_type.clone());
 
-            let kind = AstIntegerLiteralKind::from(&promote_to_type.clone().promote_if_rank_lower_than_int());
+            let (promote_to_type, _) = promote_to_type.clone().promote_if_rank_lower_than_int();
+
+            let kind = AstIntegerLiteralKind::from(&promote_to_type);
 
             Some(AstExpression::IntegerLiteral { node_id: *node_id, literal, literal_base, value, kind })
         } else {

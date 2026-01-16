@@ -4,7 +4,7 @@ use super::super::constant_table::*;
 
 #[test]
 fn get_float_constants() {
-    let mut table = ConstantTable::default();
+    let mut table = ConstantTable::new();
     _ = table.add_f64(1.0, 8);
     _ = table.add_f32(1.0, 4);
     _ = table.add_f64(-1.0, 8);
@@ -16,7 +16,7 @@ fn get_float_constants() {
     _ = table.add_f64(std::f64::NAN, 8);
     _ = table.add_f32(std::f32::NAN, 4);
 
-    let list = table.get_constants();
+    let list = table.get_float_constants();
     assert_eq!(list.len(), 10);
 
     assert_eq!(list[0].index, 0);
@@ -58,8 +58,8 @@ fn get_float_constants() {
 }
 
 #[test]
-fn update_alignment() {
-    let mut table = ConstantTable::default();
+fn update_float_alignment() {
+    let mut table = ConstantTable::new();
 
     let idx1 = table.add_f64(1.0, 8);
     let idx2 = table.add_f64(1.0, 8);
@@ -70,7 +70,7 @@ fn update_alignment() {
     assert_eq!(idx3, idx4);
     assert_ne!(idx1, idx3);
 
-    let list = table.get_constants();
+    let list = table.get_float_constants();
     assert_eq!(list.len(), 2);
 
     assert_eq!(list[0].index, 0);
@@ -87,7 +87,7 @@ fn update_alignment() {
     let idx_f32_1 = table.add_f32(1.0, 8);
     assert_eq!(idx3, idx_f32_1);
 
-    let list = table.get_constants();
+    let list = table.get_float_constants();
     assert_eq!(list.len(), 2);
 
     assert_eq!(list[0].index, 0);

@@ -404,7 +404,7 @@ fn fixup_push(instr: AsmInstruction) -> Vec<AsmInstruction> {
         out.push(AsmInstruction::Binary {
             op: AsmBinaryOp::Sub,
             asm_type: AsmType::QuadWord,
-            src: AsmOperand::Imm(8),
+            src: AsmOperand::from_u64(8),
             dst: AsmOperand::hw_reg(HwRegister::RSP, AsmType::QuadWord),
         });
         // movsd xmm, (%rsp)
@@ -566,6 +566,11 @@ fn fixup_instructions_with_two_operand_memory_address(instructions: Vec<AsmInstr
 
     for instr in instructions {
         match instr {
+            // Copy a byte array from RIP-relative data address
+            AsmInstruction::Mov { asm_type, src, dst } if src.is_data_operand() && asm_type.is_byte_array() => {
+                out.extend(copy_byte_array(asm_type, src, dst));
+            }
+
             AsmInstruction::Mov { asm_type, src, dst } if both_operands_are_memory_addresses(&src, &dst) => {
                 let (tmp_operand, mov_to_tmp) = mov_operand_to_tmp(&asm_type, src);
                 out.push(mov_to_tmp);
@@ -593,6 +598,58 @@ fn fixup_instructions_with_two_operand_memory_address(instructions: Vec<AsmInstr
     out
 }
 
+fn copy_byte_array(array_type: AsmType, src: AsmOperand, dst: AsmOperand) -> Vec<AsmInstruction> {
+    let AsmType::ByteArray { size, .. } = array_type else {
+        ICE!("Expected AsmType::ByteArray");
+    };
+
+    let AsmOperand::Data { symbol, .. } = src else {
+        ICE!("Expected AsmOperand::Data for src");
+    };
+
+    let AsmOperand::Memory { base, relative: mut dst_relative } = dst else {
+        ICE!("Expected AsmOperand::Memory for dst");
+    };
+
+    let mut out = Vec::with_capacity(10);
+
+    let mut remaining_bytes = size;
+    let mut src_relative = 0;
+
+    while remaining_bytes > 0 {
+        let bytes_to_copy = if remaining_bytes >= 8 {
+            8
+        } else if remaining_bytes >= 4 {
+            4
+        } else if remaining_bytes >= 2 {
+            2
+        } else {
+            1
+        };
+
+        let asm_type = match bytes_to_copy {
+            1 => AsmType::Byte,
+            2 => AsmType::Word,
+            4 => AsmType::DoubleWord,
+            8 => AsmType::QuadWord,
+            _ => ICE!("Invalid byte count"),
+        };
+
+        let src = AsmOperand::Data { symbol: symbol.clone(), relative: src_relative };
+        let rax_reg = AsmOperand::hw_reg(HwRegister::RAX, asm_type);
+        out.push(AsmInstruction::Mov { asm_type, src, dst: rax_reg.clone() });
+
+        let dst = AsmOperand::Memory { base, relative: dst_relative };
+        out.push(AsmInstruction::Mov { asm_type, src: rax_reg.clone(), dst });
+
+        src_relative += bytes_to_copy as i32;
+        dst_relative += bytes_to_copy as i32;
+        remaining_bytes -= bytes_to_copy;
+    }
+
+    out
+}
+
 fn is_shift_left_or_right(op: &AsmBinaryOp) -> bool {
     matches!(op, AsmBinaryOp::Shl | AsmBinaryOp::Shr | AsmBinaryOp::Sar)
 }
@@ -602,7 +659,7 @@ fn operator_dst_must_be_register(op: &AsmBinaryOp) -> bool {
 }
 
 fn operand_is_imm64(operand: &AsmOperand) -> bool {
-    if let AsmOperand::Imm(value) = operand
+    if let AsmOperand::Imm { value, .. } = operand
         && *value > i32::MAX as u64
     {
         true

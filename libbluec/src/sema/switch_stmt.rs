@@ -3,23 +3,20 @@
 //! The `switch_stmt` module provides functionality to validate switch statements.
 
 use super::constant_eval;
+use super::type_check::checker::TypeChecker;
 use super::visitor;
 
 use crate::ICE;
-use crate::compiler_driver;
+use crate::compiler_driver::Driver;
 use crate::compiler_driver::diagnostics::Diagnostic;
 use crate::compiler_driver::warnings::Warning;
 use crate::parser;
 use crate::parser::{AstConstantValue, AstFunction, AstStatement};
 
 /// Validates all switch statements in the AST.
-/// 
+///
 /// Cases in a switch statement must have constant expressions that evaluate to unique integer values.
-pub fn validate_switch_statements(
-    ast_root: &mut parser::AstRoot,
-    metadata: &mut parser::AstMetadata,
-    driver: &mut compiler_driver::Driver,
-) {
+pub fn validate_switch_statements(ast_root: &mut parser::AstRoot, chk: &mut TypeChecker, driver: &mut Driver) {
     // Visit each function definition, and for each one, visit each switch statement and verify that its cases have
     // unique constant values.
     //
@@ -31,7 +28,7 @@ pub fn validate_switch_statements(
                 // Get the type of the switch statement's controlling expression.
                 //      All case values must be of this type or cast to it.
                 //
-                let current_switch_data_type = metadata.get_node_type(&controlling_expr.node_id).cloned();
+                let current_switch_data_type = chk.metadata.get_node_type(&controlling_expr.node_id).cloned();
 
                 // Visit all the 'case' statements inside the switch body.
                 //      Remember this will find 'case' statements in nested switches too.
@@ -46,9 +43,10 @@ pub fn validate_switch_statements(
 
                         // Evaluate the expression and ensure it's a constant value.
                         //
-                        let constant_value = constant_eval::evaluate_constant_full_expr(constant_expr, None);
+                        let ctx = constant_eval::ConstantEvalContext::from_type_checker(chk, driver);
+                        let constant_value = constant_eval::evaluate_constant_full_expr(constant_expr, ctx);
                         if constant_value.is_none() {
-                            let loc = metadata.get_source_span_as_loc(&constant_expr.node_id).unwrap();
+                            let loc = chk.metadata.get_source_span_as_loc(&constant_expr.node_id).unwrap();
                             let err = "Expression cannot be evaluated at compile-time".to_string();
                             driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
                             return;
@@ -58,7 +56,7 @@ pub fn validate_switch_statements(
                         let mut constant_value = constant_value.unwrap();
 
                         if !matches!(constant_value, AstConstantValue::Integer(_)) {
-                            let loc = metadata.get_source_span_as_loc(&constant_expr.node_id).unwrap();
+                            let loc = chk.metadata.get_source_span_as_loc(&constant_expr.node_id).unwrap();
                             let err = "Case label expression must evaluate as an integer constant".to_string();
                             driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
                             return;
@@ -78,7 +76,7 @@ pub fn validate_switch_statements(
                             if constant_value != old_constant_value {
                                 let old_value = old_constant_value.to_string();
                                 let new_value = constant_value.to_string();
-                                let loc = metadata.get_source_span_as_loc(&constant_expr.node_id).unwrap();
+                                let loc = chk.metadata.get_source_span_as_loc(&constant_expr.node_id).unwrap();
                                 Warning::implicit_switch_case_conversion(
                                     &case_data_type,
                                     switch_data_type,
@@ -97,17 +95,17 @@ pub fn validate_switch_statements(
                         // Add the switch case value to the metadata and emit a diagnostic if it's not unique.
                         //
                         if let Some(existing_case_node_id) =
-                            metadata.add_switch_case(*switch_node_id, constant_expr.node_id, constant_integer)
+                            chk.metadata.add_switch_case(*switch_node_id, constant_expr.node_id, constant_integer)
                         {
                             let err = format!("Duplicate case value '{}'", constant_value);
                             let mut diag = Diagnostic::error_at_location(
                                 err,
-                                metadata.get_source_span_as_loc(&constant_expr.node_id).unwrap(),
+                                chk.metadata.get_source_span_as_loc(&constant_expr.node_id).unwrap(),
                             );
 
                             diag.add_note(
                                 "Previous case defined here:".to_string(),
-                                metadata.get_source_span_as_loc(&existing_case_node_id),
+                                chk.metadata.get_source_span_as_loc(&existing_case_node_id),
                             );
                             driver.add_diagnostic(diag);
                         }

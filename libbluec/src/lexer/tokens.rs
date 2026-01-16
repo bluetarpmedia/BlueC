@@ -59,9 +59,22 @@ pub enum TokenType {
     // Identifiers (which may be keywords)
     Identifier(String),
 
-    // Literals
+    // Char literal
+    //      The `literal` includes the surrounding single quotes.
+    //      The value is `i32` because in C a char literal has type of 'int'.
+    CharLiteral { literal: String, value: i32 },
+    
+    // Numeric literals
     IntegerLiteral { literal: String, base: NumericLiteralBase, suffix: Option<IntegerLiteralSuffix> },
     FloatLiteral { literal: String, base: NumericLiteralBase, suffix: Option<FloatLiteralSuffix> },
+
+    // String literal
+    //      `literal` is the literal string as it appears in the source, including surrounding double quotes and
+    //      unevaluated escape sequences.
+    //      `ascii` represents the individual ascii values from the raw literal. Where possible, escape sequences
+    //      from the literal are transformed into ascii values (e.g. hex/octal escape sequences). Other escape
+    //      sequences remain in place. E.g. "hello\n" --> { "h", "e", "l", "l", "o", "\n" }.
+    StringLiteral { literal: String, ascii: Vec<String> },
 }
 
 /// The base of an integer or floating-point literal.
@@ -138,7 +151,7 @@ impl fmt::Display for FloatLiteralSuffix {
 
 impl TokenType {
     /// Makes an identifier token type with the given name.
-    pub fn make_identifier(id: &str) -> TokenType {
+    pub fn new_identifier(id: &str) -> TokenType {
         TokenType::Identifier(id.to_string())
     }
 }
@@ -146,12 +159,12 @@ impl TokenType {
 #[cfg(test)]
 impl TokenType {
     /// Makes an integer literal token type. The given string should only contain digits.
-    pub fn make_int_literal(lit: &str) -> TokenType {
+    pub fn new_int_literal(lit: &str) -> TokenType {
         TokenType::IntegerLiteral { literal: lit.to_string(), base: NumericLiteralBase::Decimal, suffix: None }
     }
 
     /// Makes a long integer literal token type. The given string should only contain digits.
-    pub fn make_long_int_literal(lit: &str) -> TokenType {
+    pub fn new_long_int_literal(lit: &str) -> TokenType {
         TokenType::IntegerLiteral {
             literal: lit.to_string(),
             base: NumericLiteralBase::Decimal,
@@ -160,7 +173,7 @@ impl TokenType {
     }
 
     /// Makes a long long integer literal token type. The given string should only contain digits.
-    pub fn make_long_long_int_literal(lit: &str) -> TokenType {
+    pub fn new_long_long_int_literal(lit: &str) -> TokenType {
         TokenType::IntegerLiteral {
             literal: lit.to_string(),
             base: NumericLiteralBase::Decimal,
@@ -223,6 +236,10 @@ impl fmt::Display for TokenType {
             TokenType::Identifier(id)               => write!(f, "{}", id),
 
             // Literals
+            TokenType::CharLiteral { literal, value } => {
+                write!(f, "{literal} ({value})")
+            }
+
             TokenType::IntegerLiteral { literal, suffix, .. } => {
                 if let Some(suffix) = suffix {
                     write!(f, "{literal}{suffix}")
@@ -237,6 +254,11 @@ impl fmt::Display for TokenType {
                 } else {
                     write!(f, "{literal}")
                 }
+            }
+
+            TokenType::StringLiteral { literal, ascii } => {
+                let ascii_joined = ascii.join("");
+                write!(f, "{literal} (\"{ascii_joined}\")")
             }
         }
     }

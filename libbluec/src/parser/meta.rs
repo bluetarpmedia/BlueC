@@ -10,7 +10,7 @@ use std::collections::{HashMap, HashSet};
 /// AST metadata produced by the parser.
 #[derive(Debug)]
 pub struct AstMetadata {
-    source_span_nodes: HashMap<AstNodeId, AstNodeSourceSpanMetadata>,
+    source_span_nodes: HashMap<AstNodeId, AstNodeSourceSpan>,
     switch_cases: HashMap<AstNodeId, HashMap<AstConstantInteger, AstNodeId>>,
     switch_defaults: HashMap<AstNodeId, lexer::SourceLocation>,
     node_types: HashMap<AstNodeId, AstType>,
@@ -21,23 +21,23 @@ pub struct AstMetadata {
 ///
 /// The start and end lines and columns are inclusive. `[start, end]`
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub struct AstNodeSourceSpanMetadata {
+pub struct AstNodeSourceSpan {
     pub start_line: usize,
     pub start_column: usize,
     pub end_line: usize,
     pub end_column: usize,
 }
 
-impl From<AstNodeSourceSpanMetadata> for lexer::SourceLocation {
+impl From<AstNodeSourceSpan> for lexer::SourceLocation {
     /// Creates a `lexer::SourceLocation` from an `AstNodeSourceSpanMetadata`.
-    fn from(node_metadata: AstNodeSourceSpanMetadata) -> Self {
+    fn from(node_metadata: AstNodeSourceSpan) -> Self {
         (&node_metadata).into()
     }
 }
 
-impl From<&AstNodeSourceSpanMetadata> for lexer::SourceLocation {
+impl From<&AstNodeSourceSpan> for lexer::SourceLocation {
     /// Creates a `lexer::SourceLocation` from an `&AstNodeSourceSpanMetadata`.
-    fn from(node_metadata: &AstNodeSourceSpanMetadata) -> Self {
+    fn from(node_metadata: &AstNodeSourceSpan) -> Self {
         let length = if node_metadata.start_line == node_metadata.end_line {
             node_metadata.end_column - node_metadata.start_column
         } else {
@@ -48,7 +48,7 @@ impl From<&AstNodeSourceSpanMetadata> for lexer::SourceLocation {
     }
 }
 
-impl AstNodeSourceSpanMetadata {
+impl AstNodeSourceSpan {
     /// Creates an `AstNodeSourceSpanMetadata` from the given source location.
     pub fn from_source_location(loc: &lexer::SourceLocation) -> Self {
         Self { start_line: loc.line, start_column: loc.column, end_line: loc.line, end_column: loc.column + loc.length }
@@ -94,12 +94,12 @@ impl AstMetadata {
     }
 
     /// Adds source span metadata for a given node.
-    pub fn add_source_span(&mut self, node_id: AstNodeId, source_span: AstNodeSourceSpanMetadata) {
+    pub fn add_source_span(&mut self, node_id: AstNodeId, source_span: AstNodeSourceSpan) {
         self.source_span_nodes.insert(node_id, source_span);
     }
 
     /// Gets source span metadata for a given node.
-    pub fn get_source_span(&self, node_id: &AstNodeId) -> Option<&AstNodeSourceSpanMetadata> {
+    pub fn get_source_span(&self, node_id: &AstNodeId) -> Option<&AstNodeSourceSpan> {
         self.source_span_nodes.get(node_id)
     }
 

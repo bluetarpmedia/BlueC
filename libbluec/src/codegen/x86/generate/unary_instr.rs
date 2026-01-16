@@ -6,8 +6,8 @@ use super::Generator;
 use super::compare;
 use super::{AsmBinaryOp, AsmConstantId, AsmInstruction, AsmOperand, AsmType, AsmUnaryOp, ConditionalCode, HwRegister};
 
-use crate::ir;
 use crate::internal_error;
+use crate::ir;
 
 /// Generates the x86_64 instructions for a unary operation.
 pub fn generate_instruction(
@@ -48,8 +48,9 @@ pub fn generate_instruction(
             ]
         };
 
-        let nan_handler =
-            || vec![AsmInstruction::Mov { asm_type: dst_asm_type, src: AsmOperand::Imm(0), dst: dst_operand.clone() }];
+        let nan_handler = || {
+            vec![AsmInstruction::Mov { asm_type: dst_asm_type, src: AsmOperand::from_u64(0), dst: dst_operand.clone() }]
+        };
 
         // cmp 0, src
         if asm_type.is_floating_point() {
@@ -73,13 +74,13 @@ pub fn generate_instruction(
         //
         const ALIGNMENT: usize = 16;
         let neg_zero_id = if asm_type == AsmType::FpSingle {
-            AsmConstantId(generator.constant_table.add_f32(-0.0, ALIGNMENT))
+            AsmConstantId::from(generator.constants.add_f32(-0.0, ALIGNMENT))
         } else {
-            AsmConstantId(generator.constant_table.add_f64(-0.0, ALIGNMENT))
+            AsmConstantId::from(generator.constants.add_f64(-0.0, ALIGNMENT))
         };
 
         let neg_zero_lbl = generator.labels.make_constant_label(neg_zero_id);
-        let neg_zero = AsmOperand::Data(neg_zero_lbl.to_string());
+        let neg_zero = AsmOperand::Data { symbol: neg_zero_lbl.to_string(), relative: 0 };
 
         asm.push(AsmInstruction::Mov { asm_type, src: src_operand, dst: dst_operand.clone() });
 

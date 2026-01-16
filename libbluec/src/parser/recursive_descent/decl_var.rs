@@ -109,7 +109,7 @@ pub fn parse_variable_declaration(
     let node_id = AstNodeId::new();
     parser.metadata.add_source_span(
         node_id,
-        meta::AstNodeSourceSpanMetadata::from_source_location_pair(&var_ident.loc, &end_decl_loc),
+        meta::AstNodeSourceSpan::from_source_location_pair(&var_ident.loc, &end_decl_loc),
     );
 
     let is_declaration_only = is_declared_extern && initializer.is_none();
@@ -293,7 +293,7 @@ fn parse_aggregate_initializer(parser: &mut Parser, driver: &mut Driver) -> Pars
     let node_id = AstNodeId::new();
     parser.metadata.add_source_span(
         node_id,
-        meta::AstNodeSourceSpanMetadata::from_source_location_pair(&start_loc, &end_loc),
+        meta::AstNodeSourceSpan::from_source_location_pair(&start_loc, &end_loc),
     );
 
     Ok(AstVariableInitializer::Aggregate { node_id, init: aggregate_items })

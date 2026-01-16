@@ -8,7 +8,8 @@ use super::unary_expr;
 use super::{BlueTacTranslator, EvalExpr};
 
 use crate::ICE;
-use crate::parser::{AstAssignmentOp, AstExpression, AstFloatLiteralKind, AstFullExpression, AstType};
+use crate::parser::{AstAssignmentOp, AstExpression, AstFloatLiteralKind, AstFullExpression, AstType, AstUniqueName};
+use crate::sema::symbol_table::SymbolAttributes;
 use crate::sema::type_conversion;
 
 /// Translates an AST full expression into BlueTac IR and performs lvalue-to-rvalue conversion on the result, if
@@ -37,44 +38,11 @@ pub fn translate_expression(
     instructions: &mut Vec<BtInstruction>,
 ) -> EvalExpr {
     match expr {
-        AstExpression::IntegerLiteral { node_id, value, .. } => {
-            let literal_type = translator.get_ast_type_from_node(node_id);
+        AstExpression::CharLiteral { value, .. } => EvalExpr::Value(BtValue::Constant(BtConstantValue::Int32(*value))),
 
-            // There are no warnings emitted here; if these are a narrowing conversion then the parser/sema has already
-            // warned about them.
-            //
-            let val = match literal_type {
-                AstType::Short => {
-                    BtValue::Constant(BtConstantValue::Int16(type_conversion::convert_u64_to_i16(*value)))
-                }
-                AstType::Int => BtValue::Constant(BtConstantValue::Int32(type_conversion::convert_u64_to_i32(*value))),
-                AstType::Long | AstType::LongLong => {
-                    BtValue::Constant(BtConstantValue::Int64(type_conversion::convert_u64_to_i64(*value)))
-                }
-                AstType::UnsignedShort => {
-                    BtValue::Constant(BtConstantValue::UInt16(type_conversion::convert_u64_to_u16(*value)))
-                }
-                AstType::UnsignedInt => {
-                    BtValue::Constant(BtConstantValue::UInt32(type_conversion::convert_u64_to_u32(*value)))
-                }
-                AstType::UnsignedLong | AstType::UnsignedLongLong => BtValue::Constant(BtConstantValue::UInt64(*value)),
-
-                _ => ICE!("Invalid AstType '{literal_type}' for integer literal"),
-            };
-
-            EvalExpr::Value(val)
-        }
-
-        AstExpression::FloatLiteral { value, kind, .. } => {
-            let val = match kind {
-                AstFloatLiteralKind::Float => BtValue::Constant(BtConstantValue::Float32(*value as f32)),
-                AstFloatLiteralKind::Double | AstFloatLiteralKind::LongDouble => {
-                    BtValue::Constant(BtConstantValue::Float64(*value))
-                }
-            };
-
-            EvalExpr::Value(val)
-        }
+        AstExpression::StringLiteral { .. } => translate_string_literal(translator, expr),
+        AstExpression::IntegerLiteral { .. } => translate_integer_literal(translator, expr),
+        AstExpression::FloatLiteral { .. } => translate_float_literal(expr),
 
         AstExpression::Identifier { unique_name, .. } => {
             let expr_data_type = translator.get_expression_type(expr);
@@ -221,6 +189,86 @@ pub fn translate_expression_to_value(
             }
         }
     }
+}
+
+fn translate_string_literal(translator: &mut BlueTacTranslator, expr: &AstExpression) -> EvalExpr {
+    let AstExpression::StringLiteral { node_id, ascii, .. } = expr else {
+        ICE!("Expected an AstExpression::StringLiteral");
+    };
+
+    // Concatenate the array of ascii chars/escape sequences.
+    let mut constant_string = ascii.join("");
+
+    // If the expression type is a character array then append NULL chars, if necessary, to match the array length.
+    let data_type = translator.get_ast_type_from_node(node_id).clone();
+    if let AstType::Array { element_type, count } = &data_type
+        && element_type.is_character()
+        && *count > ascii.len()
+    {
+        let mut append_zero_count = *count - ascii.len();
+        while append_zero_count > 0 {
+            constant_string.push_str("\\000");
+            append_zero_count -= 1;
+        }
+    }
+
+    // Add the string to the constant table (or retrieve its existing index, if it already exists).
+    let constant_idx = translator.constants.add_string(&constant_string);
+
+    // Add the constant string to the symbol table (it may already exist).
+    let const_name = translator.constants.make_const_symbol_name(constant_idx);
+    let loc = translator.metadata.get_source_span_as_loc(node_id).unwrap();
+    let attrs = SymbolAttributes::constant(loc);
+    _ = translator.symbols.add(AstUniqueName::new(const_name.clone()), data_type, attrs);
+
+    EvalExpr::Value(BtValue::Variable(const_name))
+}
+
+fn translate_integer_literal(translator: &mut BlueTacTranslator, expr: &AstExpression) -> EvalExpr {
+    let AstExpression::IntegerLiteral { node_id, value, .. } = expr else {
+        ICE!("Expected an AstExpression::IntegerLiteral");
+    };
+
+    let literal_type = translator.get_ast_type_from_node(node_id);
+
+    // There are no warnings emitted here; if these are a narrowing conversion then the parser/sema has already
+    // warned about them.
+    //
+    let val = match literal_type {
+        AstType::Char | AstType::SignedChar => {
+            BtValue::Constant(BtConstantValue::Int8(type_conversion::convert_u64_to_i8(*value)))
+        }
+        AstType::Short => BtValue::Constant(BtConstantValue::Int16(type_conversion::convert_u64_to_i16(*value))),
+        AstType::Int => BtValue::Constant(BtConstantValue::Int32(type_conversion::convert_u64_to_i32(*value))),
+        AstType::Long | AstType::LongLong => {
+            BtValue::Constant(BtConstantValue::Int64(type_conversion::convert_u64_to_i64(*value)))
+        }
+        AstType::UnsignedChar => BtValue::Constant(BtConstantValue::UInt8(type_conversion::convert_u64_to_u8(*value))),
+        AstType::UnsignedShort => {
+            BtValue::Constant(BtConstantValue::UInt16(type_conversion::convert_u64_to_u16(*value)))
+        }
+        AstType::UnsignedInt => BtValue::Constant(BtConstantValue::UInt32(type_conversion::convert_u64_to_u32(*value))),
+        AstType::UnsignedLong | AstType::UnsignedLongLong => BtValue::Constant(BtConstantValue::UInt64(*value)),
+
+        _ => ICE!("Invalid AstType '{literal_type}' for integer literal"),
+    };
+
+    EvalExpr::Value(val)
+}
+
+fn translate_float_literal(expr: &AstExpression) -> EvalExpr {
+    let AstExpression::FloatLiteral { value, kind, .. } = expr else {
+        ICE!("Expected an AstExpression::FloatLiteral");
+    };
+
+    let val = match kind {
+        AstFloatLiteralKind::Float => BtValue::Constant(BtConstantValue::Float32(*value as f32)),
+        AstFloatLiteralKind::Double | AstFloatLiteralKind::LongDouble => {
+            BtValue::Constant(BtConstantValue::Float64(*value))
+        }
+    };
+
+    EvalExpr::Value(val)
 }
 
 fn translate_subscript(

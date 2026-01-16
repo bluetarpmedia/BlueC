@@ -1,12 +1,15 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 //
-//! The line_lexer module provides single-line lexing functionality to the parent lexer module.
+//! The `line_lexer` module provides single-line lexing functionality to the parent lexer module.
 
+use super::char_literal::make_char_literal;
+use super::numeric_literals::make_numeric_literal;
+use super::string_literal::make_string_literal;
+use super::{SourceLocation, Token, TokenType};
+
+use crate::ICE;
 use crate::compiler_driver;
 use crate::compiler_driver::diagnostics::Diagnostic;
-use crate::internal_error;
-use crate::lexer::numeric_literals::make_numeric_literal;
-use crate::lexer::{SourceLocation, Token, TokenType};
 
 use std::iter::Peekable;
 use std::str::CharIndices;
@@ -88,6 +91,10 @@ impl<'a, 'b> LineLexer<'a, 'b> {
                     Ok(Some(self.maximal_munch_up_to_3_chars()))
                 }
 
+                '\'' => make_char_literal(self).map(Some),
+
+                '"' => make_string_literal(self).map(Some),
+
                 _ => {
                     let (idx, ch) = self.cursor.next().unwrap(); // Safe to unwrap since we peeked ahead above
                     self.col_no = idx + 1;
@@ -150,7 +157,7 @@ impl<'a, 'b> LineLexer<'a, 'b> {
     #[rustfmt::skip]
     fn maximal_munch_up_to_3_chars(&mut self) -> Token {
         let Some((idx, first)) = self.cursor.next() else {
-            internal_error::ICE("Expected character");
+            ICE!("Expected character");
         };
         self.col_no = idx + 1;
 
@@ -225,7 +232,7 @@ impl<'a, 'b> LineLexer<'a, 'b> {
             ('>', Some('=')) => { advance(self); self.make_token(TokenType::GreaterThanOrEqualTo,   token_len) }
             ('>', _)         => {                self.make_token(TokenType::GreaterThan,            token_len) }
 
-            _ => internal_error::ICE("No token match for characters")
+            _ => ICE!("No token match for character '{first}'")
         }
     }
 

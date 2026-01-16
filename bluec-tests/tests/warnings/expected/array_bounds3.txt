@@ -1,0 +1,7 @@
+warning: Array index 5 is out of bounds for the array of type 'long [4]'
+   |
+   | long *ptr = &x[5];
+   |                ^
+   |
+
+1 warning generated

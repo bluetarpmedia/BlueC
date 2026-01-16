@@ -320,6 +320,7 @@ fn gcc_compile_to_obj_file(src_filename: &str, obj_filename: &str) -> Result<Str
     }
 
     gcc_cmd.arg("-c"); // Compile to object file
+    gcc_cmd.arg("-w"); // Disable warnings
 
     gcc_cmd.arg(src_filename);
 
@@ -347,6 +348,8 @@ fn gcc_compile_and_link_with_obj_file(
         gcc_cmd.arg("-arch");
         gcc_cmd.arg("x86_64");
     }
+
+    gcc_cmd.arg("-w"); // Disable warnings
 
     gcc_cmd.arg(src_filename);
 

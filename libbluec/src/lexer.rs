@@ -3,9 +3,11 @@
 //! The `lexer` module handles the lexical analysis of the source code and then
 //! passes the results (a vector of tokens) to the parser.
 
+mod char_literal;
 mod line_lexer;
 mod numeric_literals;
 mod source_location;
+mod string_literal;
 mod tokens;
 
 #[cfg(test)]
@@ -15,7 +17,7 @@ use crate::compiler_driver;
 use crate::compiler_driver::DriverError;
 use crate::compiler_driver::diagnostics::Diagnostic;
 pub use crate::lexer::source_location::SourceLocation;
-pub use crate::lexer::tokens::{IntegerLiteralSuffix, FloatLiteralSuffix, NumericLiteralBase, Token, TokenType};
+pub use crate::lexer::tokens::{FloatLiteralSuffix, IntegerLiteralSuffix, NumericLiteralBase, Token, TokenType};
 use crate::parser;
 
 use std::fs::File;
