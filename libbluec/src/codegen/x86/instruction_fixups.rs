@@ -407,8 +407,7 @@ fn fixup_push(instr: AsmInstruction) -> Vec<AsmInstruction> {
             src: AsmOperand::from_u64(8),
             dst: AsmOperand::hw_reg(HwRegister::RSP, AsmType::QuadWord),
         });
-        // movsd xmm, (%rsp)
-        // TODO: Need to revisit this for fp32: movss
+        // movsd xmm, (%rsp)  ; Copy the low 64 bits from the xmm register onto the stack
         out.push(AsmInstruction::Mov {
             asm_type: AsmType::FpDouble,
             src: operand,
