@@ -35,12 +35,16 @@ Options:
   -D <macro>=<value>     Define <macro> to <value> (or 1 if <value> omitted)
   -S                     Only run preprocess and compilation steps to produce
                          a '.s' assembly file
-  -Wall                  Enable all warnings
-  -Werror                Treat warnings as errors
   -c                     Only run preprocess, compiler, and assembler steps to
                          produce an object file (.o)
   -l <lib>               Specifies a library to link with
   -o <file>              Write output to <file>
+
+  -Wall                  Enable all warnings
+  -w                     Disable all warnings
+  -Werror                Treat warnings as errors
+  -W<warning>            Enable a specific warning
+  -Wno-<warning>         Disable a specific warning
 
   -fprint-terse          Print terse diagnostics without text wrapping, nor
                          filename/line/column and source code
