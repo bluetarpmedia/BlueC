@@ -24,9 +24,6 @@ pub struct DriverOptions {
     /// Libraries to link with.
     pub link_libs: Vec<String>,
 
-    /// Enable all warnings.
-    pub enable_all_warnings: bool,
-
     /// Treat warnings as errors.
     pub warnings_as_errors: bool,
 
@@ -69,17 +66,37 @@ impl DriverFlag {
 }
 
 impl DriverOptions {
-    /// Creates the driver options with default warnings enabled.
+    /// Creates the driver options with the default set of enabled warnings.
     pub fn with_default_warnings() -> Self {
         DriverOptions { enabled_warnings: WarningKind::enabled_by_default(), ..Default::default() }
     }
 
-    /// Is the given warning enabled?
-    pub fn is_warning_enabled(&self, kind: WarningKind) -> bool {
-        if self.enable_all_warnings {
-            return true;
+    /// Creates the driver options with all warnings enabled.
+    pub fn with_all_warnings() -> Self {
+        DriverOptions { enabled_warnings: WarningKind::all(), ..Default::default() }
+    }
+
+    /// Creates the driver options with the default set of enabled warnings along with the given set of enabled
+    /// warnings, but without the given set of disabled warnings.
+    pub fn with_warnings(enabled: HashSet<WarningKind>, disabled: HashSet<WarningKind>) -> Self {
+        let mut enabled_warnings = WarningKind::enabled_by_default();
+
+        enabled_warnings.extend(enabled);
+
+        for warning in disabled {
+            enabled_warnings.remove(&warning);
         }
 
+        DriverOptions { enabled_warnings, ..Default::default() }
+    }
+
+    /// Creates the driver options with all warnings disabled.
+    pub fn without_warnings() -> Self {
+        DriverOptions { enabled_warnings: HashSet::new(), ..Default::default() }
+    }
+
+    /// Is the given warning enabled?
+    pub fn is_warning_enabled(&self, kind: WarningKind) -> bool {
         self.enabled_warnings.contains(&kind)
     }
 }

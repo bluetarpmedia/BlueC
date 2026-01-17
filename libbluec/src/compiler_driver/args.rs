@@ -7,8 +7,8 @@
 use std::collections::{HashMap, HashSet};
 use std::iter::Peekable;
 
+use super::{DriverOptions, WarningKind};
 use crate::ICE;
-use crate::compiler_driver::DriverOptions;
 
 /// The command-line argument parser.
 pub struct Parser {
@@ -124,30 +124,30 @@ impl Parser {
             .map(|(key, value)| if let Some(value) = value { format!("{key}={value}") } else { key })
             .collect();
 
-        let link_obj_files = self.link_object_files;
-        let link_libs = self.options.get("l").cloned().unwrap_or_default();
-
         // Is the given flag set?
         let is_flag_set = |flag: &str| -> bool { self.flags.contains(flag) };
 
-        // Does an option exist with the given key and value? E.g. for '-Wall', key is 'W' and value is 'all'.
+        // Does an option exist with the given key and value? E.g. for '-Werror', key is 'W' and value is 'error'.
         let is_option_set = |options: &HashMap<String, Vec<String>>, key: &str, value: &str| -> bool {
             if let Some(values) = options.get(key) { values.iter().any(|v| v == value) } else { false }
         };
 
-        let output_file = self.options.remove("o").and_then(|vec| vec.into_iter().next());
-        let enable_all_warnings = is_option_set(&self.options, "W", "all");
-        let warnings_as_errors = is_option_set(&self.options, "W", "error");
-
-        let mut options = DriverOptions::with_default_warnings();
+        // Create the driver options with the appropriate warnings.
+        let disable_all_warnings = is_flag_set("w");
+        let mut options = if disable_all_warnings {
+            DriverOptions::without_warnings()
+        } else if let Some((enabled, disabled)) = parse_warning_args(&self.options) {
+            DriverOptions::with_warnings(enabled, disabled)
+        } else {
+            DriverOptions::with_default_warnings()
+        };
 
         options.preprocessor_defns = preprocessor_defns;
         options.generate_object_file = is_flag_set("c");
-        options.output_file = output_file;
-        options.link_obj_files = link_obj_files;
-        options.link_libs = link_libs;
-        options.enable_all_warnings = enable_all_warnings;
-        options.warnings_as_errors = warnings_as_errors;
+        options.output_file = self.options.remove("o").and_then(|vec| vec.into_iter().next());
+        options.link_obj_files = self.link_object_files;
+        options.link_libs = self.options.get("l").cloned().unwrap_or_default();
+        options.warnings_as_errors = is_option_set(&self.options, "W", "error");
         options.only_create_asm_file = is_flag_set("S");
         options.lex = is_flag_set("lex");
         options.parse = is_flag_set("parse");
@@ -160,6 +160,57 @@ impl Parser {
 
         options
     }
+}
+
+fn parse_warning_args(options: &HashMap<String, Vec<String>>) -> Option<(HashSet<WarningKind>, HashSet<WarningKind>)> {
+    let warning_options = options.get("W")?;
+
+    let print_unknown_warning_option = |option: &str| {
+        println!("warning: Unknown warning option '{option}'");
+    };
+
+    // Gather all the warnings that the user wants to enable.
+    let enable_all = warning_options.iter().any(|v| v == "all");
+    let enabled_warnings = if enable_all {
+        WarningKind::all()
+    } else {
+        warning_options
+            .iter()
+            .filter_map(|option| {
+                if option.starts_with("no-") || option == "error" {
+                    None
+                } else {
+                    let warning_kind = option.parse::<WarningKind>();
+
+                    if warning_kind.is_err() {
+                        print_unknown_warning_option(option);
+                    }
+
+                    warning_kind.ok()
+                }
+            })
+            .collect()
+    };
+
+    // Gather all the warnings that the user wants to disable.
+    let disabled_warnings = warning_options
+        .iter()
+        .filter_map(|option| {
+            if option.starts_with("no-") {
+                let warning_kind = option.strip_prefix("no-").unwrap().parse::<WarningKind>();
+
+                if warning_kind.is_err() {
+                    print_unknown_warning_option(option);
+                }
+
+                warning_kind.ok()
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    Some((enabled_warnings, disabled_warnings))
 }
 
 fn take_positional_argument(arg: String, sources: &mut Vec<String>, objects: &mut Vec<String>) {
@@ -276,8 +327,14 @@ fn print_help() {
         if opt[0].is_empty() {
             println!();
         } else {
-            println!("  {: <20}  {: <50}", opt[0], opt[1]);
+            println!("  {: <25}  {: <50}", opt[0], opt[1]);
         }
+    }
+
+    println!("\n  Warnings");
+    let warnings = WarningKind::all_strings();
+    for warning in warnings {
+        println!("  -W{warning}");
     }
 }
 
@@ -285,11 +342,15 @@ fn print_help() {
 static OPTIONS: &[&str] = &[
     "-D <macro>=<value>",    "Define <macro> to <value> (or 1 if <value> omitted)",
     "-S",                    "Only run preprocess and compilation steps to produce a '.s' assembly file",
-    "-Wall",                 "Enable all warnings",
-    "-Werror",               "Treat warnings as errors",
     "-c",                    "Only run preprocess, compiler, and assembler steps to produce an object file (.o)",
     "-l <lib>",              "Specifies a library to link with",
     "-o <file>",             "Write output to <file>",
+    "","",
+    "-Wall",                 "Enable all warnings",
+    "-w",                    "Disable all warnings",
+    "-Werror",               "Treat warnings as errors",
+    "-W<warning>",           "Enable a specific warning",
+    "-Wno-<warning>",        "Disable a specific warning",
     "","",
     "-fprint-terse",         "Print terse diagnostics without text wrapping, nor filename/line/column and source code",
     "-fprint-no-source-loc", "Print diagnostics without filename/line/column",

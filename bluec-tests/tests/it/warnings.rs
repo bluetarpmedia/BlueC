@@ -9,8 +9,7 @@ use libbluec::compiler_driver::{Driver, DriverError};
 
 #[test]
 fn warning_as_error() {
-    let mut options = DriverOptions::with_default_warnings();
-    options.enable_all_warnings = true;
+    let mut options = DriverOptions::with_all_warnings();
     options.warnings_as_errors = true;
 
     let mut driver = Driver::new(&get_test_source_file_path("warnings/uninitialized.c"), options);
@@ -25,8 +24,7 @@ fn warning_as_error() {
 include!(concat!(env!("OUT_DIR"), "/generated_valid_program_with_warnings_tests.rs"));
 
 fn compile_source_file_and_expect_warnings(source_filename: &str) {
-    let mut options = DriverOptions::with_default_warnings();
-    options.enable_all_warnings = true;
+    let mut options = DriverOptions::with_all_warnings();
     options.validate = true;
 
     let mut driver = Driver::new(source_filename, options);

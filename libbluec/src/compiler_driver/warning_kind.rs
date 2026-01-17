@@ -2,57 +2,103 @@
 //
 //! The `warning_kind` module defines the `WarningKind` enum.
 
-use std::fmt;
 use std::collections::HashSet;
+use std::fmt;
 
-/// The kind of warning.
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
-pub enum WarningKind {
-    None,
+// An "X-macro" to generate the `WarningKind` enum and functions to convert to/from a string representation.
+macro_rules! define_warning_kind {
+    ($($variant:ident => $string:expr),* $(,)?) => {
+        /// The kind of warning.
+        #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+        pub enum WarningKind {
+            $($variant),*
+        }
+
+        impl WarningKind {
+            /// The string representation of the warning kind.
+            pub const fn as_str(&self) -> &'static str {
+                match self {
+                    $(Self::$variant => $string),*
+                }
+            }
+
+            /// A `HashSet` of all the warnings.
+            pub fn all() -> HashSet<WarningKind> {
+                HashSet::from([$(Self::$variant),*])
+            }
+
+            /// A sorted `Vec` of the string representations of all the warnings.
+            pub fn all_strings() -> Vec<&'static str> {
+                let mut all = vec![$($string),*];
+                all.sort();
+                all
+            }
+        }
+
+        impl std::str::FromStr for WarningKind {
+            type Err = String;
+
+            /// Returns the `Ok(WarningKind)` from its string representation, or returns an `Err`.
+            fn from_str(s: &str) -> Result<Self, Self::Err> {
+                match s {
+                    $($string => Ok(Self::$variant),)*
+                    _ => Err(format!("Unknown WarningKind: {}", s)),
+                }
+            }
+        }
+    };
+}
+
+// Define the `WarningKind` enum variants and their string representations.
+#[rustfmt::skip]
+define_warning_kind! {
     //
     // Literals
     //
-    ConstantConversion,
-    ImplicitlyUnsignedLiteral,
+    Multichar                      => "multichar",
+    UnknownEscapeSequence          => "unknown-escape-sequence",
+    ConstantConversion             => "constant-conversion",
+    ImplicitlyUnsignedLiteral      => "implicitly-unsigned-literal",
     //
     // Declarations and initializers
     //
-    MissingDeclarations,
-    DuplicateDeclSpecifier,
-    ExternInitializer,
-    Uninitialized,
-    UnusedVariable,
-    UnusedFunction,
-    UnusedLocalTypedef,
-    ExcessInitializers,
-    MissingBraces,
-    ManyBracesAroundScalarInit,
+    MissingDeclarations            => "missing-declarations",
+    DuplicateDeclSpecifier         => "duplicate-decl-specifier",
+    ExternInitializer              => "extern-initializer",
+    Uninitialized                  => "uninitialized",
+    UnusedVariable                 => "unused-variable",
+    UnusedFunction                 => "unused-function",
+    UnusedLocalTypedef             => "unused-local-typedef",
+    ExcessInitializers             => "excess-initializers",
+    MissingBraces                  => "missing-braces",
+    ManyBracesAroundScalarInit     => "many-braces-around-scalar-init",
     //
     // Expressions
     //
-    LogicalOpParentheses,
-    BitwiseOpParentheses,
-    Parentheses,
-    ArrayBounds,
+    LogicalOpParentheses           => "logical-op-parentheses",
+    BitwiseOpParentheses           => "bitwise-op-parentheses",
+    Parentheses                    => "parentheses",
+    ArrayBounds                    => "array-bounds",
     //
     // Conversions and casts
     //
-    ImplicitConversion,
-    ImplicitIntConversion,
-    ImplicitFloatConversion,
-    SignConversion,
-    PointerToIntCast,
-    NonLiteralNullConversion,
+    ImplicitConversion             => "implicit-conversion",
+    ImplicitIntConversion          => "implicit-int-conversion",
+    ImplicitFloatConversion        => "implicit-float-conversion",
+    SignConversion                 => "sign-conversion",
+    PointerToIntCast               => "pointer-to-int-cast",
+    NonLiteralNullConversion       => "non-literal-null-conversion",
     //
     // Comparisons
     //
-    CompareDistinctPointerTypes,
-    PointerIntegerCompare,
+    CompareDistinctPointerTypes    => "compare-distinct-pointer-types",
+    PointerIntegerCompare          => "pointer-integer-compare",
+
     //
     // Types
     //
-    ConditionalTypeMismatch,
-    PointerTypeMismatch,
+    ConditionalTypeMismatch        => "conditional-type-mismatch",
+    PointerTypeMismatch            => "pointer-type-mismatch",
 }
 
 impl fmt::Display for WarningKind {
@@ -62,49 +108,11 @@ impl fmt::Display for WarningKind {
 }
 
 impl WarningKind {
-    /// The string representation of the warning kind.
-    #[rustfmt::skip]
-    const fn as_str(&self) -> &'static str {
-        match self {
-            WarningKind::None                           => "",
-            
-            WarningKind::ConstantConversion             => "constant-conversion",
-            WarningKind::ImplicitlyUnsignedLiteral      => "implicitly-unsigned-literal",
-
-            WarningKind::MissingDeclarations            => "missing-declarations",
-            WarningKind::DuplicateDeclSpecifier         => "duplicate-decl-specifier",
-            WarningKind::ExternInitializer              => "extern-initializer",
-            WarningKind::Uninitialized                  => "uninitialized",
-            WarningKind::UnusedVariable                 => "unused-variable",
-            WarningKind::UnusedFunction                 => "unused-function",
-            WarningKind::UnusedLocalTypedef             => "unused-local-typedef",
-            WarningKind::ExcessInitializers             => "excess-initializers",
-            WarningKind::MissingBraces                  => "missing-braces",
-            WarningKind::ManyBracesAroundScalarInit     => "many-braces-around-scalar-init",
-
-            WarningKind::LogicalOpParentheses           => "logical-op-parentheses",
-            WarningKind::BitwiseOpParentheses           => "bitwise-op-parentheses",
-            WarningKind::Parentheses                    => "parentheses",
-            WarningKind::ArrayBounds                    => "array-bounds",
-
-            WarningKind::ImplicitConversion             => "implicit-conversion",
-            WarningKind::ImplicitIntConversion          => "implicit-int-conversion",
-            WarningKind::ImplicitFloatConversion        => "implicit-float-conversion",
-            WarningKind::SignConversion                 => "sign-conversion",
-            WarningKind::PointerToIntCast               => "pointer-to-int-cast",
-            WarningKind::NonLiteralNullConversion       => "non-literal-null-conversion",
-
-            WarningKind::CompareDistinctPointerTypes    => "compare-distinct-pointer-types",
-            WarningKind::PointerIntegerCompare          => "pointer-integer-compare",
-
-            WarningKind::ConditionalTypeMismatch        => "conditional-type-mismatch",
-            WarningKind::PointerTypeMismatch            => "pointer-type-mismatch",
-        }
-    }
-
     /// Returns a `HashSet` of warnings that are enabled by default.
     pub fn enabled_by_default() -> HashSet<WarningKind> {
-        [
+        HashSet::from([
+            WarningKind::Multichar,
+            WarningKind::UnknownEscapeSequence,
             WarningKind::ConstantConversion,
             WarningKind::DuplicateDeclSpecifier,
             WarningKind::ExternInitializer,
@@ -114,6 +122,6 @@ impl WarningKind {
             WarningKind::NonLiteralNullConversion,
             WarningKind::ConditionalTypeMismatch,
             WarningKind::PointerTypeMismatch,
-        ].into_iter().collect()
+        ])
     }
 }

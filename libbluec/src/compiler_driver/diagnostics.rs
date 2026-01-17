@@ -60,12 +60,7 @@ impl Diagnostic {
 
     /// Creates a new warning diagnostic with the given message and source code location.
     pub fn warning_at_location(kind: WarningKind, message: String, loc: SourceLocation) -> Self {
-        let message = if kind == WarningKind::None {
-            message
-        } else {
-            format!("{message} [-W{}]", kind)
-        };
-
+        let message = format!("{message} [-W{kind}]");
         Self { kind: DiagnosticKind::Warning(kind), message, locations: vec![loc], notes: None }
     }
 
