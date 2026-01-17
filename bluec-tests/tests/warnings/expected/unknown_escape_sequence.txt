@@ -1,0 +1,7 @@
+warning: Unknown escape sequence '\y' [-Wunknown-escape-sequence]
+   |
+   |     char c = '\y';
+   |               ^^
+   |
+
+1 warning generated

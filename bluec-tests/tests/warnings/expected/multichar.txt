@@ -1,0 +1,8 @@
+warning: Character literal is too long; the last 4 chars are taken as the value.
+         [-Wmultichar]
+   |
+   |     int b = 'ABCDE';
+   |             ^^^^^^^
+   |
+
+1 warning generated
