@@ -322,6 +322,11 @@ impl AstExpression {
 
     /// Is the AST expression an arithmetic (integer or floating-point) literal?
     pub fn is_arithmetic_literal(&self) -> bool {
-        matches!(self, AstExpression::IntegerLiteral { .. } | AstExpression::FloatLiteral { .. })
+        matches!(
+            self,
+            AstExpression::CharLiteral { .. }
+                | AstExpression::IntegerLiteral { .. }
+                | AstExpression::FloatLiteral { .. }
+        )
     }
 }
