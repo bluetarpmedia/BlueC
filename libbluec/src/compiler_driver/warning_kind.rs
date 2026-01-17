@@ -111,17 +111,22 @@ impl WarningKind {
     /// Returns a `HashSet` of warnings that are enabled by default.
     pub fn enabled_by_default() -> HashSet<WarningKind> {
         HashSet::from([
-            WarningKind::Multichar,
-            WarningKind::UnknownEscapeSequence,
+            WarningKind::ArrayBounds,
+            WarningKind::ConditionalTypeMismatch,
             WarningKind::ConstantConversion,
-            WarningKind::DuplicateDeclSpecifier,
-            WarningKind::ExternInitializer,
             WarningKind::CompareDistinctPointerTypes,
+            WarningKind::DuplicateDeclSpecifier,
+            WarningKind::ExcessInitializers,
+            WarningKind::ExternInitializer,
+            WarningKind::ImplicitlyUnsignedLiteral,
+            WarningKind::ManyBracesAroundScalarInit,
+            WarningKind::Multichar,
+            WarningKind::NonLiteralNullConversion,
+            WarningKind::Parentheses,
             WarningKind::PointerIntegerCompare,
             WarningKind::PointerToIntCast,
-            WarningKind::NonLiteralNullConversion,
-            WarningKind::ConditionalTypeMismatch,
             WarningKind::PointerTypeMismatch,
+            WarningKind::UnknownEscapeSequence,
         ])
     }
 }

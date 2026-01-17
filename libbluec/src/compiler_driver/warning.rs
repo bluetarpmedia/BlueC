@@ -222,9 +222,9 @@ impl Warning {
             }
         };
 
-        let kind = if parent_expr_op.family() == AstBinaryOpFamily::Logical {
+        let kind = if same_family && parent_expr_op.family() == AstBinaryOpFamily::Logical {
             WarningKind::LogicalOpParentheses
-        } else if parent_expr_op.family() == AstBinaryOpFamily::Bitwise {
+        } else if same_family && parent_expr_op.family() == AstBinaryOpFamily::Bitwise {
             WarningKind::BitwiseOpParentheses
         } else {
             WarningKind::Parentheses
