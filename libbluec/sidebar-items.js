@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"macro":["ICE"],"mod":["codegen","compiler_driver","ir","lexer","parser","sema"]};
+window.SIDEBAR_ITEMS = {"macro":["ICE"],"mod":["codegen","compiler_driver","ir","lexer","parser","sema","utils"]};

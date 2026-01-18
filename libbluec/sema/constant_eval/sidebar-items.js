@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["evaluate_constant_expr","evaluate_constant_full_expr"],"struct":["ConstantEvalContext"]};

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["semantic_analysis"],"mod":["symbol_table","type_conversion","type_resolution"]};
+window.SIDEBAR_ITEMS = {"fn":["semantic_analysis"],"mod":["constant_eval","constant_table","symbol_table","type_conversion","type_resolution"]};

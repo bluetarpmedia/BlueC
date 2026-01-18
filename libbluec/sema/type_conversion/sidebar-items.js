@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["cast_i128_to_integer_type","convert_i32_to_i16","convert_i64_to_i16","convert_i64_to_i32","convert_u64_to_i16","convert_u64_to_i32","convert_u64_to_i64","convert_u64_to_u16","convert_u64_to_u32"]};
+window.SIDEBAR_ITEMS = {"fn":["cast_i128_to_integer_type","convert_i32_to_i16","convert_i64_to_i16","convert_i64_to_i32","convert_u64_to_i16","convert_u64_to_i32","convert_u64_to_i64","convert_u64_to_i8","convert_u64_to_u16","convert_u64_to_u32","convert_u64_to_u8"]};
