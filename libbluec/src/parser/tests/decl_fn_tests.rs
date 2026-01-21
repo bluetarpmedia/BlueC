@@ -1,9 +1,9 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 
-use super::utils::make_parser;
-
 use crate::compiler_driver;
 use crate::parser::recursive_descent::parse_translation_unit;
+
+use super::utils::make_parser;
 
 #[test]
 fn invalid_decl_syntax() {

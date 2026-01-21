@@ -2,15 +2,12 @@
 //
 //! The `type_resolution` module provides functionality to resolve a declared type into a canonical `AstType`.
 
-use super::symbol_table::SymbolTable;
-
 use crate::ICE;
-use crate::compiler_driver::Driver;
-use crate::compiler_driver::diagnostics::{Diagnostic, SourceIdentifier};
-use crate::compiler_driver::errors::Error;
-use crate::compiler_driver::Warning;
-use crate::lexer::SourceLocation;
+use crate::compiler_driver::{Diagnostic, Driver, Error, Warning};
+use crate::core::{SourceIdentifier, SourceLocation};
 use crate::parser::{AstBasicTypeSpecifier, AstDeclarator, AstDeclaratorKind, AstDeclaredType, AstType};
+
+use super::symbol_table::SymbolTable;
 
 /// An error returned by `resolve_type`. Error diagnostics are emitted to the compiler driver.
 pub enum ResolutionError {
@@ -135,11 +132,8 @@ fn resolve_builtin_type_specifiers(
                 // 'char' can be combined with 'signed' or 'unsigned' but nothing else.
                 //      Allow signed/unsigned to be repeated; we'll warn below.
                 if char_count == 1 && type_specifiers.len() > 1 {
-                    let invalid_combination = short_count > 0
-                        || int_count > 0
-                        || long_count > 0
-                        || float_count > 0
-                        || double_count > 0;
+                    let invalid_combination =
+                        short_count > 0 || int_count > 0 || long_count > 0 || float_count > 0 || double_count > 0;
 
                     if invalid_combination {
                         if let Some(driver) = driver {

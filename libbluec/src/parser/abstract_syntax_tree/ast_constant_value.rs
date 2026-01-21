@@ -55,11 +55,11 @@ pub enum AstAddressConstant {
     /// ```c
     /// static int a = 1;
     /// static int *p = &a;
-    /// 
+    ///
     /// static int arr[4] = {1, 2, 3, 4};
     /// static int *p = &arr[2];
     /// static int *p = arr + 2;
-    /// 
+    ///
     /// static char *ptr = "Hello";
     /// ```
     AddressOfObject { object: String, byte_offset: i32 },
@@ -129,9 +129,7 @@ impl AstConstantValue {
                 AstConstantFp::Double(_) => AstType::Double,
             },
             AstConstantValue::Pointer(ty, _) => ty.clone(),
-            AstConstantValue::String { ascii } => {
-                AstType::new_array(AstType::Char, ascii.len())
-            }
+            AstConstantValue::String { ascii } => AstType::new_array(AstType::Char, ascii.len()),
         }
     }
 
@@ -185,7 +183,9 @@ impl AstConstantValue {
         macro_rules! make_cast {
             ($value:expr) => {
                 match cast_to_type {
-                    AstType::Char | AstType::SignedChar => AstConstantValue::Integer(AstConstantInteger::from_value($value as i8)),
+                    AstType::Char | AstType::SignedChar => {
+                        AstConstantValue::Integer(AstConstantInteger::from_value($value as i8))
+                    }
                     AstType::Short => AstConstantValue::Integer(AstConstantInteger::from_value($value as i16)),
                     AstType::Int => AstConstantValue::Integer(AstConstantInteger::from_value($value as i32)),
                     AstType::Long | AstType::LongLong => {

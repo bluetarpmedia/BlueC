@@ -2,20 +2,14 @@
 //
 //! The `stmt` module defines the various parsing functions for C statements.
 
-use super::super::{EnclosingStatement, EnclosingStatementChain};
-use super::block;
-use super::decl;
-use super::expr;
-use super::peek;
-use super::utils;
-use super::{AstForInitializer, AstNodeId, AstStatement};
-use super::{ParseError, ParseResult, Parser, add_error};
-
-use crate::compiler_driver::Driver;
-use crate::compiler_driver::diagnostics::Diagnostic;
-use crate::internal_error;
+use crate::ICE;
+use crate::compiler_driver::{Diagnostic, Driver};
 use crate::lexer;
-use crate::parser::{AstDeclaration, meta};
+
+use super::super::{EnclosingStatement, EnclosingStatementChain};
+use super::{AstDeclaration, AstForInitializer, AstNodeId, AstStatement};
+use super::{ParseError, ParseResult, Parser, add_error};
+use super::{block, decl, expr, peek, utils};
 
 /// Parses a statement.
 ///
@@ -70,7 +64,7 @@ pub fn parse_statement(parser: &mut Parser, driver: &mut Driver) -> ParseResult<
                     "continue" => stmt = parse_continue_statement(parser, driver),
                     "goto" => stmt = parse_goto_statement(parser, driver),
                     "return" => stmt = parse_return_statement(parser, driver),
-                    _ => internal_error::ICE("Parser: Unhandled control statement"),
+                    _ => ICE!("Parser: Unhandled control statement '{id}'"),
                 },
 
                 // Expression statement
@@ -81,7 +75,7 @@ pub fn parse_statement(parser: &mut Parser, driver: &mut Driver) -> ParseResult<
         }
 
         _ => {
-            internal_error::ICE("Parser: Expected token to parse statement");
+            ICE!("Parser: Expected token to parse statement");
         }
     }
 
@@ -111,7 +105,7 @@ pub fn parse_labeled_statement(parser: &mut Parser, driver: &mut Driver) -> Pars
     let label_name = label_token
         .get_identifier()
         .or_else(|| {
-            internal_error::ICE("Parser: Expected identifier token");
+            ICE!("Parser: Expected identifier token");
         })
         .unwrap();
 
@@ -158,10 +152,7 @@ pub fn parse_labeled_statement(parser: &mut Parser, driver: &mut Driver) -> Pars
     let stmt = stmt.unwrap();
 
     let node_id = AstNodeId::new();
-    parser.metadata.add_source_span(
-        node_id,
-        meta::AstNodeSourceSpan::from_source_location_pair(&label_token.location, &colon_token_loc),
-    );
+    parser.metadata.add_source_location(node_id, label_token.location.merge_with(colon_token_loc));
 
     Ok(AstStatement::Labeled { node_id, label_name: label_name.clone(), stmt: Box::new(stmt) })
 }
@@ -261,7 +252,7 @@ pub fn parse_switch_case_statement(parser: &mut Parser, driver: &mut Driver) -> 
 
     // Constant expression
     let constant_expr = expr::parse_full_expression(parser, driver)?;
-    
+
     let colon_token_loc = utils::expect_token(lexer::TokenType::Colon, parser, driver)?;
 
     // Parse the statement after the label
@@ -412,7 +403,7 @@ pub fn parse_for_statement(parser: &mut Parser, driver: &mut Driver) -> ParseRes
                     add_error(
                         driver,
                         format!("Variable '{}' cannot be declared 'static' in a for-loop initializer", var_decl.ident),
-                        parser.metadata.get_source_span_as_loc(&var_decl.node_id).unwrap(),
+                        parser.metadata.get_source_location(&var_decl.node_id),
                     );
                 }
 
@@ -509,15 +500,12 @@ pub fn parse_goto_statement(parser: &mut Parser, driver: &mut Driver) -> ParseRe
     let label_name = label_token
         .get_identifier()
         .or_else(|| {
-            internal_error::ICE("Parser: Expected identifier token");
+            ICE!("Parser: Expected identifier token");
         })
         .unwrap();
 
     let node_id = AstNodeId::new();
-    parser.metadata.add_source_span(
-        node_id,
-        meta::AstNodeSourceSpan::from_source_location_pair(&goto_token_loc, &label_token.location),
-    );
+    parser.metadata.add_source_location(node_id, goto_token_loc.merge_with(label_token.location));
 
     Ok(AstStatement::Goto { node_id, label_name: label_name.clone() })
 }

@@ -1,11 +1,9 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 
-use super::super::symbol_table::{Definition, SymbolAttributes, SymbolTable};
-
-use crate::compiler_driver::diagnostics::SourceIdentifier;
-use crate::lexer::SourceLocation;
-use crate::parser::symbol::SymbolKind;
+use crate::core::{FilePosition, SourceIdentifier, SourceLocation, SymbolKind};
 use crate::parser::{AstLinkage, AstType, AstUniqueName};
+
+use super::super::symbol_table::{Definition, SymbolAttributes, SymbolTable};
 
 #[test]
 fn add_symbols() {
@@ -24,7 +22,7 @@ fn add_symbols() {
     assert!(table.get(AstUniqueName::new("calculate")).is_some_and(|symbol| symbol.kind() == SymbolKind::Function));
 
     // Cannot add duplicate symbol with same unique name
-    let global_var_source_id = SourceIdentifier("global_var", make_location(1, 1));
+    let global_var_source_id = SourceIdentifier("global_var", make_location(1));
     assert!(
         table
             .add(
@@ -41,7 +39,7 @@ fn add_symbols() {
             .add(
                 AstUniqueName::new("global_var"),
                 AstType::Function { return_type: Box::new(AstType::Int), params: Vec::new() },
-                SymbolAttributes::function(Definition::Defined, AstLinkage::External, make_location(1, 1))
+                SymbolAttributes::function(Definition::Defined, AstLinkage::External, make_location(1))
             )
             .is_err()
     );
@@ -120,7 +118,7 @@ fn unused_symbols() {
 }
 
 fn add_global_variable_declaration(table: &mut SymbolTable, name: &str) {
-    let var_source_id = SourceIdentifier(name, make_location(1, 1));
+    let var_source_id = SourceIdentifier(name, make_location(1));
     assert!(
         table
             .add(
@@ -133,7 +131,7 @@ fn add_global_variable_declaration(table: &mut SymbolTable, name: &str) {
 }
 
 fn add_local_variable_declaration(table: &mut SymbolTable, name: &str) {
-    let var_source_id = SourceIdentifier(name, make_location(2, 1));
+    let var_source_id = SourceIdentifier(name, make_location(2));
     assert!(
         table
             .add(
@@ -146,14 +144,10 @@ fn add_local_variable_declaration(table: &mut SymbolTable, name: &str) {
 }
 
 fn add_type_alias_declaration(table: &mut SymbolTable, name: &str, file_scope: bool) {
-    let alias_source_id = SourceIdentifier(name, make_location(3, 1));
+    let alias_source_id = SourceIdentifier(name, make_location(3));
     assert!(
         table
-            .add(
-                AstUniqueName::new(name),
-                AstType::Int,
-                SymbolAttributes::type_alias(alias_source_id, file_scope)
-            )
+            .add(AstUniqueName::new(name), AstType::Int, SymbolAttributes::type_alias(alias_source_id, file_scope))
             .is_ok()
     );
 }
@@ -164,12 +158,12 @@ fn add_function_declaration(table: &mut SymbolTable, name: &str, definition: Def
             .add(
                 AstUniqueName::new(name),
                 AstType::Function { return_type: Box::new(AstType::Int), params: Vec::new() },
-                SymbolAttributes::function(definition, linkage, make_location(4, 1))
+                SymbolAttributes::function(definition, linkage, make_location(4))
             )
             .is_ok()
     );
 }
 
-fn make_location(line: usize, column: usize) -> SourceLocation {
-    SourceLocation { line, column, length: 1 }
+fn make_location(pos: i32) -> SourceLocation {
+    SourceLocation::new(FilePosition::from(pos), 1)
 }

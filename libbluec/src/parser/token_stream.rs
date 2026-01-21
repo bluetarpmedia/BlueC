@@ -1,8 +1,9 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 //
-//! The token_stream module provides a stateful TokenStream which allows the parent
-//! parser module to consume and peek at tokens in the stream.
+//! The `token_stream` module provides a stateful TokenStream which allows the parent parser module to consume and
+//! peek at tokens in the stream.
 
+use crate::core::SourceLocation;
 use crate::lexer;
 
 /// A token stream is a list of tokens produced by the lexer which can be iterated over.
@@ -129,7 +130,7 @@ impl TokenStream {
     }
 
     /// Peeks at the next token's source location in the stream, without advancing past it.
-    pub fn peek_next_source_location(&self) -> Option<lexer::SourceLocation> {
+    pub fn peek_next_source_location(&self) -> Option<SourceLocation> {
         if self.cursor >= self.tokens.len() {
             return None;
         }
@@ -137,7 +138,7 @@ impl TokenStream {
     }
 
     /// The source location of the previous token in the stream, or None.
-    pub fn prev_token_source_location(&self) -> Option<lexer::SourceLocation> {
+    pub fn prev_token_source_location(&self) -> Option<SourceLocation> {
         if self.cursor == 0 || self.cursor > self.tokens.len() {
             return None;
         }

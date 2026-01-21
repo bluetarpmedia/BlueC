@@ -2,12 +2,13 @@
 //
 //! The `file_writer` module provides functionality to write x86_64 assembly to a file.
 
-use super::ast::{AsmBinaryOp, AsmInstruction, AsmLabelName, AsmOperand, AsmType, AsmUnaryOp, ConditionalCode};
-use super::symbols::{AsmSymbol, AsmSymbolTable};
-use crate::ICE;
-
 use std::fs::File;
 use std::io::{BufWriter, Result, Write};
+
+use crate::ICE;
+
+use super::ast::{AsmBinaryOp, AsmInstruction, AsmLabelName, AsmOperand, AsmType, AsmUnaryOp, ConditionalCode};
+use super::symbols::{AsmSymbol, AsmSymbolTable};
 
 const INDENT: &str = "    ";
 

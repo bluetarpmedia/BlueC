@@ -2,10 +2,10 @@
 //
 //! The `label_maker` module defines the `LabelMaker` type.
 
-use super::BtLabelIdentifier;
-
-use crate::internal_error;
+use crate::ICE;
 use crate::parser;
+
+use super::BtLabelIdentifier;
 
 /// The Label Maker provides functions to generate unique label names for use in the IR.
 #[derive(Debug)]
@@ -67,7 +67,7 @@ impl LabelMaker {
     pub fn make_unique_label(&mut self, label_name: &str) -> BtLabelIdentifier {
         let idx = self.next_label_index;
         if idx == usize::MAX {
-            internal_error::ICE("Exhausted label indices"); // Technically we have 1 more available but we'll limit ourselves to MAX-1.
+            ICE!("Exhausted label indices"); // Technically we have 1 more available
         }
         self.next_label_index += 1;
         BtLabelIdentifier(format!(

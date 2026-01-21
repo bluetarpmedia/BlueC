@@ -14,14 +14,14 @@ pub(super) mod utils;
 mod symbols;
 mod traverse;
 
+use crate::compiler_driver::Driver;
+use crate::parser::{AstMetadata, AstRoot};
+
 use self::checker::TypeChecker;
 use super::constant_table::ConstantTable;
 use super::switch_stmt;
 use super::symbol_table::SymbolTable;
 use super::type_resolution;
-
-use crate::compiler_driver::Driver;
-use crate::parser::{AstMetadata, AstRoot};
 
 /// Performs type checking on the AST.
 pub fn type_check(

@@ -2,16 +2,15 @@
 //
 //! The `literal` module defines the various parsing functions for integer and floating-point literals.
 
+use crate::ICE;
+use crate::compiler_driver::{Driver, Warning};
+use crate::core::SourceLocation;
+use crate::lexer;
+
 use super::hex_float;
 use super::utils;
 use super::{AstExpression, AstFloatLiteralKind, AstIntegerLiteralKind, AstNodeId};
 use super::{ParseError, ParseResult, Parser, add_error};
-
-use crate::ICE;
-use crate::compiler_driver::{Driver, Warning};
-use crate::lexer;
-use crate::lexer::SourceLocation;
-use crate::parser::meta;
 
 /// Parses a character literal.
 pub fn parse_char_literal(parser: &mut Parser, driver: &mut Driver) -> ParseResult<AstExpression> {
@@ -22,7 +21,7 @@ pub fn parse_char_literal(parser: &mut Parser, driver: &mut Driver) -> ParseResu
     };
 
     let node_id = AstNodeId::new();
-    parser.metadata.add_source_span(node_id, meta::AstNodeSourceSpan::from_source_location(&token.location));
+    parser.metadata.add_source_location(node_id, token.location);
 
     Ok(AstExpression::CharLiteral { node_id, literal, value })
 }
@@ -69,7 +68,7 @@ pub fn parse_string_literal(parser: &mut Parser, driver: &mut Driver) -> ParseRe
     let end_loc = parser.token_stream.prev_token_source_location().ok_or(ParseError)?;
 
     let node_id = AstNodeId::new();
-    parser.metadata.add_source_span(node_id, meta::AstNodeSourceSpan::from_source_location_pair(&start_loc, &end_loc));
+    parser.metadata.add_source_location(node_id, start_loc.merge_with(end_loc));
 
     Ok(AstExpression::StringLiteral { node_id, literals, ascii })
 }
@@ -150,7 +149,7 @@ pub fn parse_integer_literal(parser: &mut Parser, driver: &mut Driver) -> ParseR
     };
 
     let node_id = AstNodeId::new();
-    parser.metadata.add_source_span(node_id, meta::AstNodeSourceSpan::from_source_location(&token.location));
+    parser.metadata.add_source_location(node_id, token.location);
 
     Ok(AstExpression::IntegerLiteral { node_id, literal, literal_base: base.as_int(), value, kind })
 }
@@ -190,7 +189,7 @@ pub fn parse_float_literal(parser: &mut Parser, driver: &mut Driver) -> ParseRes
     };
 
     let node_id = AstNodeId::new();
-    parser.metadata.add_source_span(node_id, meta::AstNodeSourceSpan::from_source_location(&token.location));
+    parser.metadata.add_source_location(node_id, token.location);
 
     Ok(AstExpression::FloatLiteral { node_id, literal, literal_base: base.as_int(), value, kind })
 }

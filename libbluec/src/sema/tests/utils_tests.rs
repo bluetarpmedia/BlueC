@@ -1,5 +1,8 @@
-use super::super::type_check::utils;
+// Copyright 2025 Neil Henderson, Blue Tarp Media.
+
 use crate::parser::{AstConstantFp, AstConstantInteger, AstStaticStorageInitializer};
+
+use super::super::type_check::utils;
 
 #[test]
 fn combine_consecutive_zero_bytes_test() {

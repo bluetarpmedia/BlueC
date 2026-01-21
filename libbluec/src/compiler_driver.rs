@@ -2,27 +2,25 @@
 //
 //! The `compiler_driver` module defines the functions and types which orchestrate the different compilation stages.
 
+use std::path::Path;
+use std::process::Command;
+
 pub mod args;
-pub mod diagnostics;
-pub mod errors;
 pub mod multi_file_driver;
 pub mod options;
-pub mod tempfile;
 
-mod warning;
-mod warning_kind;
+mod diagnostics;
 mod driver;
+mod tu_file;
 
-pub use warning::Warning;
-pub use warning_kind::WarningKind;
+pub use diagnostics::Diagnostic;
+pub use diagnostics::error::Error;
+pub use diagnostics::warning::Warning;
+pub use diagnostics::warning_kind::WarningKind;
 pub use driver::Driver;
 
 use crate::compiler_driver::options::DriverOptions;
 use crate::lexer;
-
-use std::io::{self, Write};
-use std::path::Path;
-use std::process::{Command, Stdio};
 
 /// An error returned by the compiler driver.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -53,54 +51,24 @@ fn preprocces(
     out_translation_unit_file: &str,
     definitions: &Vec<String>,
 ) -> Result<(), DriverError> {
-    #[allow(unreachable_code)]
-    if cfg!(windows) {
-        // Future:
-        //
-        // MSVC's cl.exe prints the source filename to stderr when compiling/preprocessing,
-        // which we don't want. So we pipe the stderr output and then only display it if
-        // the process returned an error code. E.g. if there's a preprocessing error we do
-        // want to show that to the user.
-        #[allow(unused_variables)]
-        let output = Command::new("cl.exe")
-            .arg("/nologo")
-            .arg("/P") // Run preprocessor
-            .arg("/EP") // Do not emit #line directives
-            .arg("/C") // Preserve comments
-            .arg(in_source_file)
-            .stderr(Stdio::piped())
-            .output()
-            .expect("failed to run cl.exe for preprocessor step; make sure cl.exe is available on the PATH.");
+    let mut prpr_cmd = Command::new("gcc");
 
-        todo!();
-
-        if output.status.success() {
-            Ok(())
-        } else {
-            let _ = io::stderr().write_all(&output.stderr);
-            Err(DriverError::PreprocessorFailed)
-        }
-    } else {
-        // Generate args for the preprocessor.
-        let mut prpr_cmd = Command::new("gcc");
-
-        for defn in definitions {
-            prpr_cmd.arg("-D");
-            prpr_cmd.arg(defn);
-        }
-
-        prpr_cmd.arg("-E"); // Preprocess the source file
-        prpr_cmd.arg("-P"); // Do not generate line markers
-        prpr_cmd.arg("-w"); // Disable warnings
-
-        prpr_cmd.arg(in_source_file);
-        prpr_cmd.arg("-o");
-        prpr_cmd.arg(out_translation_unit_file);
-
-        let status = prpr_cmd.status().expect("failed to run gcc for preprocessor step");
-
-        if status.success() { Ok(()) } else { Err(DriverError::PreprocessorFailed) }
+    for defn in definitions {
+        prpr_cmd.arg("-D");
+        prpr_cmd.arg(defn);
     }
+
+    prpr_cmd.arg("-E"); // Preprocess the source file
+    prpr_cmd.arg("-w"); // Disable warnings
+
+    prpr_cmd.arg(in_source_file);
+
+    prpr_cmd.arg("-o");
+    prpr_cmd.arg(out_translation_unit_file);
+
+    let status = prpr_cmd.status().expect("failed to run gcc for preprocessor step");
+
+    if status.success() { Ok(()) } else { Err(DriverError::PreprocessorFailed) }
 }
 
 /// Compiles the preprocessed translation unit into assembly code.

@@ -1,7 +1,8 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 
-use super::utils::test_lexer;
 use crate::lexer::{Token, TokenType};
+
+use super::utils::test_lexer;
 
 #[test]
 fn lex_return_integer() {

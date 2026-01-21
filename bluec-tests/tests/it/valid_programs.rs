@@ -2,15 +2,16 @@
 
 //! Integration tests that compile source files, run the resulting binaries, and verify their exit codes.
 
-use libbluec::compiler_driver::options::DriverOptions;
-use libbluec::compiler_driver::tempfile::TempFile;
-use libbluec::compiler_driver::{Driver, multi_file_driver};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::OnceLock;
+
+use libbluec::compiler_driver::options::DriverOptions;
+use libbluec::compiler_driver::{Driver, multi_file_driver};
+use libbluec::core::TempFile;
 
 const DEPENDENCIES_JSON_FILENAME: &str = "dependencies.json";
 
@@ -24,15 +25,11 @@ fn expected_exit_codes_map() -> &'static HashMap<String, i32> {
 }
 
 /// Returns the expected return/exit code for a given test case executable.
-/// 
+///
 /// If an `expected_results.json` file exists in the test case directory, and if it has an entry for the test case,
 /// then that exit code is returned. Otherwise we assume the test program is meant to return zero for success.
 fn get_expected_exit_code(test_case: &str) -> i32 {
-    if let Some(exit_code) = expected_exit_codes_map().get(test_case) {
-        *exit_code
-    } else {
-        0
-    }
+    if let Some(exit_code) = expected_exit_codes_map().get(test_case) { *exit_code } else { 0 }
 }
 
 /// An integration test case for a single source file which we expect to compile and run successfully.

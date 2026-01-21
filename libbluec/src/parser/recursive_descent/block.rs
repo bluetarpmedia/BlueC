@@ -2,15 +2,15 @@
 //
 //! The `block` module defines the parsing functionality for blocks.
 
+use crate::compiler_driver::Driver;
+use crate::lexer;
+
 use super::decl;
 use super::peek;
 use super::stmt;
 use super::utils;
 use super::{AstBlock, AstBlockItem};
 use super::{ParseResult, Parser};
-
-use crate::compiler_driver::Driver;
-use crate::lexer;
 
 /// Parses a block in a new scope.
 pub fn parse_block(parser: &mut Parser, driver: &mut Driver) -> ParseResult<AstBlock> {

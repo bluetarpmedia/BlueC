@@ -3,15 +3,15 @@
 //! The `warning` module defines functions to emit warning diagnostics.
 
 use crate::ICE;
-
-use super::diagnostics::{Diagnostic, SourceIdentifier};
-use super::{Driver, WarningKind};
-
-use crate::lexer::{SourceLocation, TokenType};
+use crate::core::{SourceIdentifier, SourceLocation, SymbolKind};
+use crate::lexer::TokenType;
 use crate::parser::expr::ops;
-use crate::parser::symbol::SymbolKind;
 use crate::parser::{AstBinaryOp, AstBinaryOpFamily, AstType};
 
+use super::super::{Driver, WarningKind};
+use super::Diagnostic;
+
+/// A warning diagnostic.
 pub struct Warning;
 
 impl Warning {
@@ -263,10 +263,12 @@ impl Warning {
         {
             let note = "Add parentheses around the assignment expression to silence this warning.";
 
-            let indent = " ".repeat(assignment_expr_loc.column - 1);
+            let column_no = driver.tu_file.get_column_no(assignment_expr_loc);
+
+            let indent = " ".repeat(column_no as usize - 1);
 
             debug_assert!(assignment_expr_loc.length >= 3); // An assignment expression must be at least 3 chars
-            let space = " ".repeat(assignment_expr_loc.length - 2);
+            let space = " ".repeat(assignment_expr_loc.length as usize - 2);
             let suggested = format!("{indent}({space})");
 
             diag.add_note_with_suggested_code(note.to_string(), suggested, Some(assignment_expr_loc));
@@ -275,7 +277,8 @@ impl Warning {
         {
             let note = "Use '==' to change the assignment into an equality comparison.";
 
-            let indent = " ".repeat(assignment_operator_loc.column - 1);
+            let column_no = driver.tu_file.get_column_no(assignment_operator_loc);
+            let indent = " ".repeat(column_no as usize - 1);
             let suggested = format!("{indent}==");
 
             diag.add_note_with_suggested_code(note.to_string(), suggested, Some(assignment_operator_loc));
@@ -452,7 +455,7 @@ impl Warning {
         let kind = WarningKind::ManyBracesAroundScalarInit;
         let warning = "Too many braces around scalar initializer".to_string();
 
-        let braces_loc = SourceLocation { column: loc.column + 1, length: loc.length - 1, ..loc };
+        let braces_loc = SourceLocation { file_pos: loc.file_pos + 1, length: loc.length - 1 };
         let open_brace_loc = SourceLocation { length: 1, ..loc };
 
         let mut diag = Diagnostic::warning_at_location(kind, warning, open_brace_loc);

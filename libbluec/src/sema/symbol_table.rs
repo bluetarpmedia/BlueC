@@ -2,12 +2,10 @@
 //
 //! The `symbol_table` module defines the `SymbolTable` type and related types.
 
-use crate::compiler_driver::diagnostics::SourceIdentifier;
-use crate::lexer::SourceLocation;
-use crate::parser::symbol::SymbolKind;
-use crate::parser::{AstLinkage, AstStorageDuration, AstType, AstUniqueName};
-
 use std::collections::{HashMap, HashSet};
+
+use crate::core::{SourceIdentifier, SourceLocation, SymbolKind};
+use crate::parser::{AstLinkage, AstStorageDuration, AstType, AstUniqueName};
 
 /// Metadata about an identifier's definition.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -264,8 +262,8 @@ impl SymbolTable {
             })
             .collect();
 
-        // Sort by line and then column
-        unused.sort_by_key(|symbol| (symbol.2.line, symbol.2.column));
+        // Sort by file pos
+        unused.sort_by_key(|symbol| symbol.2.file_pos);
 
         unused
     }

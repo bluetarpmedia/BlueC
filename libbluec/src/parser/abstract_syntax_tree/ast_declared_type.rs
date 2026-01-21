@@ -4,21 +4,21 @@
 
 use std::fmt;
 
-use super::{AstBasicType, AstStorageClassSpecifier, AstDeclarator, AstIdentifier, AstType};
+use super::{AstBasicType, AstDeclarator, AstIdentifier, AstStorageClassSpecifier, AstType};
 
 /// An `AstDeclaredType` represents a parsed type declaration which is not yet resolved to its canonical `AstType`.
-/// 
+///
 /// The declared type consists of a basic type, optional storage class specifier, and optional declarator.
-/// 
+///
 /// ```c
 ///  static unsigned long int *ptr = 0;
 ///  ~~~~~~ ~~~~~~~~~~~~~~~~~ ~~~~
-/// 
+///
 /// // 'static':            the storage class specifier
 /// // 'unsigned long int': the basic type
 /// // '*ptr':              the declarator
 /// ```
-/// 
+///
 /// The semantic analysis typechecking stage resolves a declared type to a canonical `AstType`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AstDeclaredType {

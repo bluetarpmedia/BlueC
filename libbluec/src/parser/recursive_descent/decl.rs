@@ -2,23 +2,17 @@
 //
 //! The `decl` module provides functionality for parsing variable and function declarations.
 
-use super::super::symbol::SymbolKind;
-use super::decl_fn;
-use super::decl_var;
-use super::declarator;
-use super::utils;
+use crate::ICE;
+use crate::compiler_driver::{Diagnostic, Driver, Error, Warning};
+use crate::core::{SourceIdentifier, SymbolKind};
+use crate::lexer;
+
 use super::{
     AstBasicType, AstBasicTypeSpecifier, AstDeclaration, AstDeclaratorKind, AstDeclaredType, AstStorageClassSpecifier,
     AstStorageClassSpecifierKind, AstStorageClassSpecifierOption,
 };
 use super::{ParseError, ParseResult, Parser, add_error};
-
-use crate::ICE;
-use crate::compiler_driver::Driver;
-use crate::compiler_driver::diagnostics::{Diagnostic, SourceIdentifier};
-use crate::compiler_driver::errors::Error;
-use crate::compiler_driver::Warning;
-use crate::lexer;
+use super::{decl_fn, decl_var, declarator, utils};
 
 /// Parses one or more declarations.
 ///
@@ -80,7 +74,7 @@ pub fn parse_declaration(parser: &mut Parser, driver: &mut Driver) -> ParseResul
                 driver.add_diagnostic(Diagnostic::error_at_location(err.into(), declarator.loc));
                 return Err(ParseError);
             }
-            
+
             Error::expect_identifier(declarator.loc, driver);
             return Err(ParseError);
         }

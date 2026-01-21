@@ -1,68 +1,21 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 //
-//! The meta module defines metadata that the parser generates, such as source code spans for AST nodes.
-
-use crate::lexer;
-use crate::parser::{AstConstantInteger, AstNodeId, AstType};
+//! The `meta` module defines metadata that the parser generates, such as source code spans for AST nodes.
 
 use std::collections::{HashMap, HashSet};
+
+use crate::ICE;
+use crate::core::SourceLocation;
+use crate::parser::{AstConstantInteger, AstNodeId, AstType};
 
 /// AST metadata produced by the parser.
 #[derive(Debug)]
 pub struct AstMetadata {
-    source_span_nodes: HashMap<AstNodeId, AstNodeSourceSpan>,
+    source_location_nodes: HashMap<AstNodeId, SourceLocation>,
     switch_cases: HashMap<AstNodeId, HashMap<AstConstantInteger, AstNodeId>>,
-    switch_defaults: HashMap<AstNodeId, lexer::SourceLocation>,
+    switch_defaults: HashMap<AstNodeId, SourceLocation>,
     node_types: HashMap<AstNodeId, AstType>,
     expr_has_parens: HashSet<AstNodeId>,
-}
-
-/// Source span metadata for an AST node.
-///
-/// The start and end lines and columns are inclusive. `[start, end]`
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub struct AstNodeSourceSpan {
-    pub start_line: usize,
-    pub start_column: usize,
-    pub end_line: usize,
-    pub end_column: usize,
-}
-
-impl From<AstNodeSourceSpan> for lexer::SourceLocation {
-    /// Creates a `lexer::SourceLocation` from an `AstNodeSourceSpanMetadata`.
-    fn from(node_metadata: AstNodeSourceSpan) -> Self {
-        (&node_metadata).into()
-    }
-}
-
-impl From<&AstNodeSourceSpan> for lexer::SourceLocation {
-    /// Creates a `lexer::SourceLocation` from an `&AstNodeSourceSpanMetadata`.
-    fn from(node_metadata: &AstNodeSourceSpan) -> Self {
-        let length = if node_metadata.start_line == node_metadata.end_line {
-            node_metadata.end_column - node_metadata.start_column
-        } else {
-            1
-        };
-
-        lexer::SourceLocation { line: node_metadata.start_line, column: node_metadata.start_column, length }
-    }
-}
-
-impl AstNodeSourceSpan {
-    /// Creates an `AstNodeSourceSpanMetadata` from the given source location.
-    pub fn from_source_location(loc: &lexer::SourceLocation) -> Self {
-        Self { start_line: loc.line, start_column: loc.column, end_line: loc.line, end_column: loc.column + loc.length }
-    }
-
-    /// Creates an `AstNodeSourceSpanMetadata` from the given start and end pair of source locations.
-    pub fn from_source_location_pair(start_loc: &lexer::SourceLocation, end_loc: &lexer::SourceLocation) -> Self {
-        Self {
-            start_line: start_loc.line,
-            start_column: start_loc.column,
-            end_line: end_loc.line,
-            end_column: end_loc.column + end_loc.length,
-        }
-    }
 }
 
 impl Default for AstMetadata {
@@ -75,7 +28,7 @@ impl AstMetadata {
     /// Creates the AST metadata.
     pub fn new() -> Self {
         Self {
-            source_span_nodes: HashMap::new(),
+            source_location_nodes: HashMap::new(),
             switch_cases: HashMap::new(),
             switch_defaults: HashMap::new(),
             node_types: HashMap::new(),
@@ -93,19 +46,18 @@ impl AstMetadata {
         self.node_types.get(node_id)
     }
 
-    /// Adds source span metadata for a given node.
-    pub fn add_source_span(&mut self, node_id: AstNodeId, source_span: AstNodeSourceSpan) {
-        self.source_span_nodes.insert(node_id, source_span);
+    /// Adds the source location metadata for the given node.
+    pub fn add_source_location(&mut self, node_id: AstNodeId, source_loc: SourceLocation) {
+        self.source_location_nodes.insert(node_id, source_loc);
     }
 
-    /// Gets source span metadata for a given node.
-    pub fn get_source_span(&self, node_id: &AstNodeId) -> Option<&AstNodeSourceSpan> {
-        self.source_span_nodes.get(node_id)
-    }
-
-    /// Gets source span metadata for a given node and returns it as a `SourceLocation`.
-    pub fn get_source_span_as_loc(&self, node_id: &AstNodeId) -> Option<lexer::SourceLocation> {
-        self.get_source_span(node_id).map(|span| span.into())
+    /// Gets the source location metadata for the given node.
+    pub fn get_source_location(&self, node_id: &AstNodeId) -> SourceLocation {
+        if let Some(loc) = self.source_location_nodes.get(node_id) {
+            *loc
+        } else {
+            ICE!("Cannot find source location for AST node '{node_id}'")
+        }
     }
 
     /// Records that an expression is wrapped in parentheses in the original source code.
@@ -120,7 +72,7 @@ impl AstMetadata {
 
     /// Adds metadata about a switch `case` statement.
     ///
-    /// If a case did not already exist with this `constant_value`, `None` is returned.
+    /// Returns `None` if a case did not already exist with this `constant_value`.
     ///
     /// If a case already exists with this `constant_value`, `Some` is returned with the ID of the
     /// previous case statement node whose expression evaluated to this value.
@@ -143,14 +95,14 @@ impl AstMetadata {
 
     /// Adds a `default` label to the given switch statement.
     ///
-    /// If a default label did not already exist, `None` is returned.
+    /// Returns `None` if a default label did not already exist.
     ///
-    /// If a default label already exists, `Some` is returned with the source location of the previous default statement.
+    /// If a default label already exists, returns `Some` with the source location of the previous default statement.
     pub fn add_switch_default_label(
         &mut self,
         switch_node_id: AstNodeId,
-        location: lexer::SourceLocation,
-    ) -> Option<lexer::SourceLocation> {
+        location: SourceLocation,
+    ) -> Option<SourceLocation> {
         match self.switch_defaults.get(&switch_node_id) {
             Some(loc) => Some(*loc),
             None => {
@@ -162,7 +114,7 @@ impl AstMetadata {
 
     /// Gets the `case` statement values and node ids for the given switch statement, or an empty vector if the given
     /// switch node id is not found.
-    /// 
+    ///
     /// The cases are sorted by the case value in ascending order.
     pub fn get_switch_cases(&self, switch_node_id: AstNodeId) -> Vec<(AstConstantInteger, AstNodeId)> {
         let mut cases = match self.switch_cases.get(&switch_node_id) {

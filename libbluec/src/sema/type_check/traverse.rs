@@ -6,26 +6,23 @@
 //! Functions beginning with `typecheck_` perform validation and set the `AstType` for the expression/initializer.
 //! Functions beginning with `check_` only perform validation.
 
+use crate::ICE;
+use crate::compiler_driver::{Diagnostic, Driver, Error, Warning};
+use crate::parser::expr::ops;
+use crate::parser::{
+    AstAssignmentOp, AstBinaryOp, AstBlock, AstBlockItem, AstConstantValue, AstDeclaration, AstExpression,
+    AstForInitializer, AstFullExpression, AstNodeId, AstRoot, AstStatement, AstStaticStorageInitializer,
+    AstStorageDuration, AstType, AstUnaryOp, AstUniqueName, AstVariableInitializer,
+};
+
 use super::super::constant_eval;
 use super::super::type_resolution;
 use super::checker::{CastWarningPolicy, TypeCheckError, TypeCheckResult, TypeChecker};
 use super::symbols;
 use super::utils;
 
-use crate::ICE;
-use crate::compiler_driver::Driver;
-use crate::compiler_driver::diagnostics::Diagnostic;
-use crate::compiler_driver::errors::Error;
-use crate::compiler_driver::Warning;
-use crate::parser;
-use crate::parser::{
-    AstAssignmentOp, AstBinaryOp, AstBlock, AstBlockItem, AstConstantValue, AstDeclaration, AstExpression,
-    AstForInitializer, AstFullExpression, AstNodeId, AstStatement, AstStorageDuration, AstType, AstUniqueName,
-    AstVariableInitializer, AstStaticStorageInitializer
-};
-
 /// Traverses the AST and performs type checking.
-pub fn typecheck_ast(ast_root: &mut parser::AstRoot, chk: &mut TypeChecker, driver: &mut Driver) {
+pub fn typecheck_ast(ast_root: &mut AstRoot, chk: &mut TypeChecker, driver: &mut Driver) {
     _ = typecheck_declarations(&mut ast_root.0, chk, driver);
 }
 
@@ -84,14 +81,14 @@ fn typecheck_declaration(decl: &mut AstDeclaration, chk: &mut TypeChecker, drive
             }
         }
 
-        parser::AstDeclaration::Function(function) => {
+        AstDeclaration::Function(function) => {
             symbols::verify_function_declaration(function, &mut chk.symbols, driver)?;
 
             let fn_type = function.declared_type.resolved_type.as_ref().expect("Expected function type to be resolved");
             let (return_type, param_types) = utils::extract_fn_return_and_param_types(fn_type);
 
             if return_type.is_array() || return_type.is_function() {
-                let loc = chk.metadata.get_source_span_as_loc(&function.node_id).unwrap();
+                let loc = chk.metadata.get_source_location(&function.node_id);
                 Error::function_invalid_return_type(return_type, loc, driver);
             }
 
@@ -121,7 +118,7 @@ fn typecheck_declaration(decl: &mut AstDeclaration, chk: &mut TypeChecker, drive
             }
         }
 
-        parser::AstDeclaration::TypeAlias(alias_decl) => {
+        AstDeclaration::TypeAlias(alias_decl) => {
             symbols::verify_type_alias_declaration(alias_decl, chk, driver)?;
         }
     }
@@ -188,7 +185,7 @@ fn typecheck_variable_aggregate_initializer(
     {
         if init.len() > 1 {
             let next_node_id = init[1].node_id();
-            let loc = chk.metadata.get_source_span_as_loc(next_node_id).unwrap();
+            let loc = chk.metadata.get_source_location(next_node_id);
             Warning::too_many_elements_for_initializer(variable_type, loc, driver);
         }
 
@@ -211,7 +208,7 @@ fn typecheck_variable_aggregate_initializer(
         && init.len() == 1
         && let AstVariableInitializer::Scalar(full_expr) = &init[0]
     {
-        let loc = chk.metadata.get_source_span_as_loc(&full_expr.node_id).unwrap();
+        let loc = chk.metadata.get_source_location(&full_expr.node_id);
         let scalar_is_literal_zero = full_expr.expr.is_integer_literal_with_value(0);
         let scalar = std::mem::take(init);
         *init = vec![AstVariableInitializer::Aggregate { node_id: AstNodeId::new(), init: scalar }];
@@ -247,12 +244,12 @@ fn typecheck_variable_aggregate_initializer(
                 // If there is a nested aggregate initializer, e.g. `int a = {{1}};`, then warn about the
                 // unnecessary extra braces.
                 if let AstVariableInitializer::Aggregate { .. } = init[0] {
-                    let loc = chk.metadata.get_source_span_as_loc(node_id).unwrap();
+                    let loc = chk.metadata.get_source_location(node_id);
                     Warning::too_many_braces_for_scalar_initializer(loc, driver);
                 }
             }
             _ => {
-                let loc = chk.metadata.get_source_span_as_loc(node_id).unwrap();
+                let loc = chk.metadata.get_source_location(node_id);
                 Warning::too_many_elements_for_initializer(variable_type, loc, driver);
             }
         }
@@ -267,7 +264,7 @@ fn typecheck_variable_aggregate_initializer(
     else if let AstType::Array { count, .. } = variable_type {
         // Warn if there are too many elements in the initializer list, and trim it to length.
         if init.len() > *count {
-            let loc = chk.metadata.get_source_span_as_loc(node_id).unwrap();
+            let loc = chk.metadata.get_source_location(node_id);
             Warning::too_many_elements_for_initializer(variable_type, loc, driver);
 
             init.truncate(*count);
@@ -339,7 +336,7 @@ fn typecheck_statement(stmt: &mut AstStatement, chk: &mut TypeChecker, driver: &
         }
 
         AstStatement::For { init, controlling_expr, post, body, .. } => {
-            let init: &mut parser::AstForInitializer = init;
+            let init: &mut AstForInitializer = init;
 
             match init {
                 AstForInitializer::Declaration(declarations) => {
@@ -408,7 +405,7 @@ fn typecheck_switch_statement(
         }
     } else {
         let err = format!("Switch statement requires an integer expression ('{controlling_expr_type}' is invalid)");
-        let loc = chk.metadata.get_source_span_as_loc(&controlling_expr.node_id).unwrap();
+        let loc = chk.metadata.get_source_location(&controlling_expr.node_id);
         driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
     }
 
@@ -482,8 +479,8 @@ fn typecheck_expression_with_decay(
         // The source span for the new AddressOf expression will be the same as the original expression,
         // since our new AddressOf that we're inserting doesn't appear in the source code.
         let node_id = AstNodeId::new();
-        let original_expr_span = chk.metadata.get_source_span(&original_expr.node_id()).unwrap();
-        chk.metadata.add_source_span(node_id, *original_expr_span);
+        let original_expr_loc = chk.metadata.get_source_location(&original_expr.node_id());
+        chk.metadata.add_source_location(node_id, original_expr_loc);
 
         *expr = AstExpression::AddressOf { node_id, expr: Box::new(original_expr) };
 
@@ -497,8 +494,8 @@ fn typecheck_expression_with_decay(
         // The source span for the new AddressOf expression will be the same as the original expression,
         // since our new AddressOf that we're inserting doesn't appear in the source code.
         let node_id = AstNodeId::new();
-        let original_expr_span = chk.metadata.get_source_span(&original_expr.node_id()).unwrap();
-        chk.metadata.add_source_span(node_id, *original_expr_span);
+        let original_expr_loc = chk.metadata.get_source_location(&original_expr.node_id());
+        chk.metadata.add_source_location(node_id, original_expr_loc);
 
         *expr = AstExpression::AddressOf { node_id, expr: Box::new(original_expr) };
 
@@ -569,7 +566,7 @@ fn typecheck_expression(
                 chk.set_data_type(node_id, &expr_type);
                 Ok(expr_type)
             } else {
-                let loc = chk.metadata.get_source_span_as_loc(node_id).unwrap();
+                let loc = chk.metadata.get_source_location(node_id);
                 Error::indirection_requires_pointer_type(&expr_type, loc, driver);
                 Err(TypeCheckError) // Can't set data type, so must abort.
             }
@@ -583,7 +580,7 @@ fn typecheck_expression(
                 chk.set_data_type(node_id, &ptr_type);
                 Ok(ptr_type)
             } else {
-                let loc = chk.metadata.get_source_span_as_loc(node_id).unwrap();
+                let loc = chk.metadata.get_source_location(node_id);
                 Error::cannot_take_address_of_rvalue(&expr_type, loc, driver);
                 Err(TypeCheckError) // Can't set data type, so must abort.
             }
@@ -625,15 +622,15 @@ fn typecheck_cast_expression(
 
     // Warn if casting a pointer to an integer type smaller than pointer size.
     if expr_type.is_pointer() && cast_to_type.is_integer() && cast_to_type.bits() < expr_type.bits() {
-        let cast_op_loc = chk.metadata.get_source_span_as_loc(node_id).unwrap();
-        let expr_loc = chk.metadata.get_source_span_as_loc(&expr.node_id()).unwrap();
+        let cast_op_loc = chk.metadata.get_source_location(node_id);
+        let expr_loc = chk.metadata.get_source_location(&expr.node_id());
         Warning::pointer_to_smaller_int_cast(&expr_type, &cast_to_type, cast_op_loc, expr_loc, driver);
     }
 
     // Cannot cast to a function or array type
     if cast_to_type.is_function() || cast_to_type.is_array() {
-        let cast_op_loc = chk.metadata.get_source_span_as_loc(node_id).unwrap();
-        let expr_loc = chk.metadata.get_source_span_as_loc(&expr.node_id()).unwrap();
+        let cast_op_loc = chk.metadata.get_source_location(node_id);
+        let expr_loc = chk.metadata.get_source_location(&expr.node_id());
 
         Error::cannot_cast_to_function_or_array_type(cast_op_loc, expr_loc, &cast_to_type, driver);
     }
@@ -642,7 +639,7 @@ fn typecheck_cast_expression(
     if cast_to_type.is_pointer() && expr_type.is_floating_point()
         || cast_to_type.is_floating_point() && expr_type.is_pointer()
     {
-        let expr_loc = chk.metadata.get_source_span_as_loc(&expr.node_id()).unwrap();
+        let expr_loc = chk.metadata.get_source_location(&expr.node_id());
         Error::invalid_cast(expr_loc, &expr_type, &cast_to_type, driver);
     }
 
@@ -669,10 +666,10 @@ fn typecheck_subscript_expression(
         (expr1_type.is_pointer() && expr2_type.is_integer()) || (expr2_type.is_pointer() && expr1_type.is_integer());
 
     if !valid_types {
-        let loc = chk.metadata.get_source_span_as_loc(node_id).unwrap();
+        let loc = chk.metadata.get_source_location(node_id);
 
-        let expr1_loc = chk.metadata.get_source_span_as_loc(&expr1.node_id()).unwrap();
-        let expr2_loc = chk.metadata.get_source_span_as_loc(&expr2.node_id()).unwrap();
+        let expr1_loc = chk.metadata.get_source_location(&expr1.node_id());
+        let expr2_loc = chk.metadata.get_source_location(&expr2.node_id());
 
         let neither_is_pointer = !expr1_type.is_pointer() && !expr2_type.is_pointer();
 
@@ -719,7 +716,7 @@ fn typecheck_unary_operation(
     };
 
     // LogicalNot (and the binary operations for LogicalAnd/Or) have type of 'int'.
-    if *op == parser::AstUnaryOp::LogicalNot {
+    if *op == AstUnaryOp::LogicalNot {
         typecheck_expression_with_decay(operand_expr, chk, driver)?;
         chk.set_data_type(node_id, &AstType::Int);
         return Ok(AstType::Int);
@@ -729,48 +726,47 @@ fn typecheck_unary_operation(
     let operand_type = typecheck_expression_with_decay(operand_expr, chk, driver)?;
 
     // Integer promotion.
-    let operand_type = if operand_type.is_integer()
-        && matches!(op, parser::AstUnaryOp::Negate | parser::AstUnaryOp::Plus | parser::AstUnaryOp::BitwiseNot)
-    {
-        let (promoted_type, promoted) = operand_type.clone().promote_if_rank_lower_than_int();
-        if promoted {
-            // Cast the expression to 'int'.
-            let converted_expr =
-                convert_expression_type(&operand_expr.node_id(), operand_expr, &promoted_type, chk, driver)?;
+    let operand_type =
+        if operand_type.is_integer() && matches!(op, AstUnaryOp::Negate | AstUnaryOp::Plus | AstUnaryOp::BitwiseNot) {
+            let (promoted_type, promoted) = operand_type.clone().promote_if_rank_lower_than_int();
+            if promoted {
+                // Cast the expression to 'int'.
+                let converted_expr =
+                    convert_expression_type(&operand_expr.node_id(), operand_expr, &promoted_type, chk, driver)?;
 
-            *operand_expr = Box::new(converted_expr);
+                *operand_expr = Box::new(converted_expr);
 
-            promoted_type
+                promoted_type
+            } else {
+                operand_type
+            }
         } else {
             operand_type
-        }
-    } else {
-        operand_type
-    };
+        };
 
     // Pre/postfix increment & decrement require a modifiable lvalue.
-    if parser::expr::ops::is_incr_or_decr_op(op) && !utils::is_modifiable_lvalue(operand_expr, &operand_type) {
-        let loc = chk.metadata.get_source_span_as_loc(node_id).unwrap();
-        let is_increment = parser::expr::ops::is_increment_op(op);
+    if ops::is_incr_or_decr_op(op) && !utils::is_modifiable_lvalue(operand_expr, &operand_type) {
+        let loc = chk.metadata.get_source_location(node_id);
+        let is_increment = ops::is_increment_op(op);
         Error::cannot_increment_or_decrement_expression(is_increment, &operand_type, loc, driver);
         return Err(TypeCheckError);
     }
 
     if operand_type.is_pointer() && utils::unary_operator_incompatible_with_ptr_operand(*op) {
         let err = format!("Unary operation is invalid on operand of type '{operand_type}'");
-        let loc = chk.metadata.get_source_span_as_loc(node_id).unwrap();
+        let loc = chk.metadata.get_source_location(node_id);
         driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
     }
 
     if operand_type.is_function() && utils::unary_operator_incompatible_with_fn_operand(*op) {
         let err = format!("Unary operation is invalid on operand of type '{operand_type}'");
-        let loc = chk.metadata.get_source_span_as_loc(node_id).unwrap();
+        let loc = chk.metadata.get_source_location(node_id);
         driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
     }
 
-    if *op == parser::AstUnaryOp::BitwiseNot && operand_type.is_floating_point() {
+    if *op == AstUnaryOp::BitwiseNot && operand_type.is_floating_point() {
         let err = "Cannot take the bitwise complement of a floating-point type".to_string();
-        let loc = chk.metadata.get_source_span_as_loc(node_id).unwrap();
+        let loc = chk.metadata.get_source_location(node_id);
         driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
     }
 
@@ -871,9 +867,9 @@ fn typecheck_binary_operation(
                 }
 
                 utils::CommonTypeError::NoCommonType { a_type, b_type } => {
-                    let loc = chk.metadata.get_source_span_as_loc(node_id).unwrap();
-                    let a_loc = chk.metadata.get_source_span_as_loc(&left.node_id()).unwrap();
-                    let b_loc = chk.metadata.get_source_span_as_loc(&right.node_id()).unwrap();
+                    let loc = chk.metadata.get_source_location(node_id);
+                    let a_loc = chk.metadata.get_source_location(&left.node_id());
+                    let b_loc = chk.metadata.get_source_location(&right.node_id());
                     Error::incompatible_types(&a_type, &b_type, loc, a_loc, b_loc, driver);
 
                     a_type
@@ -1010,8 +1006,8 @@ fn typecheck_assignment(
 
     // The lhs must be a modifiable lvalue.
     if !utils::is_modifiable_lvalue(lhs, &lhs_type) {
-        let assign_op_loc = chk.metadata.get_source_span_as_loc(node_id).unwrap();
-        let lhs_loc = chk.metadata.get_source_span_as_loc(&lhs.node_id()).unwrap();
+        let assign_op_loc = chk.metadata.get_source_location(node_id);
+        let lhs_loc = chk.metadata.get_source_location(&lhs.node_id());
         Error::expression_is_not_assignable(assign_op_loc, lhs_loc, lhs.is_lvalue(), &lhs_type, driver);
         return Err(TypeCheckError);
     }
@@ -1136,9 +1132,9 @@ fn typecheck_conditional(
             }
 
             utils::CommonTypeError::NoCommonType { a_type, b_type } => {
-                let loc = chk.metadata.get_source_span_as_loc(node_id).unwrap();
-                let a_loc = chk.metadata.get_source_span_as_loc(&consequent.node_id()).unwrap();
-                let b_loc = chk.metadata.get_source_span_as_loc(&alternative.node_id()).unwrap();
+                let loc = chk.metadata.get_source_location(node_id);
+                let a_loc = chk.metadata.get_source_location(&consequent.node_id());
+                let b_loc = chk.metadata.get_source_location(&alternative.node_id());
                 Error::incompatible_types(&a_type, &b_type, loc, a_loc, b_loc, driver);
 
                 a_type
@@ -1194,7 +1190,7 @@ fn typecheck_function_call(
     // Verify the designator is a function or a function pointer.
     let valid_designator = designator_type.is_function() || designator_type.is_function_pointer();
     if !valid_designator {
-        let loc = chk.metadata.get_source_span_as_loc(&designator.node_id()).unwrap();
+        let loc = chk.metadata.get_source_location(&designator.node_id());
         Error::invalid_call_type(&designator_type, loc, driver);
         return Err(TypeCheckError);
     }
@@ -1267,7 +1263,7 @@ fn get_function_designator_type(
             let (_, alternative_t) = get_function_designator_type(alternative, chk, driver)?;
 
             if consequent_t != alternative_t {
-                let loc = chk.metadata.get_source_span_as_loc(node_id).unwrap();
+                let loc = chk.metadata.get_source_location(node_id);
                 Error::incompatible_fn_pointer_types(&consequent_t, &alternative_t, loc, driver);
                 return Err(TypeCheckError);
             }
@@ -1311,18 +1307,18 @@ fn get_function_designator_type(
             }
 
             let call_type = chk.get_data_type(node_id);
-            let loc = chk.metadata.get_source_span_as_loc(node_id).unwrap();
+            let loc = chk.metadata.get_source_location(node_id);
             Error::invalid_call_type(&call_type, loc, driver);
             Err(TypeCheckError)
         }
 
         AstExpression::UnaryOperation { node_id, op, .. } => {
-            if parser::expr::ops::is_incr_or_decr_op(op) {
+            if ops::is_incr_or_decr_op(op) {
                 let expr_type = chk.get_data_type(node_id);
                 Ok((None, expr_type))
             } else {
                 let call_type = chk.get_data_type(node_id);
-                let loc = chk.metadata.get_source_span_as_loc(node_id).unwrap();
+                let loc = chk.metadata.get_source_location(node_id);
                 Error::invalid_call_type(&call_type, loc, driver);
                 Err(TypeCheckError)
             }
@@ -1334,7 +1330,7 @@ fn get_function_designator_type(
                 Ok((None, expr_type))
             } else {
                 let call_type = chk.get_data_type(node_id);
-                let loc = chk.metadata.get_source_span_as_loc(node_id).unwrap();
+                let loc = chk.metadata.get_source_location(node_id);
                 Error::invalid_call_type(&call_type, loc, driver);
                 Err(TypeCheckError)
             }
@@ -1346,7 +1342,7 @@ fn get_function_designator_type(
                 Ok((None, expr_type))
             } else {
                 let call_type = chk.get_data_type(node_id);
-                let loc = chk.metadata.get_source_span_as_loc(node_id).unwrap();
+                let loc = chk.metadata.get_source_location(node_id);
                 Error::invalid_call_type(&call_type, loc, driver);
                 Err(TypeCheckError)
             }
@@ -1374,7 +1370,7 @@ fn get_function_designator_type(
 
         AstExpression::FloatLiteral { node_id, .. } => {
             let expr_type = chk.get_data_type(node_id);
-            let loc = chk.metadata.get_source_span_as_loc(node_id).unwrap();
+            let loc = chk.metadata.get_source_location(node_id);
             Error::invalid_call_type(&expr_type, loc, driver);
             Err(TypeCheckError)
         }
@@ -1499,7 +1495,7 @@ fn evaluate_static_storage_scalar_initializer(
             && full_expr_type.is_integer()
             && !constant_value_type.same_signedness(&full_expr_type);
 
-        let loc = chk.metadata.get_source_span_as_loc(&full_expr.node_id).unwrap();
+        let loc = chk.metadata.get_source_location(&full_expr.node_id);
 
         Warning::constant_conversion(
             &constant_value_type,
@@ -1526,7 +1522,7 @@ fn evaluate_constant_full_expression(
     let constant_value = constant_eval::evaluate_constant_full_expr(full_expr, ctx);
 
     if constant_value.is_none() {
-        let loc = chk.metadata.get_source_span_as_loc(&full_expr.node_id).unwrap();
+        let loc = chk.metadata.get_source_location(&full_expr.node_id);
         let err = "Initializer must be a constant expression for a variable with static storage duration".to_string();
         driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
         return Err(TypeCheckError);
@@ -1578,19 +1574,19 @@ fn check_conversion(
     }
 
     if dest_type.is_arithmetic() && source_type.is_pointer() {
-        let loc = chk.metadata.get_source_span_as_loc(source_expr_node_id).unwrap();
+        let loc = chk.metadata.get_source_location(source_expr_node_id);
         Error::incompatible_pointer_to_arithmetic_conversion(source_type, dest_type, loc, driver);
         return Err(TypeCheckError);
     }
 
     if dest_type.is_function_pointer() && source_type.is_function_pointer() {
-        let loc = chk.metadata.get_source_span_as_loc(source_expr_node_id).unwrap();
+        let loc = chk.metadata.get_source_location(source_expr_node_id);
         Error::incompatible_fn_pointer_types(dest_type, source_type, loc, driver);
         return Err(TypeCheckError);
     }
 
     if dest_type.is_pointer() && source_type.is_pointer() {
-        let loc = chk.metadata.get_source_span_as_loc(source_expr_node_id).unwrap();
+        let loc = chk.metadata.get_source_location(source_expr_node_id);
         Error::incompatible_pointer_types(dest_type, source_type, loc, driver);
         return Err(TypeCheckError);
     }
@@ -1599,13 +1595,13 @@ fn check_conversion(
         && source_type.is_arithmetic()
         && !utils::is_null_pointer_constant(source_expr, dest_type, chk, driver)
     {
-        let loc = chk.metadata.get_source_span_as_loc(source_expr_node_id).unwrap();
+        let loc = chk.metadata.get_source_location(source_expr_node_id);
         Error::incompatible_arithmetic_to_pointer_conversion(source_type, dest_type, loc, driver);
         return Err(TypeCheckError);
     }
 
     if dest_type.is_array() && source_type.is_scalar() {
-        let loc = chk.metadata.get_source_span_as_loc(source_expr_node_id).unwrap();
+        let loc = chk.metadata.get_source_location(source_expr_node_id);
         Error::cannot_initialize_array_with_scalar(source_type, loc, driver);
         return Err(TypeCheckError);
     }
@@ -1630,7 +1626,7 @@ fn check_array_string_initializer(
     // Must be an array of characters
     //
     if !array_element_type.is_character() {
-        let loc = chk.metadata.get_source_span_as_loc(node_id).unwrap();
+        let loc = chk.metadata.get_source_location(node_id);
         Error::cannot_initialize_array_with_string_literal(array_type, loc, driver);
         return Err(TypeCheckError);
     }
@@ -1642,7 +1638,7 @@ fn check_array_string_initializer(
     //      char c[3] = "test";   -->   {'t', 'e', 's'}
     //
     if ascii.len() > array_length {
-        let loc = chk.metadata.get_source_span_as_loc(node_id).unwrap();
+        let loc = chk.metadata.get_source_location(node_id);
         Warning::initializer_string_too_long_for_array(array_type, loc, driver);
 
         ascii.truncate(array_length);

@@ -1,13 +1,10 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 
-use super::utils::make_parser;
-
-use super::super::{
-    AstExpression,
-};
-
 use crate::compiler_driver;
 use crate::parser::expr;
+
+use super::super::AstExpression;
+use super::utils::make_parser;
 
 #[test]
 fn string_literals() {

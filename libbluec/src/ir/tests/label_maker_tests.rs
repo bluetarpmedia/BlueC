@@ -1,8 +1,8 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 
-use super::super::label_maker::*;
-
 use crate::parser::AstNodeId;
+
+use super::super::label_maker::*;
 
 #[test]
 fn user_labels() {

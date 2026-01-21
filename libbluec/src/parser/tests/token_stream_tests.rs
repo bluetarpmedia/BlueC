@@ -1,8 +1,10 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 
+use crate::core::{FilePosition, SourceLocation};
 use crate::lexer;
 use crate::lexer::{Token, TokenType};
-use crate::parser::token_stream::TokenStream;
+
+use super::super::token_stream::TokenStream;
 
 #[test]
 fn peek_and_take() {
@@ -83,7 +85,6 @@ fn peek_and_take() {
     verify_token(stream.prev_token(), TokenType::CloseParen);
 }
 
-
 #[test]
 fn peek_next_2_tokens() {
     {
@@ -96,9 +97,7 @@ fn peek_next_2_tokens() {
     }
 
     {
-        let one_token = vec![
-            Token::without_location(TokenType::new_int_literal("321")),
-        ];
+        let one_token = vec![Token::without_location(TokenType::new_int_literal("321"))];
 
         let stream = TokenStream::new(one_token);
         let (first, second) = stream.peek_next_2_tokens();
@@ -107,10 +106,7 @@ fn peek_next_2_tokens() {
     }
 
     {
-        let two_tokens = vec![
-            Token::without_location(TokenType::Minus),
-            Token::without_location(TokenType::Plus),
-        ];
+        let two_tokens = vec![Token::without_location(TokenType::Minus), Token::without_location(TokenType::Plus)];
 
         let stream = TokenStream::new(two_tokens);
         let (first, second) = stream.peek_next_2_tokens();
@@ -154,45 +150,45 @@ fn peek_next_2_tokens() {
 #[test]
 fn peek_and_prev_source_locations() {
     let tokens = vec![
-        Token::with_location(TokenType::Minus, 1, 1),
-        Token::with_location(TokenType::OpenParen, 1, 2),
-        Token::with_location(TokenType::BitwiseNot, 1, 3),
-        Token::with_location(TokenType::new_int_literal("321"), 1, 4),
-        Token::with_location(TokenType::CloseParen, 1, 7),
+        token_at_file_pos(TokenType::Minus, 1),
+        token_at_file_pos(TokenType::OpenParen, 2),
+        token_at_file_pos(TokenType::BitwiseNot, 3),
+        token_at_file_pos(TokenType::new_int_literal("321"), 4),
+        token_at_file_pos(TokenType::CloseParen, 7),
     ];
 
     let mut stream = TokenStream::new(tokens);
 
     let loc = stream.peek_next_source_location().expect("Should have location");
-    assert!(loc.line == 1 && loc.column == 1);
+    assert!(loc.file_pos == FilePosition::from(1));
 
     stream.take_token();
     let loc = stream.peek_next_source_location().expect("Should have location");
-    assert!(loc.line == 1 && loc.column == 2);
+    assert!(loc.file_pos == FilePosition::from(2));
 
     let prev_loc = stream.prev_token_source_location().expect("Should have location");
-    assert!(prev_loc.line == 1 && prev_loc.column == 1);
+    assert!(prev_loc.file_pos == FilePosition::from(1));
 
     stream.take_token();
     let loc = stream.peek_next_source_location().expect("Should have location");
-    assert!(loc.line == 1 && loc.column == 3);
+    assert!(loc.file_pos == FilePosition::from(3));
 
     let prev_loc = stream.prev_token_source_location().expect("Should have location");
-    assert!(prev_loc.line == 1 && prev_loc.column == 2);
+    assert!(prev_loc.file_pos == FilePosition::from(2));
 
     stream.take_token();
     let loc = stream.peek_next_source_location().expect("Should have location");
-    assert!(loc.line == 1 && loc.column == 4);
+    assert!(loc.file_pos == FilePosition::from(4));
 
     let prev_loc = stream.prev_token_source_location().expect("Should have location");
-    assert!(prev_loc.line == 1 && prev_loc.column == 3);
+    assert!(prev_loc.file_pos == FilePosition::from(3));
 
     stream.take_token();
     let loc = stream.peek_next_source_location().expect("Should have location");
-    assert!(loc.line == 1 && loc.column == 7);
+    assert!(loc.file_pos == FilePosition::from(7));
 
     let prev_loc = stream.prev_token_source_location().expect("Should have location");
-    assert!(prev_loc.line == 1 && prev_loc.column == 4);
+    assert!(prev_loc.file_pos == FilePosition::from(4));
 }
 
 #[test]
@@ -333,4 +329,8 @@ fn verify_token(token: Option<&lexer::Token>, expected_type: TokenType) {
         Some(t) => assert!(t.token_type == expected_type, "{} != {}", t.token_type, expected_type),
         _ => assert!(false),
     }
+}
+
+fn token_at_file_pos(token_type: TokenType, file_pos: i32) -> Token {
+    Token { token_type, location: SourceLocation::new(FilePosition::from(file_pos), 1) }
 }

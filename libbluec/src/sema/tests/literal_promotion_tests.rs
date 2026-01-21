@@ -1,8 +1,8 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 
-use super::super::literal_promotion;
-
 use crate::parser::{AstDeclaredType, AstExpression, AstIntegerLiteralKind, AstMetadata, AstNodeId, AstType};
+
+use super::super::literal_promotion;
 
 #[test]
 fn promote_integer_literals() {

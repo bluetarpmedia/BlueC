@@ -11,11 +11,11 @@
 //! long x = 1L;             // This sema pass replaces the cast with a new literal of type 'long'.
 //! ```
 
-use super::visitor;
-
 use crate::ICE;
 use crate::parser;
 use crate::parser::{AstExpression, AstFullExpression, AstIntegerLiteralKind, AstType};
+
+use super::visitor;
 
 /// Rewrites casts of integer literals by promoting the integer literal to the desired type and then removing
 /// the cast.

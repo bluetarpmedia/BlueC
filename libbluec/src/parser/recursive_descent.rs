@@ -16,12 +16,12 @@ pub(super) mod peek;
 pub(super) mod stmt;
 pub(super) mod utils;
 
+use crate::compiler_driver::Driver;
+
 use super::abstract_syntax_tree::*;
 use super::expr;
 use super::{ParseError, ParseResult, Parser};
 use super::{add_error, add_error_at_eof};
-
-use crate::compiler_driver::Driver;
 
 /// Parses a translation unit and returns the AST.
 pub fn parse_translation_unit(parser: &mut Parser, driver: &mut Driver) -> ParseResult<AstRoot> {

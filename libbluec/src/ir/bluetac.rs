@@ -5,9 +5,6 @@
 mod bt_constant_value;
 mod bt_static_storage_initializer;
 
-pub use bt_constant_value::BtConstantValue;
-pub use bt_static_storage_initializer::BtStaticStorageInitializer;
-
 use std::fmt;
 
 use crate::ICE;
@@ -15,6 +12,9 @@ use crate::parser;
 use crate::parser::{AstConstantInteger, AstType};
 use crate::sema::constant_table::ConstantIndex;
 use crate::sema::symbol_table::SymbolTable;
+
+pub use bt_constant_value::BtConstantValue;
+pub use bt_static_storage_initializer::BtStaticStorageInitializer;
 
 /// The root of the BlueTac IR contains a list of definitions.
 pub struct BtRoot(pub Vec<BtDefinition>);
@@ -392,11 +392,7 @@ impl BtType {
 
     /// Is this type a character array type?
     pub fn is_character_array(&self) -> bool {
-        if let BtType::Array { element_type, .. } = self {
-           element_type.is_character()
-        } else {
-            false
-        }
+        if let BtType::Array { element_type, .. } = self { element_type.is_character() } else { false }
     }
 
     /// Is this type a function type?
@@ -405,14 +401,14 @@ impl BtType {
     }
 
     /// Gets the type's inner-most scalar type.
-    /// 
+    ///
     /// For an aggregate type, recurses into the type until a scalar type is found.
-    /// 
+    ///
     /// BtType::Array { BtType::Array { BtType::Int8 } }   --->  BtType::Int8
     pub fn get_innermost_scalar_type(&self) -> &BtType {
         match self {
             BtType::Array { element_type, .. } => element_type.get_innermost_scalar_type(),
-            _ => self
+            _ => self,
         }
     }
 

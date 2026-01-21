@@ -1,20 +1,17 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 
-use super::super::constant_eval;
-use super::super::type_check;
-
-use crate::parser::Parser;
-use crate::parser::recursive_descent;
-use crate::parser::expr::parse_full_expression;
-use crate::parser::{AstConstantFp, AstConstantInteger, AstConstantValue};
-
-use crate::compiler_driver;
-use crate::lexer;
-
-
 use std::f64;
 use std::io::BufReader;
 use std::io::Cursor;
+
+use crate::compiler_driver;
+use crate::lexer;
+use crate::parser::expr::parse_full_expression;
+use crate::parser::recursive_descent;
+use crate::parser::{AstConstantFp, AstConstantInteger, AstConstantValue, Parser};
+
+use super::super::constant_eval;
+use super::super::type_check;
 
 #[test]
 fn integer_literal() {
@@ -467,7 +464,6 @@ fn pointer_arithmetic() {
     }
 }
 
-
 fn verify_expr_evaluates_to_i8(expression_source_code: &str, expected: Option<i8>) {
     let value = evaluate_expr(expression_source_code);
 
@@ -738,11 +734,9 @@ fn evaluate_expr<'a>(expression_source_code: &str) -> Option<AstConstantValue> {
     constant_eval::evaluate_constant_full_expr(&expr, ctx)
 }
 
-
 fn make_parser(driver: &mut compiler_driver::Driver, source: &str) -> Parser {
     let cursor = Cursor::new(source.as_bytes());
     let mut reader = BufReader::new(cursor);
     let tokens = lexer::lex_buf_reader(driver, &mut reader);
     Parser::new(tokens)
 }
-

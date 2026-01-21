@@ -4,10 +4,10 @@
 //! requirements.
 //! R10, R11, XMM14 and XMM15 are used as temp registers for fixups and rewrites.
 
+use crate::ICE;
+
 use super::ast::{AsmBinaryOp, AsmFunction, AsmInstruction, AsmOperand, AsmType};
 use super::registers::HwRegister;
-
-use crate::ICE;
 
 /// Rewrites instructions based on their semantic requirements.
 pub fn rewrite_instructions(function: &mut AsmFunction) {

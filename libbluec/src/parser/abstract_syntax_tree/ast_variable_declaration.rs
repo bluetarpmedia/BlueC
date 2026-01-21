@@ -2,12 +2,12 @@
 //
 //! The `ast_variable_declaration` module defines `AstVariableDeclaration` and its related types.
 
+use std::fmt;
+
 use super::{
     AstAddressConstant, AstConstantFp, AstConstantInteger, AstConstantValue, AstDeclaredType, AstFullExpression,
     AstIdentifier, AstLinkage, AstNodeId, AstStorageDuration, AstType, AstUniqueName,
 };
-
-use std::fmt;
 
 /// A variable declaration with optional definition.
 ///

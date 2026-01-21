@@ -1,6 +1,6 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 //
-//! The `internal_error` module provides functionality to report Internal Compiler Errors (ICE).
+//! The `internal_error` module defines functions to report Internal Compiler Errors (ICE).
 
 /// Generates an internal compiler error.
 #[allow(non_snake_case)]

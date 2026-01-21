@@ -2,12 +2,12 @@
 //
 //! The `binary_instr` module provides functionality to generate instructions for an operation that has two operands.
 
+use crate::ICE;
+use crate::ir;
+
 use super::Generator;
 use super::compare;
 use super::{AsmBinaryOp, AsmInstruction, AsmOperand, AsmType, ConditionalCode, HwRegister};
-
-use crate::internal_error;
-use crate::ir;
 
 /// Generates the x86_64 instructions for a binary operation.
 pub fn generate_instruction(
@@ -143,11 +143,6 @@ pub fn generate_instruction(
             true, // Return remainder
             asm,
         ),
-
-        #[allow(unreachable_patterns)]
-        _ => {
-            internal_error::ICE("Unexpected binary operator");
-        }
     }
 }
 
@@ -221,25 +216,24 @@ fn translate_ir_relational_op_to_condition_code(op: &ir::BtBinaryOp, is_signed: 
         ir::BtBinaryOp::GreaterThan                       => ConditionalCode::A,
         ir::BtBinaryOp::GreaterThanOrEqualTo              => ConditionalCode::AE,
 
-        _ => { internal_error::ICE("Unexpected relational operator")}
+        _ => ICE!("Unexpected relational operator '{op}'")
     }
 }
 
 #[rustfmt::skip]
 fn translate_ir_binary_op_to_asm(op: &ir::BtBinaryOp, is_signed: bool) -> AsmBinaryOp {
     match op {
-        ir::BtBinaryOp::Add        => AsmBinaryOp::Add,
-        ir::BtBinaryOp::Subtract   => AsmBinaryOp::Sub,
-        ir::BtBinaryOp::Multiply   => AsmBinaryOp::Mul,
-        ir::BtBinaryOp::BitwiseAnd => AsmBinaryOp::And,
-        ir::BtBinaryOp::BitwiseXor => AsmBinaryOp::Xor,
-        ir::BtBinaryOp::BitwiseOr  => AsmBinaryOp::Or,
-        ir::BtBinaryOp::LeftShift  => AsmBinaryOp::Shl,
+        ir::BtBinaryOp::Add                     => AsmBinaryOp::Add,
+        ir::BtBinaryOp::Subtract                => AsmBinaryOp::Sub,
+        ir::BtBinaryOp::Multiply                => AsmBinaryOp::Mul,
+        ir::BtBinaryOp::BitwiseAnd              => AsmBinaryOp::And,
+        ir::BtBinaryOp::BitwiseXor              => AsmBinaryOp::Xor,
+        ir::BtBinaryOp::BitwiseOr               => AsmBinaryOp::Or,
+        ir::BtBinaryOp::LeftShift               => AsmBinaryOp::Shl,
 
         ir::BtBinaryOp::RightShift if is_signed => AsmBinaryOp::Sar,
         ir::BtBinaryOp::RightShift              => AsmBinaryOp::Shr,
 
-        #[allow(unreachable_patterns)]
-        _ => { internal_error::ICE("Unexpected binary operator")}
+        _ => ICE!("Unexpected binary operator '{op}'")
     }
 }

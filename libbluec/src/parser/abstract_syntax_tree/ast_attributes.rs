@@ -2,11 +2,11 @@
 //
 //! The `ast_attributes` module defines various AST attribute types.
 
-use crate::ICE;
-use crate::lexer;
-
 use std::fmt;
 use std::sync::atomic::{AtomicUsize, Ordering};
+
+use crate::ICE;
+use crate::core::SourceLocation;
 
 /// A unique numerical identifier for a node in the AST.
 #[derive(Debug, Default, Copy, Clone, Hash, Eq, PartialEq)]
@@ -23,7 +23,7 @@ impl AstNodeId {
     pub fn new() -> Self {
         static NEXT_ID: AtomicUsize = AtomicUsize::new(1);
 
-        let next_id = NEXT_ID.fetch_add(1, Ordering::SeqCst); // Increments and returns previous value, so `1` is the very first.
+        let next_id = NEXT_ID.fetch_add(1, Ordering::SeqCst); // Increments and returns previous value, so `1` is first.
 
         if next_id == usize::MAX {
             ICE!("Exhausted node ids"); // Technically we have 1 more available but we'll limit ourselves to MAX-1.
@@ -39,11 +39,11 @@ impl AstNodeId {
     }
 
     /// Creates a null sentinel value for an `AstNodeId`.
-    /// 
+    ///
     /// It's invalid for a node in the AST to have this value, except when temporarily breaking the invariant.
-    /// 
-    /// This function is used when moving a node out from the AST by temporarily replacing it with something else. That temporary
-    /// replacement node has a null value, until it is replaced again or overwritten.
+    ///
+    /// This function is used when moving a node out from the AST by temporarily replacing it with something else.
+    /// That temporary replacement node has a null value, until it is replaced again or overwritten.
     pub fn null() -> Self {
         Self(0)
     }
@@ -87,7 +87,7 @@ impl AstLinkage {
 }
 
 /// Storage class specifiers determine an identifier's scope, storage lifetime, and linkage.
-/// 
+///
 /// `typedef` is also categorized as a storage class specifier for syntactic convenience in the C grammar, but
 /// does not affect storage in the way that other class specifiers do.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -105,7 +105,7 @@ pub enum AstStorageClassSpecifierKind {
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct AstStorageClassSpecifier {
     pub kind: AstStorageClassSpecifierKind,
-    pub loc: lexer::SourceLocation,
+    pub loc: SourceLocation,
 }
 
 impl AstStorageClassSpecifier {
@@ -131,8 +131,7 @@ pub trait AstStorageClassSpecifierOption {
     fn is_typedef(&self) -> bool;
 }
 
-impl AstStorageClassSpecifierOption for Option<AstStorageClassSpecifier>
-{
+impl AstStorageClassSpecifierOption for Option<AstStorageClassSpecifier> {
     /// Is this storage class specifier 'static'?
     fn is_static(&self) -> bool {
         self.as_ref().is_some_and(|st| st.is_static())

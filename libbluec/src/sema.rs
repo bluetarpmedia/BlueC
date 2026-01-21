@@ -25,19 +25,14 @@ mod visitor;
 #[cfg(test)]
 mod tests;
 
-use crate::compiler_driver;
-use crate::compiler_driver::diagnostics::SourceIdentifier;
-use crate::compiler_driver::Warning;
+use crate::compiler_driver::{Driver, Warning};
+use crate::core::SourceIdentifier;
 use crate::ir;
 use crate::parser;
 
 /// Analyzes the C AST produced by the Parser for semantic errors, performs typechecking and decorates the AST with
 /// their resolved types, and then passes ownership of the AST to the IR lowering stage.
-pub fn semantic_analysis(
-    mut ast_root: parser::AstRoot,
-    metadata: parser::AstMetadata,
-    driver: &mut compiler_driver::Driver,
-) {
+pub fn semantic_analysis(mut ast_root: parser::AstRoot, metadata: parser::AstMetadata, driver: &mut Driver) {
     // Type checking
     //      This is the main part of semantic analysis.
     //

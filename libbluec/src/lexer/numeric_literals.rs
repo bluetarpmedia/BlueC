@@ -2,13 +2,13 @@
 //
 //! The `numeric_literals` module provides lexing functionality for integer and floating-point literals.
 
-use crate::compiler_driver;
-use crate::compiler_driver::diagnostics::Diagnostic;
-use crate::compiler_driver::errors::Error;
-use crate::internal_error;
-use crate::lexer::line_lexer::LineLexer;
-use crate::lexer::tokens::FloatLiteralSuffix;
-use crate::lexer::{IntegerLiteralSuffix, NumericLiteralBase, SourceLocation, Token, TokenType};
+use crate::ICE;
+use crate::compiler_driver::{Diagnostic, Driver, Error};
+use crate::core::{FilePosition, SourceLocation};
+
+use super::line_lexer::LineLexer;
+use super::tokens::FloatLiteralSuffix;
+use super::{IntegerLiteralSuffix, NumericLiteralBase, Token, TokenType};
 
 /// Makes a token for an integer or floating-point literal.
 pub fn make_numeric_literal(line_lexer: &mut LineLexer) -> Result<Token, ()> {
@@ -31,18 +31,16 @@ pub fn make_numeric_literal(line_lexer: &mut LineLexer) -> Result<Token, ()> {
 
 /// Makes an integer or floating-point literal token for the given base.
 fn make_numeric_literal_for_base(line_lexer: &mut LineLexer, base: NumericLiteralBase) -> Result<Token, ()> {
-    let line_no = line_lexer.line_no();
-
     // Read the prefix chars for the base (e.g. "0x");
     //
-    let (prefix_count, prefix_str, prefix_start_col) = lex_numeric_literal_prefix(line_lexer, base);
+    let (prefix_count, prefix_str, prefix_start_pos) = lex_numeric_literal_prefix(line_lexer, base);
 
-    let mut start_col = None;
+    let mut start_pos = None;
     let mut literal = String::new();
 
     if let Some(prefix_str) = prefix_str {
         literal.push_str(prefix_str);
-        start_col = prefix_start_col;
+        start_pos = prefix_start_pos;
     }
 
     // Consume the possibly valid characters for int and float literals; we'll validate after.
@@ -50,14 +48,14 @@ fn make_numeric_literal_for_base(line_lexer: &mut LineLexer, base: NumericLitera
     //
     let mut found_period = false;
     let mut is_float_scientific_not = false;
-    let mut exponent_col_no = None;
+    let mut exponent_pos = None;
 
     while let Some((idx, ch)) = line_lexer.cursor().next_if(|(_, ch)| ch.is_alphanumeric() || *ch == '.') {
         literal.push(ch);
-        line_lexer.set_column_no(idx + 1);
+        line_lexer.set_cursor_index(idx);
 
-        if start_col.is_none() {
-            start_col = Some(line_lexer.column_no());
+        if start_pos.is_none() {
+            start_pos = Some(line_lexer.cursor_pos());
         }
 
         let is_decimal_exponent =
@@ -72,7 +70,7 @@ fn make_numeric_literal_for_base(line_lexer: &mut LineLexer, base: NumericLitera
         //
         else if is_decimal_exponent || is_hex_exponent {
             is_float_scientific_not = true;
-            exponent_col_no = Some(line_lexer.column_no());
+            exponent_pos = Some(line_lexer.cursor_pos());
             break;
         }
     }
@@ -100,13 +98,13 @@ fn make_numeric_literal_for_base(line_lexer: &mut LineLexer, base: NumericLitera
         // Take the optional +/- sign char.
         if let Some((idx, ch)) = line_lexer.cursor().next_if(|(_, ch)| *ch == '+' || *ch == '-') {
             exponent_literal.push(ch);
-            line_lexer.set_column_no(idx + 1);
+            line_lexer.set_cursor_index(idx);
         }
 
         // Take the remaining chars
         while let Some((idx, ch)) = line_lexer.cursor().next_if(|(_, ch)| ch.is_alphanumeric() || *ch == '.') {
             exponent_literal.push(ch);
-            line_lexer.set_column_no(idx + 1);
+            line_lexer.set_cursor_index(idx);
         }
 
         literal.push_str(&exponent_literal);
@@ -118,14 +116,17 @@ fn make_numeric_literal_for_base(line_lexer: &mut LineLexer, base: NumericLitera
     while let Some((idx, ch)) = line_lexer.cursor().next_if(|(_, ch)| ch.is_alphanumeric() || *ch == '_' || *ch == '.')
     {
         literal.push(ch);
-        line_lexer.set_column_no(idx + 1);
+        line_lexer.set_cursor_index(idx);
     }
 
     // Extract all the suffix chars, if present (even if there's more than the max 3 allowed.)
     //
     let token_len = literal.len();
-    let (literal, literal_suffix) =
-        if is_float_literal { extract_valid_float_literal_suffix_chars(literal) } else { extract_valid_integer_literal_suffix_chars(literal) };
+    let (literal, literal_suffix) = if is_float_literal {
+        extract_valid_float_literal_suffix_chars(literal)
+    } else {
+        extract_valid_integer_literal_suffix_chars(literal)
+    };
 
     // Validate the literal
     //
@@ -136,12 +137,12 @@ fn make_numeric_literal_for_base(line_lexer: &mut LineLexer, base: NumericLitera
 
             let components = ScientificNotation {
                 significand: significand.unwrap(),
-                significand_start_column: start_col.unwrap(),
+                significand_start_pos: start_pos.unwrap(),
                 exponent,
-                exponent_start_column: exponent_col_no.unwrap(),
+                exponent_start_pos: exponent_pos.unwrap(),
             };
 
-            is_float_scientific_notation_valid(line_lexer.driver(), line_no, base, prefix_count, components, &literal)?
+            is_float_scientific_notation_valid(line_lexer.driver(), base, prefix_count, components, &literal)?
         } else {
             debug_assert!(base == NumericLiteralBase::Decimal);
             let is_valid_char = |ch: char| is_valid_char_for_base(ch, base) || ch == '.';
@@ -153,7 +154,7 @@ fn make_numeric_literal_for_base(line_lexer: &mut LineLexer, base: NumericLitera
     };
 
     if !is_valid_literal {
-        let loc = SourceLocation::new(line_no, start_col.unwrap(), token_len);
+        let loc = SourceLocation::new(start_pos.unwrap(), token_len);
         Error::invalid_numeric_literal(&literal, is_float_literal, base, loc, line_lexer.driver());
         return Err(());
     }
@@ -164,59 +165,59 @@ fn make_numeric_literal_for_base(line_lexer: &mut LineLexer, base: NumericLitera
     //
     let suffix_max_len = if is_float_literal { 1 } else { 3 };
     if literal_suffix.len() > suffix_max_len {
-        let literal_suffix_start_loc = start_col.unwrap() + literal.len();
-        let loc = SourceLocation::new(line_no, literal_suffix_start_loc, literal_suffix.len());
+        let literal_suffix_start_pos = start_pos.unwrap() + literal.len();
+        let loc = SourceLocation::new(literal_suffix_start_pos, literal_suffix.len());
         Error::invalid_numeric_literal_suffix(&literal_suffix, is_float_literal, loc, line_lexer.driver());
         return Err(());
     }
 
-    let literal_suffix_start_column = start_col.unwrap() + literal.len();
+    let literal_suffix_start_pos = start_pos.unwrap() + literal.len();
     let driver = line_lexer.driver();
 
     let token_type = if is_float_literal {
         debug_assert!(base == NumericLiteralBase::Decimal || base == NumericLiteralBase::Hex);
-        let suffix = make_float_literal_suffix(driver, line_no, literal_suffix_start_column, &literal_suffix)?;
+        let suffix = make_float_literal_suffix(driver, literal_suffix_start_pos, &literal_suffix)?;
         TokenType::FloatLiteral { literal, base, suffix }
     } else {
-        let suffix = make_integer_literal_suffix(driver, line_no, literal_suffix_start_column, &literal_suffix)?;
+        let suffix = make_integer_literal_suffix(driver, literal_suffix_start_pos, &literal_suffix)?;
         TokenType::IntegerLiteral { literal, base, suffix }
     };
 
-    Ok(line_lexer.make_token_at_column(token_type, start_col.unwrap(), token_len))
+    Ok(line_lexer.make_token_at_location(token_type, start_pos.unwrap(), token_len))
 }
 
 fn lex_numeric_literal_prefix(
     line_lexer: &mut LineLexer,
     base: NumericLiteralBase,
-) -> (usize, Option<&'static str>, Option<usize>) {
+) -> (usize, Option<&'static str>, Option<FilePosition>) {
     match base {
         NumericLiteralBase::Hex => {
             let (idx, _) = line_lexer.cursor().next().unwrap();
-            line_lexer.set_column_no(idx + 1);
-            let start_col = Some(line_lexer.column_no());
+            line_lexer.set_cursor_index(idx);
+            let start_pos = Some(line_lexer.cursor_pos());
 
             let (idx, _) = line_lexer.cursor().next().unwrap();
-            line_lexer.set_column_no(idx + 1);
+            line_lexer.set_cursor_index(idx);
 
-            (2, Some("0x"), start_col)
+            (2, Some("0x"), start_pos)
         }
 
         NumericLiteralBase::Binary => {
             let (idx, _) = line_lexer.cursor().next().unwrap();
-            line_lexer.set_column_no(idx + 1);
-            let start_col = Some(line_lexer.column_no());
+            line_lexer.set_cursor_index(idx);
+            let start_pos = Some(line_lexer.cursor_pos());
 
             let (idx, _) = line_lexer.cursor().next().unwrap();
-            line_lexer.set_column_no(idx + 1);
+            line_lexer.set_cursor_index(idx);
 
-            (2, Some("0b"), start_col)
+            (2, Some("0b"), start_pos)
         }
 
         NumericLiteralBase::Octal => {
             let (idx, _) = line_lexer.cursor().next().unwrap();
-            line_lexer.set_column_no(idx + 1);
+            line_lexer.set_cursor_index(idx);
 
-            (1, Some("0"), Some(line_lexer.column_no()))
+            (1, Some("0"), Some(line_lexer.cursor_pos()))
         }
 
         NumericLiteralBase::Decimal => (0, None, None),
@@ -225,26 +226,24 @@ fn lex_numeric_literal_prefix(
 
 struct ScientificNotation {
     significand: String,
-    significand_start_column: usize,
+    significand_start_pos: FilePosition,
     exponent: String,
-    exponent_start_column: usize,
+    exponent_start_pos: FilePosition,
 }
 
 fn is_float_scientific_notation_valid(
-    driver: &mut compiler_driver::Driver,
-    line_no: usize,
+    driver: &mut Driver,
     base: NumericLiteralBase,
     prefix_count: usize,
     components: ScientificNotation,
     literal: &str,
 ) -> Result<bool, ()> {
     let significand = components.significand;
-    let significand_start_col = components.significand_start_column;
-    let significand_loc = SourceLocation::new(line_no, significand_start_col, significand.len());
+    let significand_loc = SourceLocation::new(components.significand_start_pos, significand.len());
     validate_float_significand(driver, base, prefix_count, &significand, significand_loc)?;
 
     let exponent = components.exponent;
-    let exponent_loc = SourceLocation::new(line_no, components.exponent_start_column, 1);
+    let exponent_loc = SourceLocation::new(components.exponent_start_pos, 1);
     validate_float_exponent(driver, &exponent, exponent_loc)?;
 
     let lower_exp = if base == NumericLiteralBase::Decimal { 'e' } else { 'p' };
@@ -258,7 +257,7 @@ fn is_float_scientific_notation_valid(
 }
 
 fn validate_float_significand(
-    driver: &mut compiler_driver::Driver,
+    driver: &mut Driver,
     base: NumericLiteralBase,
     prefix_count: usize,
     significand: &str,
@@ -278,11 +277,7 @@ fn validate_float_significand(
     Ok(())
 }
 
-fn validate_float_exponent(
-    driver: &mut compiler_driver::Driver,
-    exponent: &str,
-    exponent_loc: SourceLocation,
-) -> Result<(), ()> {
+fn validate_float_exponent(driver: &mut Driver, exponent: &str, exponent_loc: SourceLocation) -> Result<(), ()> {
     let mut emit_no_digits_error = || {
         let err = "Exponent has no digits".to_string();
         driver.add_diagnostic(Diagnostic::error_at_location(err, exponent_loc));
@@ -307,8 +302,7 @@ fn validate_float_exponent(
     if let Some((idx, _)) = exponent.char_indices().skip(skip_count).find(|(_, ch)| !ch.is_ascii_digit()) {
         let invalid_suffix = exponent[idx..].to_string();
         let err = format!("Invalid suffix '{invalid_suffix}' on floating-point literal");
-        let loc =
-            SourceLocation { column: exponent_loc.column + idx + 1, length: invalid_suffix.len(), ..exponent_loc };
+        let loc = SourceLocation::new(exponent_loc.file_pos + (idx + 1), invalid_suffix.len());
         driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
         return Err(());
     }
@@ -317,9 +311,8 @@ fn validate_float_exponent(
 }
 
 pub(super) fn make_integer_literal_suffix(
-    driver: &mut compiler_driver::Driver,
-    line_no: usize,
-    literal_suffix_start_column: usize,
+    driver: &mut Driver,
+    literal_suffix_start_pos: FilePosition,
     literal_suffix: &str,
 ) -> Result<Option<IntegerLiteralSuffix>, ()> {
     // Count the 'U' and 'L' chars. We need to count upper and lowercase 'L' to detect errors.
@@ -340,7 +333,7 @@ pub(super) fn make_integer_literal_suffix(
             && (literal_suffix.chars().nth(1) == Some('U') || literal_suffix.chars().nth(1) == Some('u'));
 
         if invalid_u_position || u_count > 1 || (l_lower > 0 && l_upper > 0) || (l_lower + l_upper > 2) {
-            let loc = SourceLocation::new(line_no, literal_suffix_start_column, literal_suffix.len());
+            let loc = SourceLocation::new(literal_suffix_start_pos, literal_suffix.len());
             driver.add_diagnostic(Diagnostic::error_at_location(
                 format!("Invalid suffix '{}' on integer constant.", &literal_suffix),
                 loc,
@@ -360,16 +353,15 @@ pub(super) fn make_integer_literal_suffix(
         (0, 2) => Some(IntegerLiteralSuffix::LL),
         (0, 1) => Some(IntegerLiteralSuffix::L),
         (0, 0) => None,
-        _ => internal_error::ICE(format!("Unhandled literal suffix '{}'", literal_suffix)),
+        _ => ICE!("Unhandled literal suffix '{}'", literal_suffix),
     };
 
     Ok(suffix)
 }
 
 pub(super) fn make_float_literal_suffix(
-    driver: &mut compiler_driver::Driver,
-    line_no: usize,
-    literal_suffix_start_column: usize,
+    driver: &mut Driver,
+    literal_suffix_start_pos: FilePosition,
     literal_suffix: &str,
 ) -> Result<Option<FloatLiteralSuffix>, ()> {
     if literal_suffix.is_empty() {
@@ -379,7 +371,7 @@ pub(super) fn make_float_literal_suffix(
     } else if literal_suffix == "l" || literal_suffix == "L" {
         Ok(Some(FloatLiteralSuffix::L))
     } else {
-        let loc = SourceLocation::new(line_no, literal_suffix_start_column, literal_suffix.len());
+        let loc = SourceLocation::new(literal_suffix_start_pos, literal_suffix.len());
         let err = format!("Invalid suffix '{}' on floating-point constant.", &literal_suffix);
         driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
         Err(())

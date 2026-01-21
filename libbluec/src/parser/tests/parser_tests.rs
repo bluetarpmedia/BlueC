@@ -1,13 +1,11 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 
-use super::utils::make_parser;
-
 use crate::compiler_driver;
 use crate::parser;
-use crate::parser::AstDeclaration;
-use crate::parser::AstNodeId;
-use crate::parser::recursive_descent::block;
-use crate::parser::recursive_descent::decl;
+use crate::parser::recursive_descent::{block, decl};
+use crate::parser::{AstDeclaration, AstNodeId};
+
+use super::utils::make_parser;
 
 #[test]
 fn make_node_id() {
@@ -59,10 +57,8 @@ fn with_new_scope() {
     let mut parser = make_parser(&mut driver, source);
 
     let x1 = decl::parse_declaration(&mut parser, &mut driver).expect("Should have parsed");
-    let x2 =
-        parser.with_new_scope(|p| decl::parse_declaration(p, &mut driver)).expect("Should have parsed");
-    let x3 =
-        parser.with_new_scope(|p| decl::parse_declaration(p, &mut driver)).expect("Should have parsed");
+    let x2 = parser.with_new_scope(|p| decl::parse_declaration(p, &mut driver)).expect("Should have parsed");
+    let x3 = parser.with_new_scope(|p| decl::parse_declaration(p, &mut driver)).expect("Should have parsed");
 
     let x1 = &x1[0];
     let x2 = &x2[0];

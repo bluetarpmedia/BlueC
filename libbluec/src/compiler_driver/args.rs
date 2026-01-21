@@ -7,8 +7,9 @@
 use std::collections::{HashMap, HashSet};
 use std::iter::Peekable;
 
-use super::{DriverOptions, WarningKind};
 use crate::ICE;
+
+use super::{DriverOptions, WarningKind};
 
 /// The command-line argument parser.
 pub struct Parser {

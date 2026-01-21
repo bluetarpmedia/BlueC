@@ -2,10 +2,7 @@
 //
 //! The `constant_eval` module provides functionality to evaluate expressions at compile-time.
 
-use super::constant_table::ConstantTable;
-use super::symbol_table::{SymbolAttributes, SymbolTable};
-use super::type_check::checker::TypeChecker;
-use super::type_resolution;
+use std::convert::TryFrom;
 
 use crate::ICE;
 use crate::compiler_driver::Driver;
@@ -16,7 +13,10 @@ use crate::parser::{
     AstStorageDuration, AstType, AstUnaryOp, AstUniqueName,
 };
 
-use std::convert::TryFrom;
+use super::constant_table::ConstantTable;
+use super::symbol_table::{SymbolAttributes, SymbolTable};
+use super::type_check::checker::TypeChecker;
+use super::type_resolution;
 
 // Future: sizeof, _Alignof
 
@@ -271,7 +271,7 @@ fn evaluate_address_constant(expr: &AstExpression, ctx: &mut ConstantEvalContext
                 if let AstType::Array { count, .. } = symbol.data_type
                     && (subscript_index < 0 || (subscript_index > 0 && subscript_index as usize > count))
                 {
-                    let loc = ctx.metadata.get_source_span_as_loc(&int_expr.node_id()).unwrap();
+                    let loc = ctx.metadata.get_source_location(&int_expr.node_id());
                     Warning::array_index_out_of_bounds(subscript_index, &symbol.data_type, loc, ctx.driver);
                 }
 
@@ -294,7 +294,7 @@ fn evaluate_address_constant(expr: &AstExpression, ctx: &mut ConstantEvalContext
             let constant_idx = ctx.constants.add_string(&constant_string);
 
             // Add the constant string to the symbol table (may already exist).
-            let loc = ctx.metadata.get_source_span_as_loc(literal_node_id).unwrap();
+            let loc = ctx.metadata.get_source_location(literal_node_id);
             let attrs = SymbolAttributes::constant(loc);
             let const_name = ctx.constants.make_const_symbol_name(constant_idx);
             let lit_data_type = ctx.get_data_type(literal_node_id);

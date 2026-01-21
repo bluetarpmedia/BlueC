@@ -2,13 +2,13 @@
 //
 //! The `ast` module defines the x86_64 Assembly AST for the parent codegen module.
 
-use super::registers::HwRegister;
+use std::fmt;
 
 use crate::ICE;
 use crate::ir::BtType;
 use crate::sema::constant_table::ConstantIndex;
 
-use std::fmt;
+use super::registers::HwRegister;
 
 /// The root of the assembly AST contains a list of definitions.
 pub struct AsmRoot(pub Vec<AsmDefinition>);

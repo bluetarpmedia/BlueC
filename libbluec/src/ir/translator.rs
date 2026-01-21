@@ -8,24 +8,22 @@ mod expr;
 mod unary_expr;
 pub(super) mod utils;
 
-use super::{
-    BtConstantValue, BtDefinition, BtFunctionDefn, BtInstruction, BtRoot, BtStaticConstant, BtStaticStorageInitializer,
-    BtStaticStorageVariable, BtSwitchCase, BtType, BtValue,
-};
-
-use super::label_maker::LabelMaker;
+use std::collections::HashMap;
 
 use crate::ICE;
 use crate::compiler_driver::Driver;
-use crate::compiler_driver::diagnostics::SourceIdentifier;
-use crate::lexer::SourceLocation;
+use crate::core::{SourceIdentifier, SourceLocation};
+use crate::core::string;
 use crate::parser;
 use crate::sema::constant_eval;
 use crate::sema::constant_table::{ConstantIndex, ConstantTable};
 use crate::sema::symbol_table::{Definition, SymbolAttributes, SymbolTable};
-use crate::utils::string;
 
-use std::collections::HashMap;
+use super::{
+    BtConstantValue, BtDefinition, BtFunctionDefn, BtInstruction, BtRoot, BtStaticConstant, BtStaticStorageInitializer,
+    BtStaticStorageVariable, BtSwitchCase, BtType, BtValue,
+};
+use super::label_maker::LabelMaker;
 
 #[derive(Debug)]
 enum EvalExpr {
@@ -359,9 +357,7 @@ fn translate_statement(
         parser::AstStatement::DoWhile { node_id, body, controlling_expr } => {
             translate_do_while_statement(node_id, *body, controlling_expr, instructions, translator, driver)
         }
-        parser::AstStatement::For { .. } => {
-            translate_for_statement(stmt, instructions, translator, driver)
-        }
+        parser::AstStatement::For { .. } => translate_for_statement(stmt, instructions, translator, driver),
 
         // Control statements: Jumps
         parser::AstStatement::Break { enclosing_stmt_node_id } => {
@@ -721,7 +717,7 @@ fn translate_var_declaration(
                     let constant_name = translator.constants.make_const_symbol_name(constant_idx);
 
                     // Add the constant to the symbol table
-                    let loc = translator.metadata.get_source_span_as_loc(&node_id).unwrap();
+                    let loc = translator.metadata.get_source_location(&node_id);
                     let attrs = SymbolAttributes::constant(loc);
                     _ = translator.symbols.add(
                         parser::AstUniqueName::new(constant_name.clone()),

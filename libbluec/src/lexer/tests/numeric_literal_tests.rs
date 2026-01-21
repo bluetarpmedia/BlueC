@@ -1,5 +1,8 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 
+use crate::compiler_driver::Driver;
+use crate::core::FilePosition;
+
 use super::super::line_lexer::LineLexer;
 use super::super::numeric_literals::{
     extract_valid_float_literal_suffix_chars, extract_valid_integer_literal_suffix_chars, make_float_literal_suffix,
@@ -8,8 +11,6 @@ use super::super::numeric_literals::{
 use super::super::{FloatLiteralSuffix, IntegerLiteralSuffix};
 use super::super::{Token, TokenType};
 use super::utils::test_lexer;
-
-use crate::compiler_driver;
 
 #[test]
 fn lex_valid_integer_literals() {
@@ -304,41 +305,43 @@ fn verify_integer_literals() {
 
 #[test]
 fn make_integer_literal_suffix_test() {
-    let mut driver = compiler_driver::Driver::for_testing();
+    let mut driver = Driver::for_testing();
+    let file_pos = FilePosition::default();
 
-    assert_eq!(make_integer_literal_suffix(&mut driver, 0, 0, ""), Ok(None));
-    assert_eq!(make_integer_literal_suffix(&mut driver, 0, 0, "L"), Ok(Some(IntegerLiteralSuffix::L)));
-    assert_eq!(make_integer_literal_suffix(&mut driver, 0, 0, "LL"), Ok(Some(IntegerLiteralSuffix::LL)));
-    assert_eq!(make_integer_literal_suffix(&mut driver, 0, 0, "U"), Ok(Some(IntegerLiteralSuffix::U)));
-    assert_eq!(make_integer_literal_suffix(&mut driver, 0, 0, "UL"), Ok(Some(IntegerLiteralSuffix::UL)));
-    assert_eq!(make_integer_literal_suffix(&mut driver, 0, 0, "ULL"), Ok(Some(IntegerLiteralSuffix::ULL)));
+    assert_eq!(make_integer_literal_suffix(&mut driver, file_pos, ""), Ok(None));
+    assert_eq!(make_integer_literal_suffix(&mut driver, file_pos, "L"), Ok(Some(IntegerLiteralSuffix::L)));
+    assert_eq!(make_integer_literal_suffix(&mut driver, file_pos, "LL"), Ok(Some(IntegerLiteralSuffix::LL)));
+    assert_eq!(make_integer_literal_suffix(&mut driver, file_pos, "U"), Ok(Some(IntegerLiteralSuffix::U)));
+    assert_eq!(make_integer_literal_suffix(&mut driver, file_pos, "UL"), Ok(Some(IntegerLiteralSuffix::UL)));
+    assert_eq!(make_integer_literal_suffix(&mut driver, file_pos, "ULL"), Ok(Some(IntegerLiteralSuffix::ULL)));
 
-    assert_eq!(make_integer_literal_suffix(&mut driver, 0, 0, "l"), Ok(Some(IntegerLiteralSuffix::L)));
-    assert_eq!(make_integer_literal_suffix(&mut driver, 0, 0, "ll"), Ok(Some(IntegerLiteralSuffix::LL)));
-    assert_eq!(make_integer_literal_suffix(&mut driver, 0, 0, "u"), Ok(Some(IntegerLiteralSuffix::U)));
-    assert_eq!(make_integer_literal_suffix(&mut driver, 0, 0, "ul"), Ok(Some(IntegerLiteralSuffix::UL)));
-    assert_eq!(make_integer_literal_suffix(&mut driver, 0, 0, "ull"), Ok(Some(IntegerLiteralSuffix::ULL)));
+    assert_eq!(make_integer_literal_suffix(&mut driver, file_pos, "l"), Ok(Some(IntegerLiteralSuffix::L)));
+    assert_eq!(make_integer_literal_suffix(&mut driver, file_pos, "ll"), Ok(Some(IntegerLiteralSuffix::LL)));
+    assert_eq!(make_integer_literal_suffix(&mut driver, file_pos, "u"), Ok(Some(IntegerLiteralSuffix::U)));
+    assert_eq!(make_integer_literal_suffix(&mut driver, file_pos, "ul"), Ok(Some(IntegerLiteralSuffix::UL)));
+    assert_eq!(make_integer_literal_suffix(&mut driver, file_pos, "ull"), Ok(Some(IntegerLiteralSuffix::ULL)));
 
-    assert_eq!(make_integer_literal_suffix(&mut driver, 0, 0, "uLL"), Ok(Some(IntegerLiteralSuffix::ULL)));
-    assert_eq!(make_integer_literal_suffix(&mut driver, 0, 0, "Ull"), Ok(Some(IntegerLiteralSuffix::ULL)));
+    assert_eq!(make_integer_literal_suffix(&mut driver, file_pos, "uLL"), Ok(Some(IntegerLiteralSuffix::ULL)));
+    assert_eq!(make_integer_literal_suffix(&mut driver, file_pos, "Ull"), Ok(Some(IntegerLiteralSuffix::ULL)));
 
-    assert!(make_integer_literal_suffix(&mut driver, 0, 0, "uLl").is_err());
-    assert!(make_integer_literal_suffix(&mut driver, 0, 0, "uu").is_err());
-    assert!(make_integer_literal_suffix(&mut driver, 0, 0, "uU").is_err());
-    assert!(make_integer_literal_suffix(&mut driver, 0, 0, "LUL").is_err());
+    assert!(make_integer_literal_suffix(&mut driver, file_pos, "uLl").is_err());
+    assert!(make_integer_literal_suffix(&mut driver, file_pos, "uu").is_err());
+    assert!(make_integer_literal_suffix(&mut driver, file_pos, "uU").is_err());
+    assert!(make_integer_literal_suffix(&mut driver, file_pos, "LUL").is_err());
 }
 
 #[test]
 fn make_float_literal_suffix_test() {
-    let mut driver = compiler_driver::Driver::for_testing();
+    let mut driver = Driver::for_testing();
+    let file_pos = FilePosition::default();
 
-    assert_eq!(make_float_literal_suffix(&mut driver, 0, 0, ""), Ok(None));
-    assert_eq!(make_float_literal_suffix(&mut driver, 0, 0, "f"), Ok(Some(FloatLiteralSuffix::F)));
-    assert_eq!(make_float_literal_suffix(&mut driver, 0, 0, "F"), Ok(Some(FloatLiteralSuffix::F)));
+    assert_eq!(make_float_literal_suffix(&mut driver, file_pos, ""), Ok(None));
+    assert_eq!(make_float_literal_suffix(&mut driver, file_pos, "f"), Ok(Some(FloatLiteralSuffix::F)));
+    assert_eq!(make_float_literal_suffix(&mut driver, file_pos, "F"), Ok(Some(FloatLiteralSuffix::F)));
 
-    assert!(make_float_literal_suffix(&mut driver, 0, 0, "FF").is_err());
-    assert!(make_float_literal_suffix(&mut driver, 0, 0, "ff").is_err());
-    assert!(make_float_literal_suffix(&mut driver, 0, 0, "fF").is_err());
+    assert!(make_float_literal_suffix(&mut driver, file_pos, "FF").is_err());
+    assert!(make_float_literal_suffix(&mut driver, file_pos, "ff").is_err());
+    assert!(make_float_literal_suffix(&mut driver, file_pos, "fF").is_err());
 }
 
 #[test]
@@ -410,8 +413,8 @@ fn extract_float_literal_suffix_test() {
 }
 
 fn expect_numeric_literal_valid(literal: &str, expected_valid: bool) {
-    let mut driver = compiler_driver::Driver::for_testing();
-    let mut line_lexer = LineLexer::new(&mut driver, 1, literal);
+    let mut driver = Driver::for_testing();
+    let mut line_lexer = LineLexer::new(&mut driver, FilePosition::default(), literal);
     match line_lexer.get_next_token() {
         Ok(Some(token)) => {
             if matches!(token.token_type, TokenType::IntegerLiteral { .. } | TokenType::FloatLiteral { .. }) {

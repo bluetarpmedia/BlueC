@@ -2,10 +2,10 @@
 //
 //! The `multi_file_driver` module provides functionality for multi-file compilation and linking.
 
-use crate::compiler_driver::{CompilerGeneratedFile, Driver, DriverError, DriverOptions};
-use crate::internal_error;
-
 use std::process::Command;
+
+use crate::ICE;
+use crate::compiler_driver::{CompilerGeneratedFile, Driver, DriverError, DriverOptions};
 
 const DEFAULT_EXECUTABLE_FILENAME: &str = "a.out";
 
@@ -53,7 +53,7 @@ pub fn compile_and_link(
                 if let CompilerGeneratedFile::ObjectFile(object_file) = generated_file {
                     object_files.push(object_file);
                 } else {
-                    internal_error::ICE("Compiler driver succeeded but did not return an object file");
+                    ICE!("Compiler driver succeeded but did not return an object file");
                 }
             }
 

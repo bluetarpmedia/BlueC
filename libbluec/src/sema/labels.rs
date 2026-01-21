@@ -3,23 +3,16 @@
 //! The `labels` module provides functionality to validate that label names are unique and `goto` targets are valid
 //! within their function.
 
-use super::visitor;
-
-use crate::compiler_driver;
-use crate::compiler_driver::diagnostics::Diagnostic;
-use crate::lexer::SourceLocation;
-use crate::parser;
-use crate::parser::{AstFunction, AstNodeId, AstStatement};
-
 use std::collections::HashMap;
+
+use crate::compiler_driver::{Diagnostic, Driver};
+use crate::parser::{AstFunction, AstMetadata, AstNodeId, AstRoot, AstStatement};
+
+use super::visitor;
 
 /// Validates that label names are unique within the function, and that all `goto <label>` targets
 /// have been declared.
-pub fn validate_labels(
-    ast_root: &mut parser::AstRoot,
-    driver: &mut compiler_driver::Driver,
-    metadata: &parser::AstMetadata,
-) {
+pub fn validate_labels(ast_root: &mut AstRoot, driver: &mut Driver, metadata: &AstMetadata) {
     // Visit each function definition, and for each one, visit each statement and take note of the
     // declared labels and the goto labels.
     //
@@ -47,8 +40,8 @@ pub fn validate_labels(
 }
 
 fn record_statement_labels(
-    driver: &mut compiler_driver::Driver,
-    metadata: &parser::AstMetadata,
+    driver: &mut Driver,
+    metadata: &AstMetadata,
     stmt: &AstStatement,
     declared_labels: &mut HashMap<String, AstNodeId>,
     goto_labels: &mut HashMap<String, AstNodeId>,
@@ -80,14 +73,14 @@ fn emit_redeclared_label_error_diagnostic(
     label_name: &str,
     node_id: &AstNodeId,
     previous_decl_node_id: &AstNodeId,
-    driver: &mut compiler_driver::Driver,
-    metadata: &parser::AstMetadata,
+    driver: &mut Driver,
+    metadata: &AstMetadata,
 ) {
     let err = format!("Redefinition of label `{}`", label_name);
-    let loc: SourceLocation = metadata.get_source_span(node_id).unwrap().into();
+    let loc = metadata.get_source_location(node_id);
     let mut diag = Diagnostic::error_at_location(err, loc);
 
-    let note_loc: SourceLocation = metadata.get_source_span(previous_decl_node_id).unwrap().into();
+    let note_loc = metadata.get_source_location(previous_decl_node_id);
     diag.add_note(format!("`{}` was previously declared here:", label_name), Some(note_loc));
 
     driver.add_diagnostic(diag);
@@ -96,10 +89,10 @@ fn emit_redeclared_label_error_diagnostic(
 fn emit_goto_undeclared_label_error_diagnostic(
     label_name: &str,
     node_id: &AstNodeId,
-    driver: &mut compiler_driver::Driver,
-    metadata: &parser::AstMetadata,
+    driver: &mut Driver,
+    metadata: &AstMetadata,
 ) {
     let err = format!("Use of undeclared label `{}` in goto statement", label_name);
-    let loc: SourceLocation = metadata.get_source_span(node_id).unwrap().into();
+    let loc = metadata.get_source_location(node_id);
     driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
 }

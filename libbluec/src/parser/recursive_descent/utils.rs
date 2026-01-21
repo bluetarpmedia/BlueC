@@ -2,14 +2,12 @@
 //
 //! The `utils` module provides helper utility functions to the parent `recursive_descent` module.
 
-use super::super::recursive_descent::add_error_at_eof;
-use super::super::symbol::SymbolKind;
-use super::super::{ParseError, ParseResult, Parser};
-
-use crate::compiler_driver::Driver;
-use crate::compiler_driver::diagnostics::Diagnostic;
+use crate::compiler_driver::{Diagnostic, Driver};
+use crate::core::{SourceLocation, SymbolKind};
 use crate::lexer;
-use crate::lexer::SourceLocation;
+
+use super::super::recursive_descent::add_error_at_eof;
+use super::super::{ParseError, ParseResult, Parser};
 
 /// Takes the next token from the stream, validates its type against the given expected type, and returns its
 /// source location.

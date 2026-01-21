@@ -1,15 +1,15 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
-//
-// Build script to generate integration test cases based on files in the
-// `tests/valid` and `tests/invalid` directories.
 
-use glob::glob;
+//! Build script to generate integration test cases based on files in the `tests/valid` and `tests/invalid` directories.
+
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
 use std::io::{BufReader, BufWriter};
 use std::path::Path;
 use std::path::PathBuf;
+
+use glob::glob;
 
 const INVALID_TEST_CASES_FILENAME: &str = "generated_invalid_program_tests.rs";
 const VALID_TEST_CASES_FILENAME: &str = "generated_valid_program_tests.rs";

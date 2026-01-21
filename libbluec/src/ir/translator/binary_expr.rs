@@ -2,12 +2,12 @@
 //
 //! The `binary_epxr` module defines functions to translate AST binary expressions into the BlueTac IR.
 
+use crate::ICE;
+use crate::parser::{AstBinaryOp, AstExpression, AstType};
+
 use super::super::{BtBinaryOp, BtConstantValue, BtInstruction, BtUnaryOp, BtValue};
 use super::expr;
 use super::{BlueTacTranslator, EvalExpr};
-
-use crate::ICE;
-use crate::parser::{AstBinaryOp, AstExpression, AstType};
 
 /// Translates a binary expression into BlueTac IR.
 pub fn translate_binary_operation(

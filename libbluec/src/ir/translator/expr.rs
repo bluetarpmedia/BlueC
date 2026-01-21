@@ -2,15 +2,15 @@
 //
 //! The `expr` module defines functions to translate AST expressions into the BlueTac IR.
 
-use super::super::{BtBinaryOp, BtConstantValue, BtInstruction, BtUnaryOp, BtValue};
-use super::binary_expr;
-use super::unary_expr;
-use super::{BlueTacTranslator, EvalExpr};
-
 use crate::ICE;
 use crate::parser::{AstAssignmentOp, AstExpression, AstFloatLiteralKind, AstFullExpression, AstType, AstUniqueName};
 use crate::sema::symbol_table::SymbolAttributes;
 use crate::sema::type_conversion;
+
+use super::super::{BtBinaryOp, BtConstantValue, BtInstruction, BtUnaryOp, BtValue};
+use super::binary_expr;
+use super::unary_expr;
+use super::{BlueTacTranslator, EvalExpr};
 
 /// Translates an AST full expression into BlueTac IR and performs lvalue-to-rvalue conversion on the result, if
 /// necessary.
@@ -217,7 +217,7 @@ fn translate_string_literal(translator: &mut BlueTacTranslator, expr: &AstExpres
 
     // Add the constant string to the symbol table (it may already exist).
     let const_name = translator.constants.make_const_symbol_name(constant_idx);
-    let loc = translator.metadata.get_source_span_as_loc(node_id).unwrap();
+    let loc = translator.metadata.get_source_location(node_id);
     let attrs = SymbolAttributes::constant(loc);
     _ = translator.symbols.add(AstUniqueName::new(const_name.clone()), data_type, attrs);
 

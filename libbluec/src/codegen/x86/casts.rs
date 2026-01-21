@@ -3,11 +3,12 @@
 //! The `casts` module provides functionality to generate the instructions for casts between various data types.
 //! R8, R9 and XMM1 are used for casts between floating-point and integer types.
 
+use crate::ICE;
+use crate::ir::BtValue;
+
 use super::ast::*;
 use super::generate::Generator;
 use super::registers::HwRegister;
-use crate::internal_error;
-use crate::ir::BtValue;
 
 pub fn fp_to_fp(src: &BtValue, dst: &BtValue, asm: &mut Vec<AsmInstruction>, generator: &mut Generator) {
     let src_type: AsmType = src.get_type(&generator.symbols).into();
@@ -43,7 +44,7 @@ pub fn fp_to_fp(src: &BtValue, dst: &BtValue, asm: &mut Vec<AsmInstruction>, gen
         asm.push(AsmInstruction::Cvtfp2fp { src_type, dst_type, src, dst });
     } else {
         asm.push(AsmInstruction::Cvtfp2fp { src_type, dst_type, src, dst: xmm1.clone() });
-        
+
         // dst = xmm1
         asm.push(AsmInstruction::Mov { asm_type: dst_type, src: xmm1, dst });
     }
@@ -74,7 +75,7 @@ pub fn fp_to_signed_integer(src: &BtValue, dst: &BtValue, asm: &mut Vec<AsmInstr
 
         AsmType::DoubleWord | AsmType::QuadWord => asm.push(AsmInstruction::Cvtfp2si { src_type, dst_type, src, dst }),
 
-        _ => internal_error::ICE(format!("Unsupported dst_type '{dst_type}' for fp_to_signed_integer")),
+        _ => ICE!("Unsupported dst_type '{dst_type}' for fp_to_signed_integer"),
     }
 }
 
@@ -118,7 +119,7 @@ pub fn fp_to_unsigned_integer(src: &BtValue, dst: &BtValue, asm: &mut Vec<AsmIns
             } else {
                 unreachable!();
             };
-            
+
             let two_pow_63_lbl = generator.labels.make_constant_label(two_pow_63_id);
             let two_pow_63_fp = AsmOperand::Data { symbol: two_pow_63_lbl.to_string(), relative: 0 };
 
@@ -172,7 +173,7 @@ pub fn fp_to_unsigned_integer(src: &BtValue, dst: &BtValue, asm: &mut Vec<AsmIns
             asm.push(AsmInstruction::Label { id: end_label });
         }
 
-        _ => internal_error::ICE(format!("Unsupported dst_type '{dst_type}' for fp_to_unsigned_integer")),
+        _ => ICE!("Unsupported dst_type '{dst_type}' for fp_to_unsigned_integer"),
     }
 }
 
@@ -199,7 +200,7 @@ pub fn signed_integer_to_fp(src: &BtValue, dst: &BtValue, asm: &mut Vec<AsmInstr
 
         AsmType::DoubleWord | AsmType::QuadWord => asm.push(AsmInstruction::Cvtsi2fp { src_type, dst_type, src, dst }),
 
-        _ => internal_error::ICE(format!("Unsupported src_type '{src_type}' for signed_integer_to_fp")),
+        _ => ICE!("Unsupported src_type '{src_type}' for signed_integer_to_fp"),
     }
 }
 
@@ -303,6 +304,6 @@ pub fn unsigned_integer_to_fp(src: &BtValue, dst: &BtValue, asm: &mut Vec<AsmIns
             asm.push(AsmInstruction::Label { id: end_label });
         }
 
-        _ => internal_error::ICE(format!("Unsupported src_type '{src_type}' for signed_integer_to_fp")),
+        _ => ICE!("Unsupported src_type '{src_type}' for signed_integer_to_fp"),
     }
 }

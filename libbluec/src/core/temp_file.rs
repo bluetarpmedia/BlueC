@@ -1,6 +1,6 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 //
-//! The `tempfile` module defines the `TempFile` type. This implementation is not as secure as the third-party
+//! The `temp_file` module defines the `TempFile` type. This implementation does not provide the same guarantees as the
 //! `tempfile` crate but we have a design goal of no external dependencies for the BlueC library and executable.
 
 use std::fs::{self, OpenOptions};
@@ -10,6 +10,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 /// The path to a temporary file.
 ///
 /// If the file exists when `TempFile` is dropped then it is automatically deleted.
+#[derive(Debug)]
 pub struct TempFile {
     pub path: PathBuf,
 }

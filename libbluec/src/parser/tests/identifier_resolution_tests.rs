@@ -1,10 +1,9 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 
-use super::super::identifier_resolution::*;
-use super::super::symbol::SymbolKind;
-use super::super::{AstIdentifier, AstLinkage, AstUniqueName};
+use crate::core::{FilePosition, SourceLocation, SymbolKind};
 
-use crate::lexer::SourceLocation;
+use super::super::identifier_resolution::*;
+use super::super::{AstIdentifier, AstLinkage, AstUniqueName};
 
 #[test]
 fn declare_and_resolve_identifiers_with_linkage() {
@@ -22,8 +21,14 @@ fn declare_and_resolve_identifiers_with_linkage() {
     assert!(resolver.resolve_identifier("func2", SearchScope::Current).is_none());
 
     // Variables at file scope are not renamed
-    assert!(same_name("my_global", resolver.add_file_scope_variable_declaration(&make_ident("my_global"), AstLinkage::External).unwrap()));
-    assert!(same_name("some_var", resolver.add_file_scope_variable_declaration(&make_ident("some_var"), AstLinkage::External).unwrap()));
+    assert!(same_name(
+        "my_global",
+        resolver.add_file_scope_variable_declaration(&make_ident("my_global"), AstLinkage::External).unwrap()
+    ));
+    assert!(same_name(
+        "some_var",
+        resolver.add_file_scope_variable_declaration(&make_ident("some_var"), AstLinkage::External).unwrap()
+    ));
 
     // Functions are not renamed
     assert!(same_name("func1", resolver.add_function_declaration(&make_ident("func1"), AstLinkage::External).unwrap()));
@@ -51,8 +56,14 @@ fn declare_and_resolve_identifiers_with_linkage() {
     );
 
     // Repeat declarations
-    assert!(same_name("my_global", resolver.add_file_scope_variable_declaration(&make_ident("my_global"), AstLinkage::External).unwrap()));
-    assert!(same_name("some_var", resolver.add_file_scope_variable_declaration(&make_ident("some_var"), AstLinkage::External).unwrap()));
+    assert!(same_name(
+        "my_global",
+        resolver.add_file_scope_variable_declaration(&make_ident("my_global"), AstLinkage::External).unwrap()
+    ));
+    assert!(same_name(
+        "some_var",
+        resolver.add_file_scope_variable_declaration(&make_ident("some_var"), AstLinkage::External).unwrap()
+    ));
     assert!(same_name("func1", resolver.add_function_declaration(&make_ident("func1"), AstLinkage::External).unwrap()));
     assert!(same_name("func2", resolver.add_function_declaration(&make_ident("func2"), AstLinkage::External).unwrap()));
 
@@ -90,9 +101,18 @@ fn declare_and_resolve_identifiers_without_linkage() {
 
     resolver.begin_scope(); // Not really needed for the test but makes semantic sense
 
-    assert!(unique_name_differs("a", resolver.add_block_scope_variable_declaration(&make_ident("a"), false, AstLinkage::None).unwrap()));
-    assert!(unique_name_differs("b", resolver.add_block_scope_variable_declaration(&make_ident("b"), false, AstLinkage::None).unwrap()));
-    assert!(unique_name_differs("c", resolver.add_block_scope_variable_declaration(&make_ident("c"), false, AstLinkage::None).unwrap()));
+    assert!(unique_name_differs(
+        "a",
+        resolver.add_block_scope_variable_declaration(&make_ident("a"), false, AstLinkage::None).unwrap()
+    ));
+    assert!(unique_name_differs(
+        "b",
+        resolver.add_block_scope_variable_declaration(&make_ident("b"), false, AstLinkage::None).unwrap()
+    ));
+    assert!(unique_name_differs(
+        "c",
+        resolver.add_block_scope_variable_declaration(&make_ident("c"), false, AstLinkage::None).unwrap()
+    ));
 
     assert!(unique_name_differs("MyInt", resolver.add_type_alias_declaration(&make_ident("MyInt")).unwrap()));
 
@@ -135,13 +155,28 @@ fn scopes() {
     assert!(unique_name_differs("MyInt", resolver.add_type_alias_declaration(&make_ident("MyInt")).unwrap()));
     assert!(unique_name_differs("MyInt", resolver.add_type_alias_declaration(&make_ident("MyInt")).unwrap()));
 
-    assert!(same_name("a", resolver.add_file_scope_variable_declaration(&make_ident("a"), AstLinkage::External).unwrap()));
-    assert!(same_name("b", resolver.add_file_scope_variable_declaration(&make_ident("b"), AstLinkage::External).unwrap()));
+    assert!(same_name(
+        "a",
+        resolver.add_file_scope_variable_declaration(&make_ident("a"), AstLinkage::External).unwrap()
+    ));
+    assert!(same_name(
+        "b",
+        resolver.add_file_scope_variable_declaration(&make_ident("b"), AstLinkage::External).unwrap()
+    ));
 
     // Can repeat
-    assert!(same_name("x", resolver.add_file_scope_variable_declaration(&make_ident("x"), AstLinkage::External).unwrap()));
-    assert!(same_name("x", resolver.add_file_scope_variable_declaration(&make_ident("x"), AstLinkage::External).unwrap()));
-    assert!(same_name("x", resolver.add_file_scope_variable_declaration(&make_ident("x"), AstLinkage::External).unwrap()));
+    assert!(same_name(
+        "x",
+        resolver.add_file_scope_variable_declaration(&make_ident("x"), AstLinkage::External).unwrap()
+    ));
+    assert!(same_name(
+        "x",
+        resolver.add_file_scope_variable_declaration(&make_ident("x"), AstLinkage::External).unwrap()
+    ));
+    assert!(same_name(
+        "x",
+        resolver.add_file_scope_variable_declaration(&make_ident("x"), AstLinkage::External).unwrap()
+    ));
 
     let myint_name_file_scope = resolver.resolve_identifier("MyInt", SearchScope::All).cloned().unwrap();
     let a_name_file_scope = resolver.resolve_identifier("a", SearchScope::All).cloned().unwrap();
@@ -271,5 +306,5 @@ fn unique_name_differs(name: &str, unique_name: AstUniqueName) -> bool {
 }
 
 fn make_ident(name: &str) -> AstIdentifier {
-    AstIdentifier::new(name, SourceLocation::new(1, 1, 1))
+    AstIdentifier::new(name, SourceLocation::new(FilePosition::default(), 1))
 }

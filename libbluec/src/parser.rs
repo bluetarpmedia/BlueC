@@ -6,7 +6,6 @@
 //! The parser performs identifier resolution. This allows us to solve the "typedef-name: identifier" ambiguity problem.
 
 pub mod printer;
-pub mod symbol;
 
 pub(super) mod expr;
 pub(super) mod recursive_descent;
@@ -25,11 +24,9 @@ pub use meta::AstMetadata;
 use identifier_resolution::{DeclaredIdentifier, SearchScope};
 
 use crate::ICE;
-use crate::compiler_driver;
-use crate::compiler_driver::Driver;
-use crate::compiler_driver::diagnostics::Diagnostic;
+use crate::compiler_driver::{Diagnostic, Driver};
+use crate::core::{FilePosition, SourceLocation};
 use crate::lexer;
-use crate::lexer::SourceLocation;
 use crate::sema;
 
 /// The parser interprets tokens produced by the lexer to generate an abstract syntax tree.
@@ -195,7 +192,7 @@ impl Parser {
 
 /// Parses the stream of tokens produced by the lexer and generates an abstract syntax tree (AST)
 /// representing the source C code, and then passes ownership of the AST to the semantic analysis stage.
-pub fn parse(driver: &mut compiler_driver::Driver, tokens: Vec<lexer::Token>) {
+pub fn parse(driver: &mut Driver, tokens: Vec<lexer::Token>) {
     let mut parser = Parser::new(tokens);
 
     let ast_root = recursive_descent::parse_translation_unit(&mut parser, driver);
@@ -241,15 +238,11 @@ pub fn add_error<S: Into<String>>(driver: &mut Driver, error: S, location: Sourc
 /// The diagnostic will be ignored if the parser is being used in a call to `Parser::disable_diagnostics_during`.
 /// This is a helper function which simplifies the construction of error diagnostics when the parser is at EOF.
 pub fn add_error_at_eof<S: Into<String>>(parser: &Parser, driver: &mut Driver, error: S) {
-    let mut eof_location: SourceLocation;
-
-    if let Some(last_token) = parser.token_stream.last_token() {
-        eof_location = last_token.location;
-        eof_location.column += eof_location.length;
-        eof_location.length = 1;
+    let eof_location = if let Some(last_token) = parser.token_stream.last_token() {
+        last_token.location.get_next_location()
     } else {
-        eof_location = SourceLocation { line: 1, column: 1, length: 1 };
-    }
+        SourceLocation::new(FilePosition::default(), 1)
+    };
 
     driver.add_diagnostic(Diagnostic::error_at_location(error.into(), eof_location));
 }

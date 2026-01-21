@@ -11,13 +11,7 @@ mod compare;
 mod functions;
 mod unary_instr;
 
-use super::ast::*;
-use super::casts;
-use super::instruction_fixups;
-use super::label_maker::AsmLabelMaker;
-use super::registers::HwRegister;
-use super::symbols::AsmSymbol;
-use super::symbols::AsmSymbolTable;
+use std::collections::HashMap;
 
 use crate::ICE;
 use crate::ir;
@@ -25,7 +19,13 @@ use crate::sema::constant_table::{ConstantTable, ConstantValue, UnsignedValue};
 use crate::sema::symbol_table::SymbolTable;
 use crate::sema::type_conversion;
 
-use std::collections::HashMap;
+use super::ast::*;
+use super::casts;
+use super::instruction_fixups;
+use super::label_maker::AsmLabelMaker;
+use super::registers::HwRegister;
+use super::symbols::AsmSymbol;
+use super::symbols::AsmSymbolTable;
 
 /// The x86_64 code generator which lowers the BlueTac IR into an x86_64 AST.
 pub struct Generator {

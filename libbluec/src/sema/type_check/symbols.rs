@@ -3,21 +3,18 @@
 //! The `symbols` module provides functionality to type check a symbol and then, if valid, add the symbol to the
 //! Symbol Table.
 
+use crate::ICE;
+use crate::compiler_driver::{Diagnostic, Driver, Error, Warning};
+use crate::core::SymbolKind;
+use crate::parser::{
+    AstDeclaration, AstDeclaredType, AstExpression, AstFunction, AstIdentifier, AstLinkage, AstMetadata, AstNodeId,
+    AstStorageClassSpecifierOption, AstStorageDuration, AstType, AstTypeAliasDeclaration, AstUniqueName,
+    AstVariableDeclaration,
+};
+
 use super::super::symbol_table::{Definition, SymbolAttributes, SymbolTable};
 use super::checker::{TypeCheckError, TypeChecker};
 use super::type_resolution;
-
-use crate::ICE;
-use crate::compiler_driver::Driver;
-use crate::compiler_driver::diagnostics::Diagnostic;
-use crate::compiler_driver::errors::{Error, RedefineErr};
-use crate::compiler_driver::Warning;
-use crate::parser::AstStorageClassSpecifierOption;
-use crate::parser::symbol::SymbolKind;
-use crate::parser::{
-    AstDeclaration, AstDeclaredType, AstExpression, AstFunction, AstIdentifier, AstLinkage, AstMetadata, AstNodeId,
-    AstStorageDuration, AstType, AstTypeAliasDeclaration, AstUniqueName, AstVariableDeclaration,
-};
 
 /// Verifies that the type alias declaration is semantically valid.
 pub fn verify_type_alias_declaration(
@@ -310,19 +307,21 @@ pub fn verify_function_declaration(
 
         // Function signature must match existing declaration
         if existing_symbol.data_type != fn_type {
-            Error::redefine_function(RedefineErr::Type, fn_ident.into(), symbol_loc, driver);
+            let old_type = &existing_symbol.data_type;
+            let new_type = fn_type;
+            Error::redefine_function_type(fn_ident.into(), old_type, &new_type, symbol_loc, driver);
             return Err(TypeCheckError);
         }
 
         // Cannot declare function with internal linkage if previous declaration has external linkage.
         if declared_linkage == AstLinkage::Internal && existing_symbol.linkage() == AstLinkage::External {
-            Error::redefine_function(RedefineErr::Linkage, fn_ident.into(), symbol_loc, driver);
+            Error::redefine_external_linkage_function_with_internal_linkage(fn_ident.into(), symbol_loc, driver);
             return Err(TypeCheckError);
         }
 
         // Cannot redefine with a different body.
         if existing_symbol.is_defined() && has_body {
-            Error::redefine_function(RedefineErr::Redefined, fn_ident.into(), symbol_loc, driver);
+            Error::redefine_function_body(fn_ident.into(), symbol_loc, driver);
             return Err(TypeCheckError);
         }
 
@@ -364,8 +363,8 @@ pub fn verify_function_arguments(
             format!("Too few arguments passed to function (expected {}, have {})", params_count, args_count)
         };
 
-        let args_source_span = metadata.get_source_span(args_node_id).expect("Args should have a source span");
-        let mut diag = Diagnostic::error_at_location(err, args_source_span.into());
+        let args_source_loc = metadata.get_source_location(args_node_id);
+        let mut diag = Diagnostic::error_at_location(err, args_source_loc);
 
         if let Some(ref fn_name) = fn_unique_name {
             let fn_symbol = symbols.get(fn_name).unwrap();

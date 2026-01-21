@@ -2,12 +2,12 @@
 //
 //! The `functions` module provides functionality to handle x86_64 function parameters and arguments.
 
+use crate::ICE;
+use crate::ir;
+
 use super::super::ast::{AsmBinaryOp, AsmInstruction, AsmOperand, AsmType};
 use super::super::registers::HwRegister;
 use super::Generator;
-
-use crate::ICE;
-use crate::ir;
 
 /// Copies function parameters from calling-convention HW registers or the stack into pseudo-registers.
 pub fn copy_params_into_pseudo_registers(bt_func: &ir::BtFunctionDefn, asm_instructions: &mut Vec<AsmInstruction>) {

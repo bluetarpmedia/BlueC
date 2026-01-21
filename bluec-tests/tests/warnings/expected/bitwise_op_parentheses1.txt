@@ -35,39 +35,39 @@ note: Add parentheses around the '&' expression to clarify the precedence of
    |
 
 warning: '^' used within '|' without parentheses [-Wbitwise-op-parentheses]
-    |
-    |     if (a | b ^ c) {
-    |           ^   ~
-    |
+   |
+   |     if (a | b ^ c) {
+   |           ^   ~
+   |
 note: Add parentheses around the '^' expression to clarify the precedence of
       operations to readers of this source code.
-    |
-    |     if (a | b ^ c) {
-    |               ^
-    |
+   |
+   |     if (a | b ^ c) {
+   |               ^
+   |
 
 warning: '&' used within '|' without parentheses [-Wbitwise-op-parentheses]
-    |
-    |     if (a | b & c) {
-    |           ^   ~
-    |
+   |
+   |     if (a | b & c) {
+   |           ^   ~
+   |
 note: Add parentheses around the '&' expression to clarify the precedence of
       operations to readers of this source code.
-    |
-    |     if (a | b & c) {
-    |               ^
-    |
+   |
+   |     if (a | b & c) {
+   |               ^
+   |
 
 warning: '&' used within '^' without parentheses [-Wbitwise-op-parentheses]
-    |
-    |     if (a ^ b & c) {
-    |           ^   ~
-    |
+   |
+   |     if (a ^ b & c) {
+   |           ^   ~
+   |
 note: Add parentheses around the '&' expression to clarify the precedence of
       operations to readers of this source code.
-    |
-    |     if (a ^ b & c) {
-    |               ^
-    |
+   |
+   |     if (a ^ b & c) {
+   |               ^
+   |
 
 6 warnings generated

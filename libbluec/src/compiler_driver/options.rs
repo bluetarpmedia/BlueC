@@ -2,9 +2,9 @@
 //
 //! The `options` module defines the compiler driver's options.
 
-use super::WarningKind;
-
 use std::collections::HashSet;
+
+use super::WarningKind;
 
 /// Options that control the compiler driver's behavior.
 #[derive(Debug, Default)]

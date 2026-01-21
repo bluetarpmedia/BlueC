@@ -1,11 +1,15 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 //
 //! The `warning_kind` module defines the `WarningKind` enum.
+//! 
+//! An X-macro is used to generate the enum along with `WarningKind::as_str()` and `WarningKind::from_str()` to
+//! convert a `WarningKind` variant to and from its string representation.
 
 use std::collections::HashSet;
 use std::fmt;
 
-// An "X-macro" to generate the `WarningKind` enum and functions to convert to/from a string representation.
+// An "X-macro" to generate the `WarningKind` enum and functions to convert to/from a string representation
+// so that we don't need to duplicate strings.
 macro_rules! define_warning_kind {
     ($($variant:ident => $string:expr),* $(,)?) => {
         /// The kind of warning.
@@ -38,7 +42,7 @@ macro_rules! define_warning_kind {
         impl std::str::FromStr for WarningKind {
             type Err = String;
 
-            /// Returns the `Ok(WarningKind)` from its string representation, or returns an `Err`.
+            /// Returns `Ok(WarningKind)` from its string representation, or returns an `Err`.
             fn from_str(s: &str) -> Result<Self, Self::Err> {
                 match s {
                     $($string => Ok(Self::$variant),)*
@@ -93,7 +97,6 @@ define_warning_kind! {
     //
     CompareDistinctPointerTypes    => "compare-distinct-pointer-types",
     PointerIntegerCompare          => "pointer-integer-compare",
-
     //
     // Types
     //
@@ -108,7 +111,7 @@ impl fmt::Display for WarningKind {
 }
 
 impl WarningKind {
-    /// Returns a `HashSet` of warnings that are enabled by default.
+    /// Returns a `HashSet` of compiler warnings that are enabled by default.
     pub fn enabled_by_default() -> HashSet<WarningKind> {
         HashSet::from([
             WarningKind::ArrayBounds,

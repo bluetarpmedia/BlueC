@@ -2,14 +2,14 @@
 //
 //! The `expr` module provides semantic analysis functionality for expressions.
 
-use super::visitor;
-
 use crate::compiler_driver;
 use crate::compiler_driver::Warning;
 use crate::parser;
 use crate::parser::{
     AstBinaryOp, AstBinaryOpFamily, AstExpression, AstFullExpression, AstFunction, AstNodeId, AstStatement,
 };
+
+use super::visitor;
 
 /// Emit warnings about expressions with mixed logical or bitwise operators and missing parentheses.
 pub fn warn_about_expressions_with_mixed_operators(
@@ -118,8 +118,8 @@ fn emit_assignment_used_in_condition_without_parens_warning(
     driver: &mut compiler_driver::Driver,
     metadata: &mut parser::AstMetadata,
 ) {
-    let full_expr_loc = metadata.get_source_span_as_loc(full_expr_node_id).unwrap();
-    let assignment_loc = metadata.get_source_span_as_loc(assignment_node_id).unwrap();
+    let full_expr_loc = metadata.get_source_location(full_expr_node_id);
+    let assignment_loc = metadata.get_source_location(assignment_node_id);
     Warning::assignment_in_condition_missing_parens(full_expr_loc, assignment_loc, driver);
 }
 
@@ -131,8 +131,8 @@ fn emit_missing_parens_warning(
     driver: &mut compiler_driver::Driver,
     metadata: &mut parser::AstMetadata,
 ) {
-    let parent_expr_loc = metadata.get_source_span_as_loc(parent_expr_node_id).unwrap();
-    let child_expr_loc = metadata.get_source_span_as_loc(child_expr_node_id).unwrap();
+    let parent_expr_loc = metadata.get_source_location(parent_expr_node_id);
+    let child_expr_loc = metadata.get_source_location(child_expr_node_id);
     Warning::mixed_operators_missing_parens(child_expr_op, parent_expr_op, child_expr_loc, parent_expr_loc, driver);
 }
 

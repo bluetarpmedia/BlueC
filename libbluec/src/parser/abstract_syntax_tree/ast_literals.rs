@@ -4,7 +4,7 @@
 
 use std::fmt;
 
-use crate::internal_error;
+use crate::ICE;
 use super::AstType;
 
 /// The kind of integer literal.
@@ -40,7 +40,7 @@ impl From<&AstType> for AstIntegerLiteralKind {
             AstType::UnsignedInt => AstIntegerLiteralKind::UnsignedInt,
             AstType::UnsignedLong => AstIntegerLiteralKind::UnsignedLong,
             AstType::UnsignedLongLong => AstIntegerLiteralKind::UnsignedLongLong,
-            _ => internal_error::ICE("Cannot convert AstType to AstIntegerLiteralKind"),
+            _ => ICE!("Cannot convert '{data_type}' to AstIntegerLiteralKind"),
         }
     }
 }
@@ -83,7 +83,7 @@ impl From<&AstType> for AstFloatLiteralKind {
             AstType::Float => AstFloatLiteralKind::Float,
             AstType::Double => AstFloatLiteralKind::Double,
             AstType::LongDouble => AstFloatLiteralKind::LongDouble,
-            _ => internal_error::ICE("Cannot convert AstType to AstFloatLiteralKind"),
+            _ => ICE!("Cannot convert '{data_type}' to AstFloatLiteralKind"),
         }
     }
 }

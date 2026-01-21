@@ -1,10 +1,11 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
-//
+
 //! main entry point for the compiler driver executable.
+
+use std::process::ExitCode;
 
 use libbluec::compiler_driver::args;
 use libbluec::compiler_driver::{Driver, DriverError, multi_file_driver};
-use std::process::ExitCode;
 
 fn main() -> ExitCode {
     // Parse the command-line arguments into the compiler driver's options.

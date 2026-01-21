@@ -4,8 +4,9 @@
 
 use std::fmt;
 
+use crate::core::SourceLocation;
+
 use super::AstUniqueName;
-use crate::lexer::SourceLocation;
 
 /// The basic type of a declaration.
 ///
@@ -45,17 +46,17 @@ impl fmt::Display for AstBasicType {
 }
 
 /// A basic type specifier.
-/// 
+///
 /// A basic type consists of one or more specifiers. In the example below the basic type is 'unsigned long int'
 /// and consists of three built-in type specifiers.
-/// 
+///
 /// ```c
 ///  unsigned long int salary = 0;
 ///  ~~~~~~~~ ~~~~ ~~~
 /// ```
-/// 
+///
 /// The following basic type has one alias specifier.
-/// 
+///
 /// ```c
 ///  typedef float F32;
 ///  F32 temperature = 0.0f;

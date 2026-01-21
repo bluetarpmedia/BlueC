@@ -2,17 +2,15 @@
 //
 //! The `utils` module provides utility functions to assist with type checking.
 
-use super::super::constant_eval;
-use super::TypeChecker;
-
 use crate::ICE;
-use crate::compiler_driver::Driver;
-use crate::compiler_driver::errors::Error;
-use crate::compiler_driver::Warning;
+use crate::compiler_driver::{Driver, Error, Warning};
 use crate::parser::{
     AstAssignmentOp, AstBinaryOp, AstExpression, AstFullExpression, AstIntegerLiteralKind, AstNodeId,
     AstStaticStorageInitializer, AstType, AstUnaryOp, AstVariableInitializer,
 };
+
+use super::super::constant_eval;
+use super::TypeChecker;
 
 /// Takes ownership of the given `Vec` and returns a new `Vec` with all consecutive `ZeroBytes` items merged together.
 pub fn combine_consecutive_zero_bytes(values: Vec<AstStaticStorageInitializer>) -> Vec<AstStaticStorageInitializer> {
@@ -163,7 +161,7 @@ pub fn is_null_pointer_constant(
             let mut ctx = constant_eval::ConstantEvalContext::from_type_checker(chk, driver);
             match constant_eval::evaluate_constant_expr(expr, &mut ctx) {
                 Some(const_value) if const_value.is_zero() && const_value.get_ast_type().is_integer() => {
-                    let loc = chk.metadata.get_source_span_as_loc(&expr.node_id()).unwrap();
+                    let loc = chk.metadata.get_source_location(&expr.node_id());
                     Warning::expression_interpreted_as_null_ptr_constant(loc, ptr_type, driver);
                     true
                 }
@@ -183,9 +181,9 @@ pub fn error_invalid_binary_expression_operands(
     chk: &mut TypeChecker,
     driver: &mut Driver,
 ) {
-    let op_loc = chk.metadata.get_source_span_as_loc(node_id).unwrap();
-    let lhs_loc = chk.metadata.get_source_span_as_loc(&lhs_expr.node_id()).unwrap();
-    let rhs_loc = chk.metadata.get_source_span_as_loc(&rhs_expr.node_id()).unwrap();
+    let op_loc = chk.metadata.get_source_location(node_id);
+    let lhs_loc = chk.metadata.get_source_location(&lhs_expr.node_id());
+    let rhs_loc = chk.metadata.get_source_location(&rhs_expr.node_id());
 
     Error::invalid_binary_expression_operands(op_loc, lhs_type, rhs_type, lhs_loc, rhs_loc, driver);
 }
@@ -200,9 +198,9 @@ pub fn warn_compare_different_pointer_types(
     chk: &mut TypeChecker,
     driver: &mut Driver,
 ) {
-    let loc = chk.metadata.get_source_span_as_loc(expr_node_id).unwrap();
-    let a_loc = chk.metadata.get_source_span_as_loc(&left.node_id()).unwrap();
-    let b_loc = chk.metadata.get_source_span_as_loc(&right.node_id()).unwrap();
+    let loc = chk.metadata.get_source_location(expr_node_id);
+    let a_loc = chk.metadata.get_source_location(&left.node_id());
+    let b_loc = chk.metadata.get_source_location(&right.node_id());
     Warning::compare_different_pointer_types(left_type, right_type, loc, a_loc, b_loc, driver);
 }
 
@@ -216,9 +214,9 @@ pub fn warn_compare_pointer_and_integer(
     chk: &mut TypeChecker,
     driver: &mut Driver,
 ) {
-    let cmp_loc = chk.metadata.get_source_span_as_loc(expr_node_id).unwrap();
-    let left_loc = chk.metadata.get_source_span_as_loc(&left.node_id()).unwrap();
-    let right_loc = chk.metadata.get_source_span_as_loc(&right.node_id()).unwrap();
+    let cmp_loc = chk.metadata.get_source_location(expr_node_id);
+    let left_loc = chk.metadata.get_source_location(&left.node_id());
+    let right_loc = chk.metadata.get_source_location(&right.node_id());
 
     let (ptr_type, int_type, ptr_loc, int_loc) = if left_type.is_pointer() {
         (left_type, right_type, left_loc, right_loc)
@@ -239,9 +237,9 @@ pub fn warn_conditional_type_mismatch(
     chk: &mut TypeChecker,
     driver: &mut Driver,
 ) {
-    let loc = chk.metadata.get_source_span_as_loc(expr_node_id).unwrap();
-    let a_loc = chk.metadata.get_source_span_as_loc(&left.node_id()).unwrap();
-    let b_loc = chk.metadata.get_source_span_as_loc(&right.node_id()).unwrap();
+    let loc = chk.metadata.get_source_location(expr_node_id);
+    let a_loc = chk.metadata.get_source_location(&left.node_id());
+    let b_loc = chk.metadata.get_source_location(&right.node_id());
     Warning::conditional_type_mismatch(left_type, right_type, loc, a_loc, b_loc, driver);
 }
 
@@ -255,9 +253,9 @@ pub fn warn_pointer_type_mismatch(
     chk: &mut TypeChecker,
     driver: &mut Driver,
 ) {
-    let loc = chk.metadata.get_source_span_as_loc(expr_node_id).unwrap();
-    let a_loc = chk.metadata.get_source_span_as_loc(&left.node_id()).unwrap();
-    let b_loc = chk.metadata.get_source_span_as_loc(&right.node_id()).unwrap();
+    let loc = chk.metadata.get_source_location(expr_node_id);
+    let a_loc = chk.metadata.get_source_location(&left.node_id());
+    let b_loc = chk.metadata.get_source_location(&right.node_id());
     Warning::pointer_type_mismatch(left_type, right_type, loc, a_loc, b_loc, driver);
 }
 

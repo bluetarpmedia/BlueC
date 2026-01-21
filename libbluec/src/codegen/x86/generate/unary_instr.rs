@@ -2,12 +2,12 @@
 //
 //! The `unary_instr` module provides functionality to generate instructions for an operation that has one operand.
 
+use crate::ICE;
+use crate::ir;
+
 use super::Generator;
 use super::compare;
 use super::{AsmBinaryOp, AsmConstantId, AsmInstruction, AsmOperand, AsmType, AsmUnaryOp, ConditionalCode, HwRegister};
-
-use crate::internal_error;
-use crate::ir;
 
 /// Generates the x86_64 instructions for a unary operation.
 pub fn generate_instruction(
@@ -102,6 +102,6 @@ fn translate_ir_unary_op_to_asm(op: &ir::BtUnaryOp) -> AsmUnaryOp {
         ir::BtUnaryOp::BitwiseNot => AsmUnaryOp::Not,
         ir::BtUnaryOp::Negate => AsmUnaryOp::Neg,
 
-        _ => internal_error::ICE("Unexpected unary operator"),
+        _ => ICE!("Unexpected unary operator '{op}'"),
     }
 }

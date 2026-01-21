@@ -1,7 +1,8 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 
-use super::super::type_check;
-use super::super::type_resolution;
+use std::io::BufReader;
+use std::io::Cursor;
+use std::vec;
 
 use crate::compiler_driver;
 use crate::lexer;
@@ -9,9 +10,8 @@ use crate::parser;
 use crate::parser::AstType;
 use crate::parser::recursive_descent;
 
-use std::io::BufReader;
-use std::io::Cursor;
-use std::vec;
+use super::super::type_check;
+use super::super::type_resolution;
 
 #[test]
 fn invalid_types() {

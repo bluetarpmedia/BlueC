@@ -1,9 +1,11 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 
-use crate::compiler_driver;
-use crate::lexer::Token;
-use crate::lexer::line_lexer::LineLexer;
-use crate::lexer::tests::utils;
+use crate::compiler_driver::Driver;
+use crate::core::FilePosition;
+
+use super::super::Token;
+use super::super::line_lexer::LineLexer;
+use super::super::tests::utils;
 
 pub fn compare_token_types(actual: &Vec<Token>, expected: &Vec<Token>) {
     assert!(actual.len() == expected.len());
@@ -13,8 +15,8 @@ pub fn compare_token_types(actual: &Vec<Token>, expected: &Vec<Token>) {
 }
 
 pub fn test_lexer(source_code: &str, expected: &Vec<Token>) {
-    let mut driver = compiler_driver::Driver::for_testing();
-    let mut line_lexer = LineLexer::new(&mut driver, 1, source_code);
+    let mut driver = Driver::for_testing();
+    let mut line_lexer = LineLexer::new(&mut driver, FilePosition::default(), source_code);
     let mut actual = Vec::new();
     loop {
         match line_lexer.get_next_token() {

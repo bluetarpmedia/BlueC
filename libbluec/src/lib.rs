@@ -6,9 +6,10 @@
 
 pub mod codegen;
 pub mod compiler_driver;
-mod internal_error;
+pub mod core;
 pub mod ir;
 pub mod lexer;
 pub mod parser;
 pub mod sema;
-pub mod utils;
+
+pub use core::ICE;

@@ -2,24 +2,18 @@
 //
 //! The `decl_var` module defines the various parsing functions for variable declarations.
 
+use crate::ICE;
+use crate::compiler_driver::{Diagnostic, Driver, Error, Warning};
+use crate::core::{SourceIdentifier, SourceLocation, SymbolKind};
+use crate::lexer::TokenType;
+
 use super::super::identifier_resolution::{ResolveError, SearchScope};
-use super::super::meta;
-use super::super::symbol::SymbolKind;
-use super::expr;
-use super::utils;
 use super::{
-    AstDeclaration, AstDeclaredType, AstIdentifier, AstLinkage, AstNodeId, AstStorageDuration, AstTypeAliasDeclaration,
-    AstUniqueName, AstVariableDeclaration, AstVariableInitializer,
+    AstDeclaration, AstDeclaredType, AstIdentifier, AstLinkage, AstNodeId, AstStorageClassSpecifierOption,
+    AstStorageDuration, AstTypeAliasDeclaration, AstUniqueName, AstVariableDeclaration, AstVariableInitializer,
 };
 use super::{ParseError, ParseResult, Parser, add_error};
-use crate::parser::AstStorageClassSpecifierOption;
-
-use crate::ICE;
-use crate::compiler_driver::Driver;
-use crate::compiler_driver::diagnostics::{Diagnostic, SourceIdentifier};
-use crate::compiler_driver::errors::Error;
-use crate::compiler_driver::Warning;
-use crate::lexer::{SourceLocation, TokenType};
+use super::{expr, utils};
 
 /// Parses the remainder of a variable declaration after the type-and-storage specifiers and declarator.
 pub fn parse_variable_declaration(
@@ -107,10 +101,7 @@ pub fn parse_variable_declaration(
     let end_decl_loc = parser.token_stream.prev_token_source_location().unwrap();
 
     let node_id = AstNodeId::new();
-    parser.metadata.add_source_span(
-        node_id,
-        meta::AstNodeSourceSpan::from_source_location_pair(&var_ident.loc, &end_decl_loc),
-    );
+    parser.metadata.add_source_location(node_id, var_ident.loc.merge_with(end_decl_loc));
 
     let is_declaration_only = is_declared_extern && initializer.is_none();
     let ident = var_ident.clone();
@@ -291,10 +282,7 @@ fn parse_aggregate_initializer(parser: &mut Parser, driver: &mut Driver) -> Pars
     let end_loc = utils::expect_token(TokenType::CloseBrace, parser, driver)?;
 
     let node_id = AstNodeId::new();
-    parser.metadata.add_source_span(
-        node_id,
-        meta::AstNodeSourceSpan::from_source_location_pair(&start_loc, &end_loc),
-    );
+    parser.metadata.add_source_location(node_id, start_loc.merge_with(end_loc));
 
     Ok(AstVariableInitializer::Aggregate { node_id, init: aggregate_items })
 }

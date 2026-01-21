@@ -1,8 +1,10 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 
-use crate::compiler_driver;
-use crate::lexer::TokenType;
-use crate::lexer::line_lexer::LineLexer;
+use crate::compiler_driver::Driver;
+use crate::core::FilePosition;
+
+use super::super::TokenType;
+use super::super::line_lexer::LineLexer;
 
 #[test]
 fn lex_valid_char_literals() {
@@ -96,8 +98,8 @@ fn lex_invalid_char_literals() {
 }
 
 fn expect_char_literal_valid(literal: &str, expected_valid: bool, expected_value: Option<i32>) {
-    let mut driver = compiler_driver::Driver::for_testing();
-    let mut line_lexer = LineLexer::new(&mut driver, 1, literal);
+    let mut driver = Driver::for_testing();
+    let mut line_lexer = LineLexer::new(&mut driver, FilePosition::default(), literal);
     match line_lexer.get_next_token() {
         Ok(Some(token)) => {
             if let TokenType::CharLiteral { value, .. } = token.token_type {

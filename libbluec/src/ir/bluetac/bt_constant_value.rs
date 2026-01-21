@@ -4,10 +4,10 @@
 
 use std::fmt;
 
-use super::BtType;
-
 use crate::ICE;
 use crate::parser::{AstConstantFp, AstConstantInteger};
+
+use super::BtType;
 
 /// A constant arithmetic value.
 #[derive(Debug, Clone, PartialEq, PartialOrd)]

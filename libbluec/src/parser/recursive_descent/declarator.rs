@@ -2,18 +2,17 @@
 //
 //! The `declarator` module provides functionality for parsing declarators in declarations.
 
+use crate::ICE;
+use crate::compiler_driver::{Driver, Error};
+use crate::core::SourceIdentifier;
+use crate::lexer::TokenType;
+
 use super::decl::parse_type_and_storage_specifiers;
 use super::literal;
 use super::peek;
 use super::utils;
 use super::{AstDeclarator, AstDeclaratorKind, AstDeclaredType, AstExpression, AstIdentifier};
 use super::{ParseError, ParseResult, Parser, add_error, add_error_at_eof};
-
-use crate::ICE;
-use crate::compiler_driver::Driver;
-use crate::compiler_driver::diagnostics::SourceIdentifier;
-use crate::compiler_driver::errors::Error;
-use crate::lexer::TokenType;
 
 /// A declarator can be parsed with or without an identifier.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -235,7 +234,7 @@ fn parse_array_size(parser: &mut Parser, driver: &mut Driver) -> ParseResult<usi
         0
     } else {
         // TODO: Allow constant expression for array declaration, e.g. int arr[10 + 1];
-        
+
         // The array size can be an integer literal or a char literal (which evaluates to 'int').
         if let Some(peek_next_token) = parser.token_stream.peek_next_token() {
             match peek_next_token.token_type {

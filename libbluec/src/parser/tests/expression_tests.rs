@@ -1,12 +1,12 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 
+use crate::compiler_driver::Driver;
+use crate::lexer::{Token, TokenType};
+
 use super::super::expr;
 use super::super::recursive_descent::block;
 use super::super::{AstBlockItem, AstExpression, AstStatement, ParseResult, Parser};
 use super::utils::make_parser;
-
-use crate::compiler_driver::Driver;
-use crate::lexer::{Token, TokenType};
 
 #[test]
 fn unary_negate_operation() {

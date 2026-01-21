@@ -1,12 +1,12 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 
+use crate::compiler_driver;
+use crate::core::SourceLocation;
+
 use super::super::recursive_descent::decl::parse_type_and_storage_specifiers;
+use super::super::recursive_descent::utils;
 use super::super::{AstBasicTypeSpecifier, AstStorageClassSpecifierKind};
 use super::utils::make_parser;
-
-use crate::compiler_driver;
-use crate::lexer::SourceLocation;
-use crate::parser::recursive_descent::utils;
 
 #[test]
 fn invalid_type_and_storage_specifiers() {

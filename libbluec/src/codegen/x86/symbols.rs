@@ -5,11 +5,12 @@
 
 use std::collections::HashMap;
 
-use super::ast::AsmType;
-use crate::parser;
-use crate::parser::AstStorageDuration;
+use crate::core::SymbolKind;
 use crate::ir::BtType;
+use crate::parser::AstStorageDuration;
 use crate::sema::symbol_table::SymbolTable;
+
+use super::ast::AsmType;
 
 /// A symbol in the table.
 #[derive(Debug, Clone)]
@@ -30,25 +31,25 @@ impl AsmSymbolTable {
         let symbols = sema_symbols
             .into_iter()
             .filter_map(|(unique_name, symbol)| match symbol.kind() {
-                parser::symbol::SymbolKind::Variable => {
+                SymbolKind::Variable => {
                     let is_static = symbol.storage_duration() == AstStorageDuration::Static;
                     let is_constant = false;
                     let bt_type = BtType::from(symbol.data_type);
                     let asm_type = AsmType::from(bt_type);
                     Some((unique_name.to_string(), AsmSymbol::Object { asm_type, is_static, is_constant }))
                 }
-                parser::symbol::SymbolKind::Constant => {
+                SymbolKind::Constant => {
                     let is_static = true;
                     let is_constant = true;
                     let bt_type = BtType::from(symbol.data_type);
                     let asm_type = AsmType::from(bt_type);
                     Some((unique_name.to_string(), AsmSymbol::Object { asm_type, is_static, is_constant }))
                 }
-                parser::symbol::SymbolKind::Function => {
+                SymbolKind::Function => {
                     let is_defined = symbol.is_defined();
                     Some((unique_name.to_string(), AsmSymbol::Function { is_defined }))
                 }
-                parser::symbol::SymbolKind::TypeAlias => None,
+                SymbolKind::TypeAlias => None,
             })
             .collect();
 

@@ -1,11 +1,11 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 
+use std::io::BufReader;
+use std::io::Cursor;
+
 use crate::compiler_driver;
 use crate::lexer::tests::utils;
 use crate::lexer::{Token, TokenType, lex_buf_reader};
-
-use std::io::BufReader;
-use std::io::Cursor;
 
 #[test]
 fn lex_one_line_program() {

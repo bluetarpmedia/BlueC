@@ -2,8 +2,11 @@
 //
 //! The `decl_fn` module defines the parsing functionality for function declarations (and definitions).
 
+use crate::ICE;
+use crate::compiler_driver::{Diagnostic, Driver, Error};
+use crate::lexer;
+
 use super::super::identifier_resolution::ResolveError;
-use super::super::meta;
 use super::AstStorageClassSpecifierOption;
 use super::block;
 use super::utils;
@@ -12,12 +15,6 @@ use super::{
     AstTypeAliasDeclaration, AstUniqueName,
 };
 use super::{ParseError, ParseResult, Parser, add_error};
-
-use crate::ICE;
-use crate::compiler_driver::Driver;
-use crate::compiler_driver::diagnostics::Diagnostic;
-use crate::compiler_driver::errors::Error;
-use crate::lexer;
 
 /// Whether `parse_function` is allowed to parse a declaration-only, or a declaration with optional definition.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -176,7 +173,7 @@ pub fn parse_function(
     })?;
 
     let node_id = AstNodeId::new();
-    parser.metadata.add_source_span(node_id, meta::AstNodeSourceSpan::from_source_location(&fn_ident.loc));
+    parser.metadata.add_source_location(node_id, fn_ident.loc);
 
     let ident = fn_ident.clone();
 

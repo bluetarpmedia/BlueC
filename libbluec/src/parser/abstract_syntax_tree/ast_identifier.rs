@@ -2,10 +2,9 @@
 //
 //! The `ast_identifier` module defines the `AstIdentifier` type.
 
-use crate::lexer::SourceLocation;
-use crate::compiler_driver::diagnostics::SourceIdentifier;
-
 use std::fmt;
+
+use crate::core::{SourceIdentifier, SourceLocation};
 
 /// An identifier is a user-defined name for variables, functions, enums, etc.
 #[derive(Debug, Clone, PartialEq, Eq)]

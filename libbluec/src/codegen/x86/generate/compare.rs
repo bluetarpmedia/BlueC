@@ -3,9 +3,10 @@
 //! The `compare` module provides functionality to handle Cmp instructions, including quiet NaNs with floating-
 //! point types.
 
-use super::Generator;
 use crate::codegen::x86::ast::{AsmBinaryOp, AsmInstruction, AsmOperand, AsmType, ConditionalCode};
 use crate::codegen::x86::registers::HwRegister;
+
+use super::Generator;
 
 /// Generates the Cmp instruction to compare the given primitive (integer-type) operand with zero, and then calls
 /// the given `and_then` closure to generate subsequent instructions which should test the comparison result and

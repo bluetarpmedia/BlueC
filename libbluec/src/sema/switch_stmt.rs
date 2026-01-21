@@ -2,21 +2,18 @@
 //
 //! The `switch_stmt` module provides functionality to validate switch statements.
 
+use crate::ICE;
+use crate::compiler_driver::{Diagnostic, Driver, Warning};
+use crate::parser::{AstConstantValue, AstFunction, AstRoot, AstStatement};
+
 use super::constant_eval;
 use super::type_check::checker::TypeChecker;
 use super::visitor;
 
-use crate::ICE;
-use crate::compiler_driver::Driver;
-use crate::compiler_driver::diagnostics::Diagnostic;
-use crate::compiler_driver::Warning;
-use crate::parser;
-use crate::parser::{AstConstantValue, AstFunction, AstStatement};
-
 /// Validates all switch statements in the AST.
 ///
 /// Cases in a switch statement must have constant expressions that evaluate to unique integer values.
-pub fn validate_switch_statements(ast_root: &mut parser::AstRoot, chk: &mut TypeChecker, driver: &mut Driver) {
+pub fn validate_switch_statements(ast_root: &mut AstRoot, chk: &mut TypeChecker, driver: &mut Driver) {
     // Visit each function definition, and for each one, visit each switch statement and verify that its cases have
     // unique constant values.
     //
@@ -46,7 +43,7 @@ pub fn validate_switch_statements(ast_root: &mut parser::AstRoot, chk: &mut Type
                         let ctx = constant_eval::ConstantEvalContext::from_type_checker(chk, driver);
                         let constant_value = constant_eval::evaluate_constant_full_expr(constant_expr, ctx);
                         if constant_value.is_none() {
-                            let loc = chk.metadata.get_source_span_as_loc(&constant_expr.node_id).unwrap();
+                            let loc = chk.metadata.get_source_location(&constant_expr.node_id);
                             let err = "Expression cannot be evaluated at compile-time".to_string();
                             driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
                             return;
@@ -56,7 +53,7 @@ pub fn validate_switch_statements(ast_root: &mut parser::AstRoot, chk: &mut Type
                         let mut constant_value = constant_value.unwrap();
 
                         if !matches!(constant_value, AstConstantValue::Integer(_)) {
-                            let loc = chk.metadata.get_source_span_as_loc(&constant_expr.node_id).unwrap();
+                            let loc = chk.metadata.get_source_location(&constant_expr.node_id);
                             let err = "Case label expression must evaluate as an integer constant".to_string();
                             driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
                             return;
@@ -76,11 +73,12 @@ pub fn validate_switch_statements(ast_root: &mut parser::AstRoot, chk: &mut Type
                             if constant_value != old_constant_value {
                                 let old_value = old_constant_value.to_string();
                                 let new_value = constant_value.to_string();
-                                let sign_change =
-                                    (old_constant_value.has_negative_value() && !constant_value.has_negative_value()) ||
-                                    (!old_constant_value.has_negative_value() && constant_value.has_negative_value());
+                                let sign_change = (old_constant_value.has_negative_value()
+                                    && !constant_value.has_negative_value())
+                                    || (!old_constant_value.has_negative_value()
+                                        && constant_value.has_negative_value());
 
-                                let loc = chk.metadata.get_source_span_as_loc(&constant_expr.node_id).unwrap();
+                                let loc = chk.metadata.get_source_location(&constant_expr.node_id);
                                 Warning::implicit_switch_case_conversion(
                                     &case_data_type,
                                     switch_data_type,
@@ -105,12 +103,12 @@ pub fn validate_switch_statements(ast_root: &mut parser::AstRoot, chk: &mut Type
                             let err = format!("Duplicate case value '{}'", constant_value);
                             let mut diag = Diagnostic::error_at_location(
                                 err,
-                                chk.metadata.get_source_span_as_loc(&constant_expr.node_id).unwrap(),
+                                chk.metadata.get_source_location(&constant_expr.node_id),
                             );
 
                             diag.add_note(
                                 "Previous case defined here:".to_string(),
-                                chk.metadata.get_source_span_as_loc(&existing_case_node_id),
+                                Some(chk.metadata.get_source_location(&existing_case_node_id)),
                             );
                             driver.add_diagnostic(diag);
                         }

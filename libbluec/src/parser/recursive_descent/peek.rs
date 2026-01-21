@@ -4,15 +4,13 @@
 //! These functions look ahead at the token stream and try to parse the tokens in a certain way without consuming the
 //! tokens or affecting the stream.
 
-use super::super::expr;
-use super::super::symbol::SymbolKind;
-use super::super::{ParseError, Parser};
-use super::decl;
-use super::declarator;
-use super::utils;
-
 use crate::compiler_driver::Driver;
+use crate::core::SymbolKind;
 use crate::lexer;
+
+use super::super::expr;
+use super::super::{ParseError, Parser};
+use super::{decl, declarator, utils};
 
 /// Peeks ahead and returns whether the next tokens are a variable, function, or type alias declaration.
 ///
@@ -39,9 +37,10 @@ pub fn is_declaration(parser: &mut Parser, driver: &mut Driver) -> bool {
                         // If the token is an identifier for an existing variable or function declaration then it
                         // cannot be a new declaration.
                         //
-                        else if parser.get_identifier_if_visible_from_current_scope(id).is_some_and(|decl| {
-                            decl.kind == SymbolKind::Variable || decl.kind == SymbolKind::Function
-                        }) {
+                        else if parser
+                            .get_identifier_if_visible_from_current_scope(id)
+                            .is_some_and(|decl| decl.kind == SymbolKind::Variable || decl.kind == SymbolKind::Function)
+                        {
                             Err(())
                         }
                         //

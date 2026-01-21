@@ -2,11 +2,11 @@
 //
 //! The `utils` module defines utility functions for the BlueTac translator.
 
-use super::BlueTacTranslator;
-
 use crate::compiler_driver::Driver;
 use crate::parser::AstVariableInitializer;
 use crate::sema::constant_eval;
+
+use super::BlueTacTranslator;
 
 /// Merges adjacent null string escape codes ("\\000") into a single string.
 ///

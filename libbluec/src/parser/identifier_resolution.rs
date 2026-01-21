@@ -2,13 +2,12 @@
 //
 //! The `identifier_resolution` module provides identifier resolution functionality across parsing scopes.
 
-use super::symbol::SymbolKind;
-use super::{AstIdentifier, AstLinkage, AstUniqueName};
-
-use crate::internal_error;
-use crate::lexer::SourceLocation;
-
 use std::collections::HashMap;
+
+use crate::ICE;
+use crate::core::{SourceLocation, SymbolKind};
+
+use super::{AstIdentifier, AstLinkage, AstUniqueName};
 
 /// The identifier resolver is responsible for tracking identifiers across scopes and resolving their declared
 /// names to their unique names.
@@ -81,7 +80,7 @@ impl IdentifierResolver {
         if self.scopes.len() > 1 {
             _ = self.scopes.pop();
         } else {
-            internal_error::ICE("Cannot pop the file scope");
+            ICE!("Cannot pop the file scope");
         }
     }
 
@@ -231,7 +230,7 @@ impl IdentifierResolver {
     fn make_unique_name(&mut self, name: &str) -> AstUniqueName {
         let idx = self.unique_identifier_index;
         if idx == usize::MAX {
-            internal_error::ICE("Exhausted unique identifiers"); // Technically we have 1 more available but we'll limit ourselves to MAX-1.
+            ICE!("Exhausted unique identifiers"); // Technically we have 1 more available
         }
         self.unique_identifier_index += 1;
 

@@ -1,13 +1,12 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 
+use std::io::BufReader;
+use std::io::Cursor;
+
 use crate::compiler_driver;
 use crate::lexer;
 use crate::parser;
-use crate::parser::AstDeclaration;
-use crate::parser::AstVariableDeclaration;
-
-use std::io::BufReader;
-use std::io::Cursor;
+use crate::parser::{AstDeclaration, AstVariableDeclaration};
 
 /// Creates a `Parser` for the given source code.
 pub fn make_parser(driver: &mut compiler_driver::Driver, source_code: &str) -> parser::Parser {

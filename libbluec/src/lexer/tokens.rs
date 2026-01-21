@@ -1,10 +1,10 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 //
-//! The tokens module defines the tokens that the lexer produces.
-
-use crate::lexer::SourceLocation;
+//! The `tokens` module defines the tokens that the lexer produces.
 
 use std::fmt;
+
+use crate::core::SourceLocation;
 
 /// Types of tokens produced by lexical analysis.
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -63,7 +63,7 @@ pub enum TokenType {
     //      The `literal` includes the surrounding single quotes.
     //      The value is `i32` because in C a char literal has type of 'int'.
     CharLiteral { literal: String, value: i32 },
-    
+
     // Numeric literals
     IntegerLiteral { literal: String, base: NumericLiteralBase, suffix: Option<IntegerLiteralSuffix> },
     FloatLiteral { literal: String, base: NumericLiteralBase, suffix: Option<FloatLiteralSuffix> },
@@ -323,11 +323,6 @@ impl Token {
 
 #[cfg(test)]
 impl Token {
-    /// Creates a Token with a TokenType and a line/column source location.
-    pub fn with_location(token_type: TokenType, line: usize, column: usize) -> Self {
-        Self { token_type, location: SourceLocation { line, column, length: 1 } }
-    }
-
     /// Creates a Token with a TokenType but a default/zero source location.
     pub fn without_location(token_type: TokenType) -> Self {
         Self { token_type, location: Default::default() }

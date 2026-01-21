@@ -2,7 +2,8 @@
 //
 //! The `type_conversion` module provides functionality to convert between data types.
 
-use crate::{internal_error, parser::AstType};
+use crate::ICE;
+use crate::parser::AstType;
 
 /// Casts a `i128` value to the given integer data type, and returns the new value as either `u64` or `i64`.
 pub fn cast_i128_to_integer_type(value: i128, data_type: &AstType) -> (Option<u64>, Option<i64>) {
@@ -15,7 +16,7 @@ pub fn cast_i128_to_integer_type(value: i128, data_type: &AstType) -> (Option<u6
         AstType::UnsignedShort => (Some((value as u16) as u64), None),
         AstType::UnsignedInt => (Some((value as u32) as u64), None),
         AstType::UnsignedLong | AstType::UnsignedLongLong => (Some(value as u64), None),
-        _ => internal_error::ICE("'cast_u64_to_integer_type' expects an integer data type to cast to"),
+        _ => ICE!("Cannot cast '{value}' to '{data_type}'"),
     }
 }
 

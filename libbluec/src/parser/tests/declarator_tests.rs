@@ -1,15 +1,14 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 
-use super::utils::make_parser;
+use crate::compiler_driver::Driver;
+use crate::core::{FilePosition, SourceLocation};
 
 use super::super::recursive_descent::declarator::*;
 use super::super::{
     AstBasicType, AstBasicTypeSpecifier, AstDeclarator, AstDeclaratorKind, AstDeclaredType, AstIdentifier,
     AstStorageClassSpecifier,
 };
-
-use crate::compiler_driver;
-use crate::lexer::SourceLocation;
+use super::utils::make_parser;
 
 #[test]
 fn invalid_declarators() {
@@ -127,25 +126,36 @@ fn function_declarators() {
         parse("calculate(int age, double salary, float tax)"),
         "calculate",
         &vec![
-            make_param_with_identifier("int", "age", SourceLocation::new(1, 15, 3)),
-            make_param_with_identifier("double", "salary", SourceLocation::new(1, 27, 6)),
-            make_param_with_identifier("float", "tax", SourceLocation::new(1, 41, 3)),
+            make_param_with_identifier("int", "age", SourceLocation::new(FilePosition::from(14), 3)),
+            make_param_with_identifier("double", "salary", SourceLocation::new(FilePosition::from(26), 6)),
+            make_param_with_identifier("float", "tax", SourceLocation::new(FilePosition::from(40), 3)),
         ]
     ));
 
-    let pf = AstDeclarator { kind: AstDeclaratorKind::AbstractPointer, loc: SourceLocation::new(1, 44, 1) };
-    let ppf = AstDeclarator { kind: AstDeclaratorKind::Pointer(Box::new(pf)), loc: SourceLocation::new(1, 43, 2) };
-    let pppf = AstDeclarator { kind: AstDeclaratorKind::Pointer(Box::new(ppf)), loc: SourceLocation::new(1, 42, 3) };
+    let pf =
+        AstDeclarator { kind: AstDeclaratorKind::AbstractPointer, loc: SourceLocation::new(FilePosition::from(43), 1) };
+    let ppf = AstDeclarator {
+        kind: AstDeclaratorKind::Pointer(Box::new(pf)),
+        loc: SourceLocation::new(FilePosition::from(42), 2),
+    };
+    let pppf = AstDeclarator {
+        kind: AstDeclaratorKind::Pointer(Box::new(ppf)),
+        loc: SourceLocation::new(FilePosition::from(41), 3),
+    };
 
     assert!(is_function(
         parse("calculate(int age, double *salary, float ***)"),
         "calculate",
         &vec![
-            make_param_with_identifier("int", "age", SourceLocation::new(1, 15, 3)),
+            make_param_with_identifier("int", "age", SourceLocation::new(FilePosition::from(14), 3)),
             make_declared_type(
                 "double",
                 None,
-                Some(make_pointer_declarator("salary", SourceLocation::new(1, 28, 6), SourceLocation::new(1, 27, 7)))
+                Some(make_pointer_declarator(
+                    "salary",
+                    SourceLocation::new(FilePosition::from(27), 6),
+                    SourceLocation::new(FilePosition::from(26), 7)
+                ))
             ),
             make_declared_type("float", None, Some(pppf)),
         ]
@@ -158,17 +168,26 @@ fn function_declarators() {
             make_declared_type(
                 "long",
                 None,
-                Some(AstDeclarator { kind: AstDeclaratorKind::AbstractPointer, loc: SourceLocation::new(1, 15, 1) })
+                Some(AstDeclarator {
+                    kind: AstDeclaratorKind::AbstractPointer,
+                    loc: SourceLocation::new(FilePosition::from(14), 1)
+                })
             ),
             make_declared_type(
                 "long double",
                 None,
-                Some(AstDeclarator { kind: AstDeclaratorKind::AbstractPointer, loc: SourceLocation::new(1, 29, 1) })
+                Some(AstDeclarator {
+                    kind: AstDeclaratorKind::AbstractPointer,
+                    loc: SourceLocation::new(FilePosition::from(28), 1)
+                })
             ),
             make_declared_type(
                 "unsigned short",
                 None,
-                Some(AstDeclarator { kind: AstDeclaratorKind::AbstractPointer, loc: SourceLocation::new(1, 46, 1) })
+                Some(AstDeclarator {
+                    kind: AstDeclaratorKind::AbstractPointer,
+                    loc: SourceLocation::new(FilePosition::from(45), 1)
+                })
             ),
         ]
     ));
@@ -180,17 +199,29 @@ fn function_declarators() {
             make_declared_type(
                 "long",
                 None,
-                Some(make_pointer_declarator("a", SourceLocation::new(1, 17, 1), SourceLocation::new(1, 16, 2)))
+                Some(make_pointer_declarator(
+                    "a",
+                    SourceLocation::new(FilePosition::from(16), 1),
+                    SourceLocation::new(FilePosition::from(15), 2)
+                ))
             ),
             make_declared_type(
                 "long double",
                 None,
-                Some(make_pointer_declarator("b", SourceLocation::new(1, 33, 1), SourceLocation::new(1, 32, 2)))
+                Some(make_pointer_declarator(
+                    "b",
+                    SourceLocation::new(FilePosition::from(32), 1),
+                    SourceLocation::new(FilePosition::from(31), 2)
+                ))
             ),
             make_declared_type(
                 "unsigned short",
                 None,
-                Some(make_pointer_declarator("c", SourceLocation::new(1, 52, 1), SourceLocation::new(1, 51, 2)))
+                Some(make_pointer_declarator(
+                    "c",
+                    SourceLocation::new(FilePosition::from(51), 1),
+                    SourceLocation::new(FilePosition::from(50), 2)
+                ))
             ),
         ]
     ));
@@ -203,7 +234,11 @@ fn function_declarators() {
         &vec![make_declared_type(
             "int",
             None,
-            Some(make_pointer_declarator("p", SourceLocation::new(1, 18, 1), SourceLocation::new(1, 17, 2)))
+            Some(make_pointer_declarator(
+                "p",
+                SourceLocation::new(FilePosition::from(17), 1),
+                SourceLocation::new(FilePosition::from(16), 2)
+            ))
         )]
     ));
 }
@@ -363,7 +398,7 @@ fn is_function(
 }
 
 fn parse(source: &str) -> Option<AstDeclarator> {
-    let mut driver = compiler_driver::Driver::for_testing();
+    let mut driver = Driver::for_testing();
     let mut parser = make_parser(&mut driver, source);
 
     let declarator = parse_declarator(&mut parser, &mut driver, ParseOption::AllowAbstract);

@@ -2,11 +2,11 @@
 //
 //! The `bt_static_storage_initializer` module defines the `BtStaticStorageInitializer` type.
 
-use super::BtConstantValue;
+use std::fmt;
 
 use crate::parser::{AstAddressConstant, AstStaticStorageInitializer};
 
-use std::fmt;
+use super::BtConstantValue;
 
 /// An initializer value for a static storage variable.
 #[derive(Debug, Clone)]

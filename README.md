@@ -5,9 +5,9 @@
 [![Tests](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/bluetarpmedia/4a3049e2f6a53832726ab63f0b395357/raw/bluec-junit-tests.json)](https://github.com/bluetarpmedia/BlueC/actions/workflows/build-bluec.yml)
 [![Build documentation](https://github.com/bluetarpmedia/BlueC/actions/workflows/build-docs.yml/badge.svg)](https://github.com/bluetarpmedia/BlueC/actions/workflows/build-docs.yml)
 
-The initial goal is to write a fully conforming C17 compiler, from the preprocessor stage through to the assembly code emission stage, supporting multiple targets.
+The initial goal is to write a fully conforming C17 compiler, from the preprocessor stage through to the assembly code emission stage, supporting multiple targets, with a focus on friendly diagnostics, and using no `unsafe` Rust and no third-party dependencies.
 
-See the [Status and Roadmap](#status-and-roadmap) section for current progress.
+See the [Status and Roadmap](#status-and-roadmap) section for current progress and [Design Goals](#design-goals) for further information about design choices.
 
 By default, the BlueC compiler driver runs the appropriate platform development tool (`gcc` / `msvc`) for final assembly and linking to produce a binary/object file. If desired, the driver can stop after writing an `.s` file with the assembly code.
 
@@ -21,6 +21,9 @@ By default, the BlueC compiler driver runs the appropriate platform development 
   * [Dependencies & SBOM](#dependencies--sbom)
 * [Design Goals](#design-goals)
 * [Architecture](#architecture)
+  * [Library Modules](#library-modules)
+  * [Unit Tests](#unit-tests)
+  * [Integration Tests](#integration-tests)
 * [Compiler Pipeline](#compiler-pipeline)
 * [Status and Roadmap](#status-and-roadmap)
 * [Extensions](#extensions)
@@ -123,11 +126,33 @@ BlueC has been deliberately designed without depending on any third-party crates
 
 ## Architecture
 
-BlueC is both a library and a binary executable.
+BlueC is both a library and a binary executable. The Cargo workspace includes 3 crates:
 
-All compiler stages, plus the compiler driver itself, are exported from the library.
+| Crate       | Notes |
+| ----------- | ----- |
+| libbluec    | The BlueC compiler library |
+| bluec       | The binary executable (a very thin wrapper which invokes the library's `compiler_driver`) |
+| bluec-tests | Integration tests |
 
-The binary executable is a very thin wrapper around the `compiler_driver::Driver`.
+### Library Modules
+
+Currently, the entire compiler is implemented in one `libbluec` crate and each stage in the compiler is a different top-level module in the crate. (In future, we may extract these stages into their own crates.) See [Compiler Pipeline](#compiler-pipeline) for a description of the top-level modules.
+
+### Unit Tests
+
+Each library module's unit tests are placed in their own `tests.rs` submodule, and never written directly next to code within the module they are testing. (E.g. see [parser/tests.rs](src/parser/tests.rs) or [sema/tests.rs](src/sema/tests.rs)). This is a deliberate strategy to optimize build times (see 'Assorted Tricks' in [One Hundred Thousand Lines of Rust](https://matklad.github.io/2021/02/27/delete-cargo-integration-tests.html)).
+
+### Integration Tests
+
+[![Tests](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/bluetarpmedia/4a3049e2f6a53832726ab63f0b395357/raw/bluec-junit-tests.json)](https://github.com/bluetarpmedia/BlueC/actions/workflows/build-bluec.yml)
+
+The vast majority of tests are integration tests. There are 3 categories of test cases:
+
+| Tests | Description |
+| ---------- | ----- |
+| Valid      | Valid C source files.<br>We expect to successfully compile each file without any error diagnostics, and then we run the resulting executable file and check its return code against an expected result. In addition, some tests also link with object files compiled by `gcc` to verify ABI compatibility. |
+| Invalid    | Invalid (ill-formed) C source files.<br>We expect the compiler to emit one or more error diagnostics when compiling these files. |
+| Warnings   | Valid C source files which produce warnings.<br>When compiling we expect the compiler to emit one or more warning diagnostics, but no errors. We verify the emitted warnings match the expected results. |
 
 ## Compiler Pipeline
 

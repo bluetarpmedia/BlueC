@@ -2,23 +2,24 @@
 //
 //! The `checker` module defines `TypeChecker`, which holds mutable state necessary for type checking.
 
+use std::collections::HashMap;
+
+use crate::ICE;
+use crate::compiler_driver::{Driver, Warning};
+use crate::core::SourceLocation;
+use crate::parser::{AstDeclaredType, AstExpression, AstMetadata, AstNodeId, AstType, AstUnaryOp};
+
 use super::super::constant_table::ConstantTable;
 use super::super::symbol_table::SymbolTable;
 use super::super::type_conversion;
 
-use crate::ICE;
-use crate::compiler_driver::Driver;
-use crate::compiler_driver::Warning;
-use crate::lexer::SourceLocation;
-use crate::parser;
-use crate::parser::{AstDeclaredType, AstExpression, AstNodeId, AstType, AstUnaryOp};
-
-use std::collections::HashMap;
-
+/// The error result for `TypeCheckResult`.
 pub struct TypeCheckError;
 
+/// The result of a type checking operation.
 pub type TypeCheckResult<T> = Result<T, TypeCheckError>;
 
+/// The scope that a type alias is declared.
 #[derive(Debug, Default)]
 pub struct DeclarationScope {
     pub type_alias_map: HashMap<String, (AstType, SourceLocation)>,
@@ -27,7 +28,7 @@ pub struct DeclarationScope {
 /// The Type Checker holds mutable state necessary for type checking.
 #[derive(Debug)]
 pub struct TypeChecker {
-    pub metadata: parser::AstMetadata,
+    pub metadata: AstMetadata,
     pub symbols: SymbolTable,
     pub constants: ConstantTable,
     current_func_return_type: Option<AstType>,
@@ -43,13 +44,13 @@ pub enum CastWarningPolicy {
 
 impl Default for TypeChecker {
     fn default() -> Self {
-        Self::new(parser::AstMetadata::default(), SymbolTable::default(), ConstantTable::default())
+        Self::new(AstMetadata::default(), SymbolTable::default(), ConstantTable::default())
     }
 }
 
 impl TypeChecker {
     /// Creates a new Type Checker.
-    pub fn new(metadata: parser::AstMetadata, symbols: SymbolTable, constants: ConstantTable) -> Self {
+    pub fn new(metadata: AstMetadata, symbols: SymbolTable, constants: ConstantTable) -> Self {
         let scopes = vec![DeclarationScope::default()];
         Self { metadata, symbols, constants, current_func_return_type: None, scopes }
     }
@@ -128,7 +129,7 @@ impl TypeChecker {
                 && inner_expr.is_integer_literal()
             {
                 let old_type = self.metadata.get_node_type(node_id).cloned().unwrap();
-                let loc = self.metadata.get_source_span_as_loc(node_id);
+                let loc = self.metadata.get_source_location(node_id);
                 let sign_change = true;
 
                 let AstExpression::IntegerLiteral { value, .. } = inner_expr.as_ref() else {
@@ -142,7 +143,7 @@ impl TypeChecker {
                         target_type,
                         *value,
                         true,
-                        loc.unwrap(),
+                        loc,
                         sign_change,
                         driver,
                     );
@@ -157,7 +158,7 @@ impl TypeChecker {
                 && !target_type.can_hold_value(*value)
             {
                 let old_type = kind.data_type();
-                let loc = self.metadata.get_source_span_as_loc(node_id);
+                let loc = self.metadata.get_source_location(node_id);
                 let sign_change =
                     old_type.is_integer() && target_type.is_integer() && !old_type.same_signedness(target_type);
 
@@ -166,7 +167,7 @@ impl TypeChecker {
                     target_type,
                     *value,
                     false,
-                    loc.unwrap(),
+                    loc,
                     sign_change,
                     driver,
                 );
@@ -181,7 +182,7 @@ impl TypeChecker {
                 let both_floating_point = target_type.is_floating_point() && expr_type.is_floating_point();
 
                 if (both_integers || both_floating_point) && !expr_type.fits_inside(target_type) {
-                    let loc = self.metadata.get_source_span_as_loc(&expr.node_id()).unwrap();
+                    let loc = self.metadata.get_source_location(&expr.node_id());
                     Warning::implicit_arithmetic_conversion(&expr_type, target_type, loc, driver);
                 }
             }

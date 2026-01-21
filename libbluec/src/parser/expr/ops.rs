@@ -2,13 +2,12 @@
 //
 //! The `ops` module defines helper functions for parsing unary and binary operations.
 
-use super::super::meta;
-use super::super::{AstAssignmentOp, AstBinaryOp, AstExpression, AstNodeId, AstUnaryOp, ParseResult, Parser};
-use super::parse_unary_expression;
-
 use crate::ICE;
 use crate::compiler_driver::Driver;
 use crate::lexer;
+
+use super::super::{AstAssignmentOp, AstBinaryOp, AstExpression, AstNodeId, AstUnaryOp, ParseResult, Parser};
+use super::parse_unary_expression;
 
 /// Parses a prefix unary operation and returns an AST expression.
 pub fn parse_prefix_unary_operation(parser: &mut Parser, driver: &mut Driver) -> ParseResult<AstExpression> {
@@ -23,10 +22,7 @@ pub fn parse_prefix_unary_operation(parser: &mut Parser, driver: &mut Driver) ->
     let end_loc = parser.token_stream.prev_token_source_location().expect("Should have a location");
 
     let node_id = AstNodeId::new();
-    parser.metadata.add_source_span(
-        node_id,
-        meta::AstNodeSourceSpan::from_source_location_pair(&unary_op_token.location, &end_loc),
-    );
+    parser.metadata.add_source_location(node_id, unary_op_token.location.merge_with(end_loc));
 
     // We parse dereference and address-of as unary operations but output dedicated AstExpressions for them,
     // rather than storing them as `AstExpression::UnaryOperation`s. This makes it easier to handle them later
@@ -60,9 +56,7 @@ pub fn parse_postfix_incr_or_decr(
     let end_loc = parser.token_stream.prev_token_source_location().expect("Should have a location");
 
     let node_id = AstNodeId::new();
-    parser
-        .metadata
-        .add_source_span(node_id, meta::AstNodeSourceSpan::from_source_location_pair(&unary_op_loc, &end_loc));
+    parser.metadata.add_source_location(node_id, unary_op_loc.merge_with(end_loc));
 
     Ok(AstExpression::UnaryOperation { node_id, op, expr: Box::new(expr) })
 }

@@ -6,8 +6,9 @@
 use std::collections::HashMap;
 
 use crate::ICE;
-use super::ast::{AsmConstantId, AsmLabelName};
 use crate::ir;
+
+use super::ast::{AsmConstantId, AsmLabelName};
 
 #[derive(Debug)]
 pub struct AsmLabelMaker {

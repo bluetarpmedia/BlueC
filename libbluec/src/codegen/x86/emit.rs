@@ -2,6 +2,8 @@
 //
 //! The `emit` module provides x86_64 assembly emission functionality to the parent codegen module.
 
+use std::io::Result;
+
 use crate::ICE;
 
 use super::ast::*;
@@ -9,8 +11,6 @@ use super::file_writer::{
     AsmDataDefinitionDirective, AsmFileWriter, AsmSectionDirective, AsmStorageReservationDirective,
 };
 use super::symbols::AsmSymbolTable;
-
-use std::io::Result;
 
 /// Emits the x86_64 assembly code for the given program and writes it to an '.s' file.
 pub fn emit_asm_to_file(asm_root: &AsmRoot, asm_file: &str, symbol_table: AsmSymbolTable) {

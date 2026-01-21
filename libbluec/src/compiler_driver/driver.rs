@@ -2,23 +2,22 @@
 //
 //! The `driver` module defines `Driver`, which is the BlueC compiler driver type.
 
-use super::diagnostics::{Diagnostic, DiagnosticKind, Printer};
-use super::options::{DriverFlag, DriverOptions};
-use super::tempfile::TempFile;
-use super::{CompilerGeneratedFile, DriverError};
-
-use crate::ICE;
-
 use std::io::Write;
 use std::path::Path;
+
+use super::diagnostics::printer::Printer;
+use super::diagnostics::{Diagnostic, DiagnosticKind};
+use super::options::{DriverFlag, DriverOptions};
+use super::tu_file::TuFile;
+use super::{CompilerGeneratedFile, DriverError};
 
 /// The BlueC compiler driver.
 pub struct Driver {
     // The path to the source `.c` file.
-    pub source_filename: String,
+    pub source_file_path: String,
 
-    // The path to the temp preprocessed translation unit file.
-    pub translation_unit_filename: String,
+    // The temporary preprocessed translation unit file.
+    pub tu_file: TuFile,
 
     // The path to the `.s` assembly file created by our compiler.
     pub asm_filename: String,
@@ -30,26 +29,21 @@ pub struct Driver {
     diagnostics_enabled: bool,
     errors: Vec<Diagnostic>,
     warnings: Vec<Diagnostic>,
-
-    // Owns the temporary file we create for the preprocessed translation unit file.
-    _translation_unit_temp_file: TempFile,
 }
 
 impl Driver {
     /// Creates a new compiler driver configured to compile the given source file.
-    pub fn new(source_filename: &str, options: DriverOptions) -> Self {
-        let (translation_unit_temp_file, translation_unit_filename) = create_temp_file_path(source_filename);
-        let asm_filename = Path::new(&source_filename).with_extension("s").to_string_lossy().to_string();
+    pub fn new(source_file_path: &str, options: DriverOptions) -> Self {
+        let asm_filename = Path::new(&source_file_path).with_extension("s").to_string_lossy().to_string();
 
         Self {
-            source_filename: source_filename.to_string(),
-            translation_unit_filename,
+            source_file_path: source_file_path.to_string(),
+            tu_file: TuFile::new(source_file_path),
             asm_filename,
             options: Some(options),
             diagnostics_enabled: true,
             errors: Vec::new(),
             warnings: Vec::new(),
-            _translation_unit_temp_file: translation_unit_temp_file,
         }
     }
 
@@ -57,21 +51,20 @@ impl Driver {
     #[cfg(test)]
     pub fn for_testing() -> Self {
         Self {
-            source_filename: String::new(),
-            translation_unit_filename: String::new(),
+            source_file_path: String::new(),
+            tu_file: TuFile::for_testing(),
             asm_filename: String::new(),
             options: Some(DriverOptions::default()),
             diagnostics_enabled: true,
             errors: Vec::new(),
             warnings: Vec::new(),
-            _translation_unit_temp_file: TempFile::none(),
         }
     }
 
     /// Runs the compiler pipeline and returns the appropriate file depending on the given options.
     pub fn run(&mut self) -> Result<CompilerGeneratedFile, DriverError> {
         // Run the preprocessor (external tool)
-        super::preprocces(&self.source_filename, &self.translation_unit_filename, &self.options().preprocessor_defns)?;
+        super::preprocces(&self.source_file_path, self.tu_file.file_path(), &self.options().preprocessor_defns)?;
 
         // Begin the compilation pipeline
         //      Note: diagnostics are recorded on the Driver itself, and not returned as errors in the `Result<>` type.
@@ -136,7 +129,7 @@ impl Driver {
 
         match diagnostic.kind() {
             DiagnosticKind::Error => self.errors.push(diagnostic),
-            
+
             DiagnosticKind::Warning(warning_kind) => {
                 if self.options().is_warning_enabled(warning_kind) {
                     if self.options().warnings_as_errors {
@@ -181,7 +174,7 @@ impl Driver {
         let terse = self.is_flag_set(DriverFlag::PRINT_TERSE);
         let show_source_loc = !self.is_flag_set(DriverFlag::PRINT_NO_SOURCE_LOC);
 
-        let mut printer = Printer::with_source_and_tu(buffer, &self.source_filename, &self.translation_unit_filename);
+        let mut printer = Printer::new(buffer, &self.tu_file);
         printer.set_terse(terse);
         printer.show_source_file_and_loc(show_source_loc);
         printer.print_diagnostics(&self.errors, &self.warnings);
@@ -197,18 +190,4 @@ impl Driver {
             println!("{:?}", warning);
         }
     }
-}
-
-fn create_temp_file_path(source_filename: &str) -> (TempFile, String) {
-    let temp_file_prefix = Path::new(source_filename).file_stem().unwrap_or_default().to_str().unwrap_or_default();
-
-    let temp_file = TempFile::try_create(temp_file_prefix);
-    if temp_file.is_none() {
-        ICE!("Cannot create temporary file path");
-    }
-
-    let temp_file = temp_file.unwrap();
-    let temp_file_path = temp_file.path_to_string();
-
-    (temp_file, temp_file_path)
 }

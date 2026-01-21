@@ -1,21 +1,14 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 //
-//! The `errors` module defines all the error diagnostics.
+//! The `error` module defines functions to emit error diagnostics.
 
 use crate::ICE;
-use crate::compiler_driver::diagnostics::SourceIdentifier;
 use crate::compiler_driver::{Driver, diagnostics::Diagnostic};
-use crate::lexer::{NumericLiteralBase, SourceLocation, TokenType};
-use crate::parser::symbol::SymbolKind;
+use crate::core::{SourceIdentifier, SourceLocation, SymbolKind};
+use crate::lexer::{NumericLiteralBase, TokenType};
 use crate::parser::{AstLinkage, AstType};
 
-/// Kinds of redefinition errors.
-pub enum RedefineErr {
-    Type,
-    Linkage,
-    Redefined,
-}
-
+/// An error diagnostic.
 pub struct Error;
 
 impl Error {
@@ -50,7 +43,7 @@ impl Error {
         driver: &mut Driver,
     ) {
         let err =
-            format!("Redefinition of variable '{}' with a different type: '{new_type}' vs '{old_type}' ", variable.0);
+            format!("Redefinition of variable '{}' with a different type: '{new_type}' vs '{old_type}'", variable.0);
         let mut diag = Diagnostic::error_at_location(err, variable.1);
         diag.add_note(format!("'{}' was previously declared here", variable.0), Some(existing_symbol_loc));
         driver.add_diagnostic(diag);
@@ -106,23 +99,41 @@ impl Error {
         driver.add_diagnostic(diag);
     }
 
-    /// Emits an error that a function cannot be redefined with different semantics.
-    pub fn redefine_function(
-        redefine_err: RedefineErr,
+    /// Emits an error that a function cannot be redefined with a different type.
+    pub fn redefine_function_type(
+        function: SourceIdentifier,
+        old_type: &AstType,
+        new_type: &AstType,
+        existing_symbol_loc: SourceLocation,
+        driver: &mut Driver,
+    ) {
+        let err =
+            format!("Redefinition of function '{}' with a different type: '{new_type}' vs '{old_type}'", function.0);
+        let mut diag = Diagnostic::error_at_location(err, function.1);
+        diag.add_note(format!("'{}' was previously declared here", function.0), Some(existing_symbol_loc));
+        driver.add_diagnostic(diag);
+    }
+
+    /// Emits an error that a function cannot be redefined with internal linkage if its previous declaration has
+    /// external linkage.
+    pub fn redefine_external_linkage_function_with_internal_linkage(
         function: SourceIdentifier,
         existing_symbol_loc: SourceLocation,
         driver: &mut Driver,
     ) {
-        let err = match redefine_err {
-            RedefineErr::Type => {
-                format!("Function '{}' has different types compared to previous declaration", function.0)
-            }
-            RedefineErr::Linkage => {
-                format!("Static declaration of '{}' follows non-static declaration", function.0)
-            }
-            RedefineErr::Redefined => format!("Redefinition of '{}' function", function.0),
-        };
+        let err = format!("Static declaration of '{}' follows non-static declaration", function.0);
+        let mut diag = Diagnostic::error_at_location(err, function.1);
+        diag.add_note(format!("'{}' was previously declared here", function.0), Some(existing_symbol_loc));
+        driver.add_diagnostic(diag);
+    }
 
+    /// Emits an error that a function cannot be redefined with a different body.
+    pub fn redefine_function_body(
+        function: SourceIdentifier,
+        existing_symbol_loc: SourceLocation,
+        driver: &mut Driver,
+    ) {
+        let err = format!("Redefinition of function '{}'", function.0);
         let mut diag = Diagnostic::error_at_location(err, function.1);
         diag.add_note(format!("'{}' was previously declared here", function.0), Some(existing_symbol_loc));
         driver.add_diagnostic(diag);
@@ -378,9 +389,11 @@ impl Error {
                         initialize the first element of the array with this value, and the remaining \
                         elements with zero.";
 
-            let indent = if loc.column == 1 { " ".to_string() } else { " ".repeat(loc.column - 2) };
+            let column_no = driver.tu_file.get_column_no(loc);
 
-            let space = if loc.length == 1 { " ".to_string() } else { " ".repeat(loc.length - 2) };
+            let indent = if column_no == 1 { " ".to_string() } else { " ".repeat(column_no as usize - 2) };
+
+            let space = if loc.length == 1 { " ".to_string() } else { " ".repeat(loc.length as usize - 2) };
 
             let suggested = format!("{indent}{{{space}}}");
 

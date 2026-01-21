@@ -22,9 +22,9 @@
 
 use std::fmt;
 
-use super::super::{AstDeclaredType, AstIdentifier};
+use crate::core::SourceLocation;
 
-use crate::lexer::SourceLocation;
+use super::super::{AstDeclaredType, AstIdentifier};
 
 /// A parsed declarator.
 ///
