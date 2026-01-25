@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["FloatLiteralSuffix","IntegerLiteralSuffix","NumericLiteralBase","TokenType"],"fn":["lex","lex_buf_reader"],"struct":["SourceLocation","Token"]};
+window.SIDEBAR_ITEMS = {"enum":["FloatLiteralSuffix","IntegerLiteralSuffix","NumericLiteralBase","TokenType"],"fn":["lex","lex_buf_reader"],"struct":["Token"]};

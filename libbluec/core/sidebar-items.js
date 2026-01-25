@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["SymbolKind"],"fn":["ICE"],"mod":["string"],"struct":["FilePosition","SourceIdentifier","SourceLocation","TempFile"]};

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["CompilerGeneratedFile","DriverError","WarningKind"],"mod":["args","diagnostics","errors","multi_file_driver","options","tempfile"],"struct":["Driver","Warning"]};
+window.SIDEBAR_ITEMS = {"enum":["CompilerGeneratedFile","DriverError","WarningKind"],"mod":["args","multi_file_driver","options"],"struct":["Diagnostic","Driver","Error","Warning"]};
