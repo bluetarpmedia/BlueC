@@ -157,17 +157,14 @@ pub fn is_null_pointer_constant(
     match expr {
         AstExpression::IntegerLiteral { value, .. } => *value == 0,
 
-        _ => {
-            let mut ctx = constant_eval::ConstantEvalContext::from_type_checker(chk, driver);
-            match constant_eval::evaluate_constant_expr(expr, &mut ctx) {
-                Some(const_value) if const_value.is_zero() && const_value.get_ast_type().is_integer() => {
-                    let loc = chk.metadata.get_source_location(&expr.node_id());
-                    Warning::expression_interpreted_as_null_ptr_constant(loc, ptr_type, driver);
-                    true
-                }
-                _ => false,
+        _ => match constant_eval::evaluate_constant_expr(expr, chk, driver) {
+            Some(const_value) if const_value.is_zero() && const_value.get_ast_type().is_integer() => {
+                let loc = chk.metadata.get_source_location(&expr.node_id());
+                Warning::expression_interpreted_as_null_ptr_constant(loc, ptr_type, driver);
+                true
             }
-        }
+            _ => false,
+        },
     }
 }
 

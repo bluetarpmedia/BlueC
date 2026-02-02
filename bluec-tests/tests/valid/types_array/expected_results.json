@@ -6,6 +6,7 @@
     {"filename": "types_array_compound_initializer_too_long_static.c", "exit_code": 3},
     {"filename": "types_array_compound_initializer_too_long.c", "exit_code": 3},
     {"filename": "types_array_simple.c", "exit_code": 3},
+    {"filename": "types_array_size_expression.c", "exit_code": 37},
     {"filename": "types_array_subscript_precedence.c", "exit_code": 1},
     {"filename": "types_array_trailing_comma_initializer.c", "exit_code": 3}
 ]

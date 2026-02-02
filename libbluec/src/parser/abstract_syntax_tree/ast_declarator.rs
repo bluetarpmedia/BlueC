@@ -24,7 +24,7 @@ use std::fmt;
 
 use crate::core::SourceLocation;
 
-use super::super::{AstDeclaredType, AstIdentifier};
+use super::super::{AstDeclaredType, AstFullExpression, AstIdentifier};
 
 /// A parsed declarator.
 ///
@@ -36,7 +36,7 @@ use super::super::{AstDeclaredType, AstIdentifier};
 /// int ** get_ptr(void);    Pointer{Pointer{Function{Ident}}}    Function
 /// int (*fn)(void);         Function{Pointer{Ident}}             Pointer
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct AstDeclarator {
     /// The kind of declarator. You probably want [AstDeclarator::get_derived_kind] instead.
     pub kind: AstDeclaratorKind,
@@ -50,14 +50,14 @@ impl fmt::Display for AstDeclarator {
         match &self.kind {
             AstDeclaratorKind::Ident(ident) => write!(f, "{ident}"),
             AstDeclaratorKind::Pointer(decl) => write!(f, "*{decl}"),
-            AstDeclaratorKind::Array { decl, size } => write!(f, "{decl}[{size}]"),
+            AstDeclaratorKind::Array { decl, .. } => write!(f, "{decl}[]"),
             AstDeclaratorKind::Function { decl, params } => {
                 write!(f, "{decl}(")?;
                 fmt_params(params, f)?;
                 write!(f, ")")
             }
             AstDeclaratorKind::AbstractPointer => write!(f, "*"),
-            AstDeclaratorKind::AbstractArray { size } => write!(f, "[{size}]"),
+            AstDeclaratorKind::AbstractArray { .. } => write!(f, "[]"),
             AstDeclaratorKind::AbstractFunction { params } => {
                 write!(f, "()(")?;
                 fmt_params(params, f)?;
@@ -131,14 +131,14 @@ impl AstDeclarator {
 /// int func(void)       int (void)
 /// int (*fnptr)(void)   int (*)(void)
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum AstDeclaratorKind {
     Ident(AstIdentifier),
     Pointer(Box<AstDeclarator>),
-    Array { decl: Box<AstDeclarator>, size: usize },
+    Array { decl: Box<AstDeclarator>, size_expr: Option<Box<AstFullExpression>> },
     Function { decl: Box<AstDeclarator>, params: Vec<AstDeclaredType> },
     AbstractPointer,
-    AbstractArray { size: usize },
+    AbstractArray { size_expr: Option<Box<AstFullExpression>> },
     AbstractFunction { params: Vec<AstDeclaredType> },
 }
 

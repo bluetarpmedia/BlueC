@@ -20,7 +20,7 @@ use super::{AstBasicType, AstDeclarator, AstIdentifier, AstStorageClassSpecifier
 /// ```
 ///
 /// The semantic analysis typechecking stage resolves a declared type to a canonical `AstType`.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct AstDeclaredType {
     /// The basic type of the declaration, from which the optional declarator's derived type is resolved.
     pub basic_type: AstBasicType,

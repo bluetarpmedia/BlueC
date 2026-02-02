@@ -44,13 +44,15 @@ pub enum CastWarningPolicy {
 
 impl Default for TypeChecker {
     fn default() -> Self {
-        Self::new(AstMetadata::default(), SymbolTable::default(), ConstantTable::default())
+        Self::new(AstMetadata::default())
     }
 }
 
 impl TypeChecker {
     /// Creates a new Type Checker.
-    pub fn new(metadata: AstMetadata, symbols: SymbolTable, constants: ConstantTable) -> Self {
+    pub fn new(metadata: AstMetadata) -> Self {
+        let symbols = SymbolTable::new();
+        let constants = ConstantTable::new();
         let scopes = vec![DeclarationScope::default()];
         Self { metadata, symbols, constants, current_func_return_type: None, scopes }
     }
@@ -73,10 +75,7 @@ impl TypeChecker {
 
     /// Gets a node's data type
     pub fn get_data_type(&self, node_id: &AstNodeId) -> AstType {
-        match self.metadata.get_node_type(node_id) {
-            Some(data_type) => data_type.clone(),
-            None => ICE!("Data type not found for node {node_id}"),
-        }
+        self.metadata.get_node_type(node_id).clone()
     }
 
     /// Sets a node's data type
@@ -117,6 +116,7 @@ impl TypeChecker {
         let node_id = AstNodeId::new();
 
         self.set_data_type(&node_id, target_type);
+        self.metadata.propagate_const_flag_from_child(expr.node_id(), node_id);
 
         if warning_policy == CastWarningPolicy::WarnOnImplicitConversion {
             let mut emitted_warning = false;
@@ -128,7 +128,7 @@ impl TypeChecker {
                 && *op == AstUnaryOp::Negate
                 && inner_expr.is_integer_literal()
             {
-                let old_type = self.metadata.get_node_type(node_id).cloned().unwrap();
+                let old_type = self.metadata.get_node_type(node_id);
                 let loc = self.metadata.get_source_location(node_id);
                 let sign_change = true;
 
@@ -139,7 +139,7 @@ impl TypeChecker {
                 // Don't warn on implicit unsigned cast applied to '-0'.
                 if *value != 0 {
                     emit_implicit_literal_conversion_warning(
-                        &old_type,
+                        old_type,
                         target_type,
                         *value,
                         true,

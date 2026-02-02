@@ -13,17 +13,15 @@ use std::collections::HashMap;
 use crate::ICE;
 use crate::compiler_driver::Driver;
 use crate::core::{SourceIdentifier, SourceLocation};
-use crate::core::string;
 use crate::parser;
-use crate::sema::constant_eval;
 use crate::sema::constant_table::{ConstantIndex, ConstantTable};
 use crate::sema::symbol_table::{Definition, SymbolAttributes, SymbolTable};
 
+use super::label_maker::LabelMaker;
 use super::{
     BtConstantValue, BtDefinition, BtFunctionDefn, BtInstruction, BtRoot, BtStaticConstant, BtStaticStorageInitializer,
     BtStaticStorageVariable, BtSwitchCase, BtType, BtValue,
 };
-use super::label_maker::LabelMaker;
 
 #[derive(Debug)]
 enum EvalExpr {
@@ -61,10 +59,7 @@ impl BlueTacTranslator {
 
     /// Gets the `AstType` from the symbol table for the given AST node.
     pub fn get_ast_type_from_node(&self, node_id: &parser::AstNodeId) -> &parser::AstType {
-        let Some(data_type) = self.metadata.get_node_type(node_id) else {
-            ICE!("Symbol should exist for node {node_id}");
-        };
-        data_type
+        self.metadata.get_node_type(node_id)
     }
 
     /// Adds a static storage duration variable (may be global or local).
@@ -686,7 +681,7 @@ fn translate_var_declaration(
     initializer: Option<parser::AstVariableInitializer>,
     instructions: &mut Vec<BtInstruction>,
     translator: &mut BlueTacTranslator,
-    driver: &mut Driver,
+    _driver: &mut Driver,
 ) {
     if let Some(initializer) = initializer {
         match initializer {
@@ -696,40 +691,8 @@ fn translate_var_declaration(
                 instructions.push(BtInstruction::Copy { src: init_result, dst: variable });
             }
 
-            parser::AstVariableInitializer::Aggregate { node_id, .. } => {
-                let aggregate_type = translator.get_ast_type_from_node(&node_id).clone();
-
-                // Is this a constant initializer for a character array?
-                if aggregate_type.is_array()
-                    && aggregate_type.get_innermost_scalar_type().is_character()
-                    && utils::is_constant_initializer(&initializer, translator, driver)
-                {
-                    // Create an array of constant string initializers.
-                    let mut strings = Vec::new();
-                    translate_constant_character_array_initializer(initializer, &mut strings, translator, driver);
-
-                    // Merge adjacent null chars (\000).
-                    utils::merge_adjacent_nulls(&mut strings);
-
-                    let dst_ptr = BtValue::Variable(unique_variable_name.to_string());
-
-                    let constant_idx = translator.constants.add_string_array(unique_variable_name, strings);
-                    let constant_name = translator.constants.make_const_symbol_name(constant_idx);
-
-                    // Add the constant to the symbol table
-                    let loc = translator.metadata.get_source_location(&node_id);
-                    let attrs = SymbolAttributes::constant(loc);
-                    _ = translator.symbols.add(
-                        parser::AstUniqueName::new(constant_name.clone()),
-                        aggregate_type,
-                        attrs,
-                    );
-
-                    let src = BtValue::Variable(constant_name);
-                    instructions.push(BtInstruction::StoreAtOffset { src, dst_ptr, dst_offset: 0 });
-                } else {
-                    translate_aggregate_initializer(&unique_variable_name, 0, initializer, instructions, translator);
-                }
+            parser::AstVariableInitializer::Aggregate { .. } => {
+                translate_aggregate_initializer(&unique_variable_name, 0, initializer, instructions, translator);
             }
         }
     }
@@ -762,83 +725,6 @@ fn translate_aggregate_initializer(
             }
 
             next_offset
-        }
-    }
-}
-
-fn translate_constant_character_array_initializer(
-    initializer: parser::AstVariableInitializer,
-    strings: &mut Vec<String>,
-    translator: &mut BlueTacTranslator,
-    driver: &mut Driver,
-) {
-    match initializer {
-        parser::AstVariableInitializer::Scalar(full_expr) => {
-            let ctx = constant_eval::ConstantEvalContext::new(
-                &translator.metadata,
-                &mut translator.symbols,
-                &mut translator.constants,
-                driver,
-            );
-
-            let mut push_ascii_char = |char_value: u8| {
-                if strings.is_empty() {
-                    strings.push(String::new());
-                }
-
-                strings.last_mut().unwrap().push_str(&string::to_ascii(char_value as u32));
-            };
-
-            // Evaluate the initializer constant value
-            let constant_value = constant_eval::evaluate_constant_full_expr(&full_expr, ctx);
-
-            match constant_value {
-                Some(constant_value) => match constant_value {
-                    parser::AstConstantValue::Integer(int_value) => match int_value {
-                        v if v.is_zero() => push_ascii_char(0),
-
-                        parser::AstConstantInteger::Char(value) => push_ascii_char(value as u8),
-                        parser::AstConstantInteger::UnsignedChar(value) => push_ascii_char(value),
-
-                        _ => ICE!("Invalid integer constant value '{int_value}' for char array initializer"),
-                    },
-
-                    parser::AstConstantValue::String { ascii } => {
-                        let required_char_count = {
-                            let full_expr_type = translator.get_expression_type(&full_expr.expr);
-                            debug_assert!(full_expr_type.is_character_array());
-                            let parser::AstType::Array { count, .. } = full_expr_type else {
-                                ICE!("Expected AstType::Array");
-                            };
-
-                            *count
-                        };
-
-                        let mut string_init = ascii.join("");
-
-                        // Append any extra NULL chars, if necessary.
-                        debug_assert!(string_init.len() <= required_char_count);
-                        if string_init.len() < required_char_count {
-                            let nulls_to_add = required_char_count - string_init.len();
-                            for _ in 0..nulls_to_add {
-                                string_init.push_str(&string::to_ascii(0));
-                            }
-                        }
-
-                        strings.push(string_init);
-                    }
-
-                    _ => ICE!("Invalid constant value '{constant_value}' for char array initializer"),
-                },
-
-                None => ICE!("Expression is not a constant for char array initializer"),
-            }
-        }
-
-        parser::AstVariableInitializer::Aggregate { init, .. } => {
-            for ini in init {
-                translate_constant_character_array_initializer(ini, strings, translator, driver);
-            }
         }
     }
 }

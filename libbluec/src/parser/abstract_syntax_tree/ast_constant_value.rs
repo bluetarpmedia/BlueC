@@ -1,6 +1,6 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 //
-//! The `ast_constant_value` module defines `AstConstantValue` and its related types.
+//! The `ast_constant_value` module defines [AstConstantValue] and its related types.
 
 use std::fmt;
 
@@ -10,10 +10,27 @@ use crate::parser::AstType;
 /// A constant value that was either parsed from a literal or was evaluated from a constant expression.
 #[derive(Debug, Clone, PartialEq)]
 pub enum AstConstantValue {
+    /// A constant integer value.
     Integer(AstConstantInteger),
+
+    // A constant floating-point value.
     Fp(AstConstantFp),
+
+    /// A pointer address constant from evaluating a static storage pointer initializer. See [AstAddressConstant] for
+    /// more examples.
+    /// ```c
+    /// static int *p = 0;
+    /// static char *str = "hello";
+    /// ```
     Pointer(AstType, AstAddressConstant),
-    String { ascii: Vec<String> },
+
+    /// A constant string value from evaluating a static storage character array initializer.
+    /// ```c
+    /// static char text[4] = "abcd";
+    /// ```
+    String {
+        ascii: Vec<String>,
+    },
 }
 
 /// A constant integer value.
@@ -131,6 +148,11 @@ impl AstConstantValue {
             AstConstantValue::Pointer(ty, _) => ty.clone(),
             AstConstantValue::String { ascii } => AstType::new_array(AstType::Char, ascii.len()),
         }
+    }
+
+    /// Is the constant value a pointer address constant?
+    pub fn is_pointer_address_constant(&self) -> bool {
+        matches!(self, AstConstantValue::Pointer(..))
     }
 
     /// Is the constant value equal to zero?

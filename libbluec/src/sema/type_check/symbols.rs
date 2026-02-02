@@ -32,8 +32,8 @@ pub fn verify_type_alias_declaration(
         _ => ICE!("Unexpected declaration"),
     };
 
-    let resolved_type = type_resolution::resolve_declared_type(declared_type, Some(&mut chk.symbols), Some(driver))
-        .map_err(|_| TypeCheckError)?;
+    let resolved_type =
+        type_resolution::resolve_declared_type(declared_type, chk, driver).map_err(|_| TypeCheckError)?;
 
     // Is the alias identifier already declared in the current scope?
     //      It's valid to repeat the `typedef` declaration in the same scope multiple times, as long as it
@@ -75,14 +75,14 @@ pub fn verify_type_alias_declaration(
 /// Verifies that the file scope variable declaration is semantically valid.
 pub fn verify_file_scope_variable_declaration(
     var_decl: &mut AstVariableDeclaration,
-    symbols: &mut SymbolTable,
+    chk: &mut TypeChecker,
     driver: &mut Driver,
 ) -> Result<(), TypeCheckError> {
     let var_unique_name = &var_decl.unique_name;
     let var_ident = &var_decl.ident;
     let var_declared_type = &var_decl.declared_type;
-    let var_type = type_resolution::resolve_declared_type(var_declared_type, Some(symbols), Some(driver))
-        .map_err(|_| TypeCheckError)?;
+    let var_type =
+        type_resolution::resolve_declared_type(var_declared_type, chk, driver).map_err(|_| TypeCheckError)?;
 
     let has_initializer = var_decl.initializer.is_some();
 
@@ -103,7 +103,7 @@ pub fn verify_file_scope_variable_declaration(
         Warning::extern_initializer(var_declared_type.storage_class.as_ref().unwrap().loc, driver)
     }
 
-    if let Some(existing_symbol) = symbols.get(var_unique_name) {
+    if let Some(existing_symbol) = chk.symbols.get(var_unique_name) {
         let symbol_kind = existing_symbol.kind();
         let symbol_loc = existing_symbol.location();
 
@@ -142,7 +142,8 @@ pub fn verify_file_scope_variable_declaration(
         Definition::None
     };
 
-    if symbols
+    if chk
+        .symbols
         .add(
             var_unique_name,
             var_type.clone(),
@@ -150,7 +151,7 @@ pub fn verify_file_scope_variable_declaration(
         )
         .is_err()
     {
-        let _ = symbols.set_definition(var_unique_name, definition);
+        let _ = chk.symbols.set_definition(var_unique_name, definition);
     }
 
     var_decl.declared_type.resolved_type = Some(var_type);
@@ -161,7 +162,7 @@ pub fn verify_file_scope_variable_declaration(
 /// Verifies that the block scope variable declaration is semantically valid.
 pub fn verify_local_variable_declaration(
     var_decl: &mut AstVariableDeclaration,
-    symbols: &mut SymbolTable,
+    chk: &mut TypeChecker,
     driver: &mut Driver,
 ) -> Result<(), TypeCheckError> {
     let var_unique_name = &var_decl.unique_name;
@@ -171,8 +172,7 @@ pub fn verify_local_variable_declaration(
     let var_type = if var_declared_type.is_resolved() {
         var_declared_type.resolved_type.clone().unwrap()
     } else {
-        type_resolution::resolve_declared_type(var_declared_type, Some(symbols), Some(driver))
-            .map_err(|_| TypeCheckError)?
+        type_resolution::resolve_declared_type(var_declared_type, chk, driver).map_err(|_| TypeCheckError)?
     };
 
     let has_initializer = var_decl.initializer.is_some();
@@ -189,7 +189,7 @@ pub fn verify_local_variable_declaration(
             return Err(TypeCheckError);
         }
 
-        if let Some(existing_symbol) = symbols.get(var_unique_name) {
+        if let Some(existing_symbol) = chk.symbols.get(var_unique_name) {
             let symbol_kind = existing_symbol.kind();
             let symbol_loc = existing_symbol.location();
 
@@ -211,7 +211,8 @@ pub fn verify_local_variable_declaration(
 
     let definition = if has_initializer { Definition::Defined } else { Definition::None };
 
-    if symbols
+    if chk
+        .symbols
         .add(
             var_unique_name,
             var_type.clone(),
@@ -219,7 +220,7 @@ pub fn verify_local_variable_declaration(
         )
         .is_err()
     {
-        let _ = symbols.set_definition(var_unique_name, definition);
+        let _ = chk.symbols.set_definition(var_unique_name, definition);
     }
 
     var_decl.declared_type.resolved_type = Some(var_type);
@@ -232,7 +233,7 @@ pub fn verify_function_parameter_declaration(
     param_unique_name: &AstUniqueName,
     param_ident: &AstIdentifier,
     param_type: &AstType,
-    symbols: &mut SymbolTable,
+    chk: &mut TypeChecker,
     driver: &mut Driver,
 ) -> Result<(), TypeCheckError> {
     let declared_type = AstDeclaredType::resolved(param_type);
@@ -250,13 +251,13 @@ pub fn verify_function_parameter_declaration(
         storage: AstStorageDuration::Automatic,
     };
 
-    verify_local_variable_declaration(&mut param_decl, symbols, driver)
+    verify_local_variable_declaration(&mut param_decl, chk, driver)
 }
 
 /// Verifies that the function declaration is semantically valid.
 pub fn verify_function_declaration(
     function: &mut AstFunction,
-    symbols: &mut SymbolTable,
+    chk: &mut TypeChecker,
     driver: &mut Driver,
 ) -> Result<(), TypeCheckError> {
     let fn_unique_name = &function.unique_name;
@@ -264,8 +265,7 @@ pub fn verify_function_declaration(
     let fn_declared_type = &function.declared_type;
 
     // Resolve the function type
-    let fn_type = type_resolution::resolve_declared_type(fn_declared_type, Some(symbols), Some(driver))
-        .map_err(|_| TypeCheckError)?;
+    let fn_type = type_resolution::resolve_declared_type(fn_declared_type, chk, driver).map_err(|_| TypeCheckError)?;
 
     // If any of the parameter types are array types then transform them to a pointer to the array element type.
     //
@@ -295,7 +295,7 @@ pub fn verify_function_declaration(
 
     // If there's an existing symbol for this function's name then make sure the declarations match.
     //
-    if let Some(existing_symbol) = symbols.get(fn_unique_name) {
+    if let Some(existing_symbol) = chk.symbols.get(fn_unique_name) {
         let symbol_kind = existing_symbol.kind();
         let symbol_loc = existing_symbol.location();
 
@@ -331,11 +331,12 @@ pub fn verify_function_declaration(
 
     let definition = if has_body { Definition::Defined } else { Definition::None };
 
-    if symbols
+    if chk
+        .symbols
         .add(fn_unique_name, fn_type.clone(), SymbolAttributes::function(definition, declared_linkage, fn_ident.loc))
         .is_err()
     {
-        let _ = symbols.set_definition(fn_unique_name, definition);
+        let _ = chk.symbols.set_definition(fn_unique_name, definition);
     }
 
     function.declared_type.resolved_type = Some(fn_type);

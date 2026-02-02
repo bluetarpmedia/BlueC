@@ -12,7 +12,7 @@ use super::visitor;
 
 /// Validates that label names are unique within the function, and that all `goto <label>` targets
 /// have been declared.
-pub fn validate_labels(ast_root: &mut AstRoot, driver: &mut Driver, metadata: &AstMetadata) {
+pub fn validate_labels(ast_root: &mut AstRoot, metadata: &AstMetadata, driver: &mut Driver) {
     // Visit each function definition, and for each one, visit each statement and take note of the
     // declared labels and the goto labels.
     //

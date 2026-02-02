@@ -18,7 +18,6 @@
     {"filename": "expr_assign_compound_multiply.c", "exit_code": 12},
     {"filename": "expr_assign_compound_plus.c", "exit_code": 4},
     {"filename": "expr_assign_exp_then_declaration.c", "exit_code": 1},
-    {"filename": "expr_assign_local_var_missing_return.c", "exit_code": 0},
     {"filename": "expr_assign_mixed_precedence_assignment.c", "exit_code": 4},
     {"filename": "expr_assign_use_assignment_result.c", "exit_code": 4}
 ]

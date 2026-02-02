@@ -7,7 +7,7 @@ use crate::compiler_driver::{Diagnostic, Driver, Warning};
 use crate::parser::{AstConstantValue, AstFunction, AstRoot, AstStatement};
 
 use super::constant_eval;
-use super::type_check::checker::TypeChecker;
+use super::type_check::TypeChecker;
 use super::visitor;
 
 /// Validates all switch statements in the AST.
@@ -25,7 +25,7 @@ pub fn validate_switch_statements(ast_root: &mut AstRoot, chk: &mut TypeChecker,
                 // Get the type of the switch statement's controlling expression.
                 //      All case values must be of this type or cast to it.
                 //
-                let current_switch_data_type = chk.metadata.get_node_type(&controlling_expr.node_id).cloned();
+                let current_switch_data_type = chk.metadata.get_node_type(&controlling_expr.node_id).clone();
 
                 // Visit all the 'case' statements inside the switch body.
                 //      Remember this will find 'case' statements in nested switches too.
@@ -40,8 +40,7 @@ pub fn validate_switch_statements(ast_root: &mut AstRoot, chk: &mut TypeChecker,
 
                         // Evaluate the expression and ensure it's a constant value.
                         //
-                        let ctx = constant_eval::ConstantEvalContext::from_type_checker(chk, driver);
-                        let constant_value = constant_eval::evaluate_constant_full_expr(constant_expr, ctx);
+                        let constant_value = constant_eval::evaluate_constant_full_expr(constant_expr, chk, driver);
                         if constant_value.is_none() {
                             let loc = chk.metadata.get_source_location(&constant_expr.node_id);
                             let err = "Expression cannot be evaluated at compile-time".to_string();
@@ -62,7 +61,7 @@ pub fn validate_switch_statements(ast_root: &mut AstRoot, chk: &mut TypeChecker,
                         // If necessary cast the case constant value to the type of the switch statement's
                         // controlling expression.
                         let case_data_type = constant_value.get_ast_type();
-                        let switch_data_type = current_switch_data_type.as_ref().unwrap();
+                        let switch_data_type = &current_switch_data_type;
 
                         if case_data_type != *switch_data_type {
                             let old_constant_value = constant_value.clone(); // In case we need to warn of conversion

@@ -1,18 +1,6 @@
 [
-    {
-        "filename": "types_short_assign_truncate.c",
-        "exit_code": 1
-    },
-    {
-        "filename": "types_short_simple_integer_promotion.c",
-        "exit_code": 1
-    },
-    {
-        "filename": "types_short_multi_args",
-        "exit_code": 45
-    },
-    {
-        "filename": "types_short_multi_maintain_stack_alignment",
-        "exit_code": 12
-    }
+    {"filename": "types_short_assign_truncate.c", "exit_code": 1},
+    {"filename": "types_short_simple_integer_promotion.c", "exit_code": 1},
+    {"filename": "types_short_multi_args", "exit_code": 45},
+    {"filename": "types_short_multi_maintain_stack_alignment", "exit_code": 12}
 ]

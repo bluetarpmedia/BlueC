@@ -55,9 +55,9 @@ fn typecheck_declaration(decl: &mut AstDeclaration, chk: &mut TypeChecker, drive
     match decl {
         AstDeclaration::Variable(decl) => {
             if decl.is_file_scope {
-                symbols::verify_file_scope_variable_declaration(decl, &mut chk.symbols, driver)?;
+                symbols::verify_file_scope_variable_declaration(decl, chk, driver)?;
             } else {
-                symbols::verify_local_variable_declaration(decl, &mut chk.symbols, driver)?;
+                symbols::verify_local_variable_declaration(decl, chk, driver)?;
             }
 
             let var_type =
@@ -82,7 +82,7 @@ fn typecheck_declaration(decl: &mut AstDeclaration, chk: &mut TypeChecker, drive
         }
 
         AstDeclaration::Function(function) => {
-            symbols::verify_function_declaration(function, &mut chk.symbols, driver)?;
+            symbols::verify_function_declaration(function, chk, driver)?;
 
             let fn_type = function.declared_type.resolved_type.as_ref().expect("Expected function type to be resolved");
             let (return_type, param_types) = utils::extract_fn_return_and_param_types(fn_type);
@@ -95,14 +95,8 @@ fn typecheck_declaration(decl: &mut AstDeclaration, chk: &mut TypeChecker, drive
             let param_names = &function.param_names;
 
             let valid_params = param_types.iter().zip(param_names).all(|(param_type, (param_ident, param_unique))| {
-                symbols::verify_function_parameter_declaration(
-                    param_unique,
-                    param_ident,
-                    param_type,
-                    &mut chk.symbols,
-                    driver,
-                )
-                .is_ok()
+                symbols::verify_function_parameter_declaration(param_unique, param_ident, param_type, chk, driver)
+                    .is_ok()
             });
 
             if valid_params && let Some(body) = function.body.as_mut() {
@@ -321,7 +315,10 @@ fn typecheck_statement(stmt: &mut AstStatement, chk: &mut TypeChecker, driver: &
 
         AstStatement::Switch { .. } => typecheck_switch_statement(stmt, chk, driver)?,
 
-        AstStatement::Case { stmt, .. } => typecheck_statement(stmt, chk, driver)?,
+        AstStatement::Case { constant_expr, stmt, .. } => {
+            typecheck_full_expression(constant_expr, chk, driver)?;
+            typecheck_statement(stmt, chk, driver)?
+        }
 
         AstStatement::Default { stmt, .. } => typecheck_statement(stmt, chk, driver)?,
 
@@ -481,6 +478,7 @@ fn typecheck_expression_with_decay(
         let node_id = AstNodeId::new();
         let original_expr_loc = chk.metadata.get_source_location(&original_expr.node_id());
         chk.metadata.add_source_location(node_id, original_expr_loc);
+        chk.metadata.propagate_const_flag_from_child(original_expr.node_id(), node_id);
 
         *expr = AstExpression::AddressOf { node_id, expr: Box::new(original_expr) };
 
@@ -496,6 +494,7 @@ fn typecheck_expression_with_decay(
         let node_id = AstNodeId::new();
         let original_expr_loc = chk.metadata.get_source_location(&original_expr.node_id());
         chk.metadata.add_source_location(node_id, original_expr_loc);
+        chk.metadata.propagate_const_flag_from_child(original_expr.node_id(), node_id);
 
         *expr = AstExpression::AddressOf { node_id, expr: Box::new(original_expr) };
 
@@ -613,8 +612,7 @@ fn typecheck_cast_expression(
     let expr_type = typecheck_expression_with_decay(expr, chk, driver)?;
 
     let target_resolved_type =
-        type_resolution::resolve_declared_type(target_type, Some(&mut chk.symbols), Some(driver))
-            .map_err(|_| TypeCheckError)?;
+        type_resolution::resolve_declared_type(target_type, chk, driver).map_err(|_| TypeCheckError)?;
 
     target_type.resolved_type = Some(target_resolved_type);
 
@@ -1278,8 +1276,7 @@ fn get_function_designator_type(
             let (unique_name, _) = get_function_designator_type(expr, chk, driver)?;
 
             let target_resolved_type =
-                type_resolution::resolve_declared_type(target_type, Some(&mut chk.symbols), Some(driver))
-                    .map_err(|_| TypeCheckError)?;
+                type_resolution::resolve_declared_type(target_type, chk, driver).map_err(|_| TypeCheckError)?;
 
             Ok((unique_name, target_resolved_type))
         }
@@ -1518,8 +1515,7 @@ fn evaluate_constant_full_expression(
     chk: &mut TypeChecker,
     driver: &mut Driver,
 ) -> TypeCheckResult<AstConstantValue> {
-    let ctx = constant_eval::ConstantEvalContext::from_type_checker(chk, driver);
-    let constant_value = constant_eval::evaluate_constant_full_expr(full_expr, ctx);
+    let constant_value = constant_eval::evaluate_constant_full_expr(full_expr, chk, driver);
 
     if constant_value.is_none() {
         let loc = chk.metadata.get_source_location(&full_expr.node_id);

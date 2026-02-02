@@ -1,118 +1,13 @@
 [
-    {
-        "filename": "storage_class_bitwise_ops_file_scope_vars.c",
-        "exit_code": 0
-    },
-    {
-        "filename": "storage_class_compound_assignment_static_var.c",
-        "exit_code": 0
-    },
-    {
-        "filename": "storage_class_distinct_local_and_extern.c",
-        "exit_code": 7
-    },
-    {
-        "filename": "storage_class_extern_block_scope_variable.c",
-        "exit_code": 3
-    },
-    {
-        "filename": "storage_class_goto_skip_static_initializer.c",
-        "exit_code": 10
-    },
-    {
-        "filename": "storage_class_increment_global_vars.c",
-        "exit_code": 0
-    },
-    {
-        "filename": "storage_class_label_file_scope_var_same_name.c",
-        "exit_code": 0
-    },
-    {
-        "filename": "storage_class_label_static_var_same_name.c",
-        "exit_code": 5
-    },
-    {
-        "filename": "storage_class_multiple_static_file_scope_vars.c",
-        "exit_code": 4
-    },
-    {
-        "filename": "storage_class_multiple_static_local.c",
-        "exit_code": 29
-    },
-    {
-        "filename": "storage_class_shadow_static_local_var.c",
-        "exit_code": 0
-    },
-    {
-        "filename": "storage_class_static_local_multiple_scopes.c",
-        "exit_code": 0
-    },
-    {
-        "filename": "storage_class_static_local_uninitialized.c",
-        "exit_code": 4
-    },
-    {
-        "filename": "storage_class_static_recursive_call.c",
-        "exit_code": 0
-    },
-    {
-        "filename": "storage_class_static_then_extern.c",
-        "exit_code": 3
-    },
-    {
-        "filename": "storage_class_static_variables_in_expressions.c",
-        "exit_code": 0
-    },
-    {
-        "filename": "storage_class_switch_on_extern.c",
-        "exit_code": 0
-    },
-    {
-        "filename": "storage_class_switch_skip_extern_decl.c",
-        "exit_code": 0
-    },
-    {
-        "filename": "storage_class_switch_skip_static_initializer.c",
-        "exit_code": 10
-    },
-    {
-        "filename": "storage_class_tentative_definition.c",
-        "exit_code": 5
-    },
-    {
-        "filename": "storage_class_type_before_storage_class.c",
-        "exit_code": 7
-    },
-    {
-        "filename": "storage_class_external_linkage_function",
-        "exit_code": 0
-    },
-    {
-        "filename": "storage_class_external_tentative_var",
-        "exit_code": 0
-    },
-    {
-        "filename": "storage_class_external_var_scoping",
-        "exit_code": 0
-    },
-    {
-        "filename": "storage_class_external_variable",
-        "exit_code": 0
-    },
-    {
-        "filename": "storage_class_internal_hides_external_linkage",
-        "exit_code": 0
-    },
-    {
-        "filename": "storage_class_internal_linkage_function",
-        "exit_code": 0
-    },
-    {
-        "filename": "storage_class_internal_linkage_var",
-        "exit_code": 0
-    },
-    {
-        "filename": "storage_class_same_label_same_fun",
-        "exit_code": 0
-    }
+    {"filename": "storage_class_distinct_local_and_extern.c", "exit_code": 7},
+    {"filename": "storage_class_extern_block_scope_variable.c", "exit_code": 3},
+    {"filename": "storage_class_goto_skip_static_initializer.c", "exit_code": 10},
+    {"filename": "storage_class_label_static_var_same_name.c", "exit_code": 5},
+    {"filename": "storage_class_multiple_static_file_scope_vars.c", "exit_code": 4},
+    {"filename": "storage_class_multiple_static_local.c", "exit_code": 29},
+    {"filename": "storage_class_static_local_uninitialized.c", "exit_code": 4},
+    {"filename": "storage_class_static_then_extern.c", "exit_code": 3},
+    {"filename": "storage_class_switch_skip_static_initializer.c", "exit_code": 10},
+    {"filename": "storage_class_tentative_definition.c", "exit_code": 5},
+    {"filename": "storage_class_type_before_storage_class.c", "exit_code": 7}
 ]

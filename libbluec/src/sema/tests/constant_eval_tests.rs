@@ -6,9 +6,9 @@ use std::io::Cursor;
 
 use crate::compiler_driver;
 use crate::lexer;
-use crate::parser::expr::parse_full_expression;
-use crate::parser::recursive_descent;
+use crate::parser::tests::utils;
 use crate::parser::{AstConstantFp, AstConstantInteger, AstConstantValue, Parser};
+use crate::parser::{expr, recursive_descent};
 
 use super::super::constant_eval;
 use super::super::type_check;
@@ -389,13 +389,7 @@ fn pointer_initializer() {
 
     for case in valid_cases {
         let mut driver = compiler_driver::Driver::for_testing();
-        let mut parser = make_parser(&mut driver, case);
-        let ast_root = recursive_descent::parse_translation_unit(&mut parser, &mut driver);
-        assert!(!driver.has_error_diagnostics());
-
-        let mut ast_root = ast_root.unwrap();
-
-        _ = type_check::type_check(&mut ast_root, parser.metadata, &mut driver);
+        parse_and_type_check(&mut driver, case);
         assert!(!driver.has_error_diagnostics());
     }
 
@@ -410,13 +404,7 @@ fn pointer_initializer() {
 
     for case in invalid_cases {
         let mut driver = compiler_driver::Driver::for_testing();
-        let mut parser = make_parser(&mut driver, case);
-        let ast_root = recursive_descent::parse_translation_unit(&mut parser, &mut driver);
-        assert!(!driver.has_error_diagnostics()); // Should parse okay
-
-        let mut ast_root = ast_root.unwrap();
-
-        _ = type_check::type_check(&mut ast_root, parser.metadata, &mut driver);
+        parse_and_type_check(&mut driver, case);
         assert!(driver.has_error_diagnostics());
     }
 }
@@ -433,13 +421,7 @@ fn pointer_arithmetic() {
 
     for case in valid_cases {
         let mut driver = compiler_driver::Driver::for_testing();
-        let mut parser = make_parser(&mut driver, case);
-        let ast_root = recursive_descent::parse_translation_unit(&mut parser, &mut driver);
-        assert!(!driver.has_error_diagnostics());
-
-        let mut ast_root = ast_root.unwrap();
-
-        _ = type_check::type_check(&mut ast_root, parser.metadata, &mut driver);
+        parse_and_type_check(&mut driver, case);
         assert!(!driver.has_error_diagnostics());
     }
 
@@ -453,13 +435,7 @@ fn pointer_arithmetic() {
 
     for case in invalid_cases {
         let mut driver = compiler_driver::Driver::for_testing();
-        let mut parser = make_parser(&mut driver, case);
-        let ast_root = recursive_descent::parse_translation_unit(&mut parser, &mut driver);
-        assert!(!driver.has_error_diagnostics()); // Should parse okay
-
-        let mut ast_root = ast_root.unwrap();
-
-        _ = type_check::type_check(&mut ast_root, parser.metadata, &mut driver);
+        parse_and_type_check(&mut driver, case);
         assert!(driver.has_error_diagnostics());
     }
 }
@@ -720,7 +696,7 @@ fn evaluate_expr<'a>(expression_source_code: &str) -> Option<AstConstantValue> {
 
     let mut parser = Parser::new(tokens);
 
-    let expr = parse_full_expression(&mut parser, &mut driver);
+    let expr = expr::parse_full_expression(&mut parser, &mut driver);
     if driver.has_error_diagnostics() {
         driver.debug_print_diagnostics();
         assert!(false, "Parser emitted errors");
@@ -729,14 +705,18 @@ fn evaluate_expr<'a>(expression_source_code: &str) -> Option<AstConstantValue> {
     assert!(expr.is_ok(), "Did not parse {}", expression_source_code);
     let expr = expr.unwrap();
 
-    let mut chk = type_check::checker::TypeChecker::default();
-    let ctx = constant_eval::ConstantEvalContext::from_type_checker(&mut chk, &mut driver);
-    constant_eval::evaluate_constant_full_expr(&expr, ctx)
+    let mut chk = type_check::TypeChecker::default();
+    constant_eval::evaluate_constant_full_expr(&expr, &mut chk, &mut driver)
 }
 
-fn make_parser(driver: &mut compiler_driver::Driver, source: &str) -> Parser {
-    let cursor = Cursor::new(source.as_bytes());
-    let mut reader = BufReader::new(cursor);
-    let tokens = lexer::lex_buf_reader(driver, &mut reader);
-    Parser::new(tokens)
+fn parse_and_type_check(driver: &mut compiler_driver::Driver, source: &str) {
+    let mut parser = utils::make_parser(driver, source);
+    let ast_root = recursive_descent::parse_translation_unit(&mut parser, driver);
+    assert!(!driver.has_error_diagnostics());
+
+    let mut ast_root = ast_root.unwrap();
+    let Parser { metadata, .. } = parser;
+    let mut chk = type_check::TypeChecker::new(metadata);
+
+    _ = type_check::type_check(&mut ast_root, &mut chk, driver);
 }

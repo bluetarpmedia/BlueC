@@ -5,53 +5,18 @@
 use std::convert::TryFrom;
 
 use crate::ICE;
-use crate::compiler_driver::Driver;
-use crate::compiler_driver::Warning;
+use crate::compiler_driver::{Driver, Warning};
 use crate::parser::{
     AstAddressConstant, AstBinaryOp, AstConstantFp, AstConstantInteger, AstConstantValue, AstDeclaredType,
-    AstExpression, AstFloatLiteralKind, AstFullExpression, AstIntegerLiteralKind, AstMetadata, AstNodeId,
-    AstStorageDuration, AstType, AstUnaryOp, AstUniqueName,
+    AstExpression, AstFloatLiteralKind, AstFullExpression, AstIntegerLiteralKind, AstStorageDuration, AstType,
+    AstUnaryOp, AstUniqueName,
 };
 
-use super::constant_table::ConstantTable;
-use super::symbol_table::{SymbolAttributes, SymbolTable};
-use super::type_check::checker::TypeChecker;
+use super::symbol_table::SymbolAttributes;
+use super::type_check::TypeChecker;
 use super::type_resolution;
 
 // Future: sizeof, _Alignof
-
-/// The context to use for constant expression evaluation.
-pub struct ConstantEvalContext<'a, 'b> {
-    metadata: &'a AstMetadata,
-    symbols: &'a mut SymbolTable,
-    constants: &'a mut ConstantTable,
-    driver: &'b mut Driver,
-}
-
-impl<'a, 'b> ConstantEvalContext<'a, 'b> {
-    /// Creates a new constant evaluation context.
-    pub fn new(
-        metadata: &'a AstMetadata,
-        symbols: &'a mut SymbolTable,
-        constants: &'a mut ConstantTable,
-        driver: &'b mut Driver,
-    ) -> Self {
-        Self { metadata, symbols, constants, driver }
-    }
-
-    /// Creates the constant evaluation context from the given type checker.
-    pub fn from_type_checker(chk: &'a mut TypeChecker, driver: &'b mut Driver) -> Self {
-        Self { metadata: &chk.metadata, symbols: &mut chk.symbols, constants: &mut chk.constants, driver }
-    }
-
-    /// Gets a node's data type
-    pub fn get_data_type(&self, node_id: &AstNodeId) -> AstType {
-        match self.metadata.get_node_type(node_id) {
-            Some(data_type) => data_type.clone(),
-            None => ICE!("Data type not found for node {node_id}"),
-        }
-    }
-}
 
 /// Evaluates an AST full expression node at compile-time and produces value, or `None` if it cannot be evaluated.
 ///
@@ -59,17 +24,22 @@ impl<'a, 'b> ConstantEvalContext<'a, 'b> {
 /// returned.
 pub fn evaluate_constant_full_expr(
     full_expr: &AstFullExpression,
-    mut ctx: ConstantEvalContext,
+    chk: &mut TypeChecker,
+    driver: &mut Driver,
 ) -> Option<AstConstantValue> {
-    evaluate_constant_expr(&full_expr.expr, &mut ctx)
+    evaluate_constant_expr(&full_expr.expr, chk, driver)
 }
 
 /// Evaluates an AST expression node at compile-time and produces value, or `None` if it cannot be evaluated.
 ///
 /// There is no undefined behaviour when evaluating a constant expression. If UB would have occurred then `None` is
 /// returned.
-pub fn evaluate_constant_expr(expr: &AstExpression, ctx: &mut ConstantEvalContext) -> Option<AstConstantValue> {
-    let value = evaluate_const_expr_recursively(expr, ctx)?;
+pub fn evaluate_constant_expr(
+    expr: &AstExpression,
+    chk: &mut TypeChecker,
+    driver: &mut Driver,
+) -> Option<AstConstantValue> {
+    let value = evaluate_const_expr_recursively(expr, chk, driver)?;
 
     match value {
         ConstantValue::Pointer(ty, init) => Some(AstConstantValue::Pointer(ty, init)),
@@ -162,7 +132,11 @@ pub fn evaluate_constant_expr(expr: &AstExpression, ctx: &mut ConstantEvalContex
     }
 }
 
-fn evaluate_const_expr_recursively(expr: &AstExpression, ctx: &mut ConstantEvalContext) -> Option<ConstantValue> {
+fn evaluate_const_expr_recursively(
+    expr: &AstExpression,
+    chk: &mut TypeChecker,
+    driver: &mut Driver,
+) -> Option<ConstantValue> {
     match expr {
         // These expressions cannot be used in compile-time constant expressions.
         AstExpression::Identifier { .. } => None, // Future: C23 allows `constexpr` variables.
@@ -190,35 +164,41 @@ fn evaluate_const_expr_recursively(expr: &AstExpression, ctx: &mut ConstantEvalC
         },
 
         // Other expressions
-        AstExpression::AddressOf { .. } => evaluate_address_of(expr, ctx),
-        AstExpression::Cast { target_type, expr, .. } => evaluate_cast(target_type, expr, ctx),
-        AstExpression::UnaryOperation { op, expr, .. } => evaluate_unary_operation(op, expr, ctx),
-        AstExpression::BinaryOperation { op, left, right, .. } => evaluate_binary_operation(op, left, right, ctx),
+        AstExpression::AddressOf { .. } => evaluate_address_of(expr, chk, driver),
+        AstExpression::Cast { target_type, expr, .. } => evaluate_cast(target_type, expr, chk, driver),
+        AstExpression::UnaryOperation { op, expr, .. } => evaluate_unary_operation(op, expr, chk, driver),
+        AstExpression::BinaryOperation { op, left, right, .. } => {
+            evaluate_binary_operation(op, left, right, chk, driver)
+        }
         AstExpression::Conditional { expr, consequent, alternative, .. } => {
-            evaluate_conditional(expr, consequent, alternative, ctx)
+            evaluate_conditional(expr, consequent, alternative, chk, driver)
         }
     }
 }
 
-fn evaluate_address_of(expr: &AstExpression, ctx: &mut ConstantEvalContext) -> Option<ConstantValue> {
+fn evaluate_address_of(expr: &AstExpression, chk: &mut TypeChecker, driver: &mut Driver) -> Option<ConstantValue> {
     let AstExpression::AddressOf { node_id, expr } = expr else {
         ICE!("Expected AstExpression::AddressOf");
     };
 
-    let ptr_type = ctx.get_data_type(node_id);
+    let ptr_type = chk.get_data_type(node_id);
 
-    let init = evaluate_address_constant(expr, ctx)?;
+    let init = evaluate_address_constant(expr, chk, driver)?;
 
     Some(ConstantValue::Pointer(ptr_type, init))
 }
 
-fn evaluate_address_constant(expr: &AstExpression, ctx: &mut ConstantEvalContext) -> Option<AstAddressConstant> {
+fn evaluate_address_constant(
+    expr: &AstExpression,
+    chk: &mut TypeChecker,
+    driver: &mut Driver,
+) -> Option<AstAddressConstant> {
     match expr {
         // A static storage pointer can be initialized with the address of an object of static storage duration,
         // or a function designator.
         //
         AstExpression::Identifier { unique_name, .. } => {
-            let symbol = ctx.symbols.get(unique_name).expect("Symbol should exist");
+            let symbol = chk.symbols.get(unique_name).expect("Symbol should exist");
 
             if symbol.data_type.is_function() {
                 Some(AstAddressConstant::AddressOfFunction(unique_name.to_string()))
@@ -229,19 +209,19 @@ fn evaluate_address_constant(expr: &AstExpression, ctx: &mut ConstantEvalContext
             }
         }
 
-        AstExpression::AddressOf { expr, .. } => evaluate_address_constant(expr, ctx),
+        AstExpression::AddressOf { expr, .. } => evaluate_address_constant(expr, chk, driver),
 
         // A static storage pointer can be initialized with the address of an array element.
         //
         AstExpression::Subscript { node_id, expr1, expr2, .. } => {
-            let expr1_t = ctx.get_data_type(&expr1.node_id());
-            let expr2_t = ctx.get_data_type(&expr2.node_id());
+            let expr1_t = chk.get_data_type(&expr1.node_id());
+            let expr2_t = chk.get_data_type(&expr2.node_id());
             debug_assert!(expr1_t.is_pointer() || expr2_t.is_pointer());
 
             let (ptr_expr, int_expr) = if expr1_t.is_pointer() { (expr1, expr2) } else { (expr2, expr1) };
 
-            let subscript_identifier = evaluate_address_constant(ptr_expr, ctx)?;
-            let subscript_index_value = evaluate_constant_expr(int_expr, ctx)?;
+            let subscript_identifier = evaluate_address_constant(ptr_expr, chk, driver)?;
+            let subscript_index_value = evaluate_constant_expr(int_expr, chk, driver)?;
 
             if !matches!(subscript_index_value, AstConstantValue::Integer(_)) {
                 return None;
@@ -258,7 +238,7 @@ fn evaluate_address_constant(expr: &AstExpression, ctx: &mut ConstantEvalContext
             };
 
             if let AstAddressConstant::AddressOfObject { object, .. } = subscript_identifier {
-                let Some(symbol) = ctx.symbols.get(AstUniqueName::new(object.clone())) else {
+                let Some(symbol) = chk.symbols.get(AstUniqueName::new(object.clone())) else {
                     ICE!("Symbol should exist for '{object}'");
                 };
 
@@ -271,11 +251,11 @@ fn evaluate_address_constant(expr: &AstExpression, ctx: &mut ConstantEvalContext
                 if let AstType::Array { count, .. } = symbol.data_type
                     && (subscript_index < 0 || (subscript_index > 0 && subscript_index as usize > count))
                 {
-                    let loc = ctx.metadata.get_source_location(&int_expr.node_id());
-                    Warning::array_index_out_of_bounds(subscript_index, &symbol.data_type, loc, ctx.driver);
+                    let loc = chk.metadata.get_source_location(&int_expr.node_id());
+                    Warning::array_index_out_of_bounds(subscript_index, &symbol.data_type, loc, driver);
                 }
 
-                let subscript_expr_type = ctx.get_data_type(node_id);
+                let subscript_expr_type = chk.get_data_type(node_id);
                 let element_bytes = (subscript_expr_type.bits() / 8) as i32;
                 let byte_offset = subscript_index * element_bytes;
 
@@ -291,15 +271,15 @@ fn evaluate_address_constant(expr: &AstExpression, ctx: &mut ConstantEvalContext
             // Add the string literal to the constant table (may already exist).
             let mut constant_string = ascii.join("");
             constant_string.push_str("\\000"); // Append NULL
-            let constant_idx = ctx.constants.add_string(&constant_string);
+            let constant_idx = chk.constants.add_string(&constant_string);
 
             // Add the constant string to the symbol table (may already exist).
-            let loc = ctx.metadata.get_source_location(literal_node_id);
+            let loc = chk.metadata.get_source_location(literal_node_id);
             let attrs = SymbolAttributes::constant(loc);
-            let const_name = ctx.constants.make_const_symbol_name(constant_idx);
-            let lit_data_type = ctx.get_data_type(literal_node_id);
+            let const_name = chk.constants.make_const_symbol_name(constant_idx);
+            let lit_data_type = chk.get_data_type(literal_node_id);
             let unique_name = AstUniqueName::new(const_name.clone());
-            _ = ctx.symbols.add(unique_name, lit_data_type, attrs);
+            _ = chk.symbols.add(unique_name, lit_data_type, attrs);
 
             Some(AstAddressConstant::AddressOfObject { object: const_name, byte_offset: 0 })
         }
@@ -311,11 +291,12 @@ fn evaluate_address_constant(expr: &AstExpression, ctx: &mut ConstantEvalContext
 fn evaluate_cast(
     declared_type: &AstDeclaredType,
     expr: &AstExpression,
-    ctx: &mut ConstantEvalContext,
+    chk: &mut TypeChecker,
+    driver: &mut Driver,
 ) -> Option<ConstantValue> {
-    let value = evaluate_const_expr_recursively(expr, ctx)?;
+    let value = evaluate_const_expr_recursively(expr, chk, driver)?;
 
-    let ast_type = type_resolution::resolve_declared_type(declared_type, None, None).ok()?;
+    let ast_type = type_resolution::resolve_declared_type(declared_type, chk, driver).ok()?;
 
     value.cast_to(&ast_type)
 }
@@ -323,9 +304,10 @@ fn evaluate_cast(
 fn evaluate_unary_operation(
     op: &AstUnaryOp,
     expr: &AstExpression,
-    ctx: &mut ConstantEvalContext,
+    chk: &mut TypeChecker,
+    driver: &mut Driver,
 ) -> Option<ConstantValue> {
-    let value = evaluate_const_expr_recursively(expr, ctx)?;
+    let value = evaluate_const_expr_recursively(expr, chk, driver)?;
     match op {
         AstUnaryOp::Negate => Some(value.negate()),
         AstUnaryOp::Plus => Some(value),
@@ -342,10 +324,11 @@ fn evaluate_binary_operation(
     op: &AstBinaryOp,
     left: &AstExpression,
     right: &AstExpression,
-    ctx: &mut ConstantEvalContext,
+    chk: &mut TypeChecker,
+    driver: &mut Driver,
 ) -> Option<ConstantValue> {
-    let lhs = evaluate_const_expr_recursively(left, ctx)?;
-    let rhs = evaluate_const_expr_recursively(right, ctx)?;
+    let lhs = evaluate_const_expr_recursively(left, chk, driver)?;
+    let rhs = evaluate_const_expr_recursively(right, chk, driver)?;
 
     let common_type = lhs.get_common_type(&rhs)?;
 
@@ -363,7 +346,8 @@ fn evaluate_conditional(
     expr: &AstExpression,
     consequent: &AstExpression,
     alternative: &AstExpression,
-    ctx: &mut ConstantEvalContext,
+    chk: &mut TypeChecker,
+    driver: &mut Driver,
 ) -> Option<ConstantValue> {
     // We need do determine the common type of both `consequent` and `alternative` expressions, in case they have
     // different types, so that we can cast them to the common type.
@@ -373,14 +357,14 @@ fn evaluate_conditional(
     // alternative at compile-time because there can be no side-effects, even though strictly only the `true`
     // case expression should be evaluated.
     //
-    let consequent = evaluate_const_expr_recursively(consequent, ctx)?;
-    let alternative = evaluate_const_expr_recursively(alternative, ctx)?;
+    let consequent = evaluate_const_expr_recursively(consequent, chk, driver)?;
+    let alternative = evaluate_const_expr_recursively(alternative, chk, driver)?;
 
     let common_type = consequent.get_common_type(&alternative)?;
     let consequent = consequent.cast_to(&common_type)?;
     let alternative = alternative.cast_to(&common_type)?;
 
-    match evaluate_const_expr_recursively(expr, ctx) {
+    match evaluate_const_expr_recursively(expr, chk, driver) {
         v if v.as_ref().is_some_and(|v| v.is_zero()) => Some(alternative),
         Some(_) => Some(consequent),
         None => None,

@@ -1,66 +1,18 @@
 [
-    {
-        "filename": "typedef_alias_used_in_function_signature.c",
-        "exit_code": 21
-    },
-    {
-        "filename": "typedef_array1.c",
-        "exit_code": 4
-    },
-    {
-        "filename": "typedef_array2.c",
-        "exit_code": 99
-    },
-    {
-        "filename": "typedef_chain.c",
-        "exit_code": 11
-    },
-    {
-        "filename": "typedef_for_loop.c",
-        "exit_code": 10
-    },
-    {
-        "filename": "typedef_function_pointer1.c",
-        "exit_code": 22
-    },
-    {
-        "filename": "typedef_long_int_order.c",
-        "exit_code": 7
-    },
-    {
-        "filename": "typedef_multiple1.c",
-        "exit_code": 6
-    },
-    {
-        "filename": "typedef_multiple2.c",
-        "exit_code": 1
-    },
-    {
-        "filename": "typedef_redeclare_nested_scope.c",
-        "exit_code": 1
-    },
-    {
-        "filename": "typedef_redeclare_same_underlying.c",
-        "exit_code": 3
-    },
-    {
-        "filename": "typedef_redeclare_symbol_different_scope.c",
-        "exit_code": 10
-    },
-    {
-        "filename": "typedef_redeclare.c",
-        "exit_code": 5
-    },
-    {
-        "filename": "typedef_same_identifier_different_scopes1.c",
-        "exit_code": 3
-    },
-    {
-        "filename": "typedef_same_identifier_different_scopes2.c",
-        "exit_code": 2
-    },
-    {
-        "filename": "typedef_syntax_and_identifiers.c",
-        "exit_code": 12
-    }
+    {"filename": "typedef_alias_used_in_function_signature.c", "exit_code": 21},
+    {"filename": "typedef_array1.c", "exit_code": 4},
+    {"filename": "typedef_array2.c", "exit_code": 99},
+    {"filename": "typedef_chain.c", "exit_code": 11},
+    {"filename": "typedef_for_loop.c", "exit_code": 10},
+    {"filename": "typedef_function_pointer1.c", "exit_code": 22},
+    {"filename": "typedef_long_int_order.c", "exit_code": 7},
+    {"filename": "typedef_multiple1.c", "exit_code": 6},
+    {"filename": "typedef_multiple2.c", "exit_code": 1},
+    {"filename": "typedef_redeclare_nested_scope.c", "exit_code": 1},
+    {"filename": "typedef_redeclare_same_underlying.c", "exit_code": 3},
+    {"filename": "typedef_redeclare_symbol_different_scope.c", "exit_code": 10},
+    {"filename": "typedef_redeclare.c", "exit_code": 5},
+    {"filename": "typedef_same_identifier_different_scopes1.c", "exit_code": 3},
+    {"filename": "typedef_same_identifier_different_scopes2.c", "exit_code": 2},
+    {"filename": "typedef_syntax_and_identifiers.c", "exit_code": 12}
 ]

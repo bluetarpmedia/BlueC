@@ -203,6 +203,11 @@ impl AstBinaryOp {
             | AstBinaryOp::GreaterThanOrEqualTo => AstBinaryOpFamily::Relational,
         }
     }
+
+    /// Is the operator both commutative and associative (Add or Multiply)?
+    pub fn is_commutative_and_associative(&self) -> bool {
+        matches!(self, AstBinaryOp::Add | AstBinaryOp::Multiply)
+    }
 }
 
 impl AstAssignmentOp {

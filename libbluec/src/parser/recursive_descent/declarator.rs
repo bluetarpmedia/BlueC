@@ -2,17 +2,14 @@
 //
 //! The `declarator` module provides functionality for parsing declarators in declarations.
 
-use crate::ICE;
 use crate::compiler_driver::{Driver, Error};
 use crate::core::SourceIdentifier;
 use crate::lexer::TokenType;
 
 use super::decl::parse_type_and_storage_specifiers;
-use super::literal;
-use super::peek;
-use super::utils;
-use super::{AstDeclarator, AstDeclaratorKind, AstDeclaredType, AstExpression, AstIdentifier};
-use super::{ParseError, ParseResult, Parser, add_error, add_error_at_eof};
+use super::{AstDeclarator, AstDeclaratorKind, AstDeclaredType, AstFullExpression, AstIdentifier};
+use super::{ParseError, ParseResult, Parser, add_error};
+use super::{expr, peek, utils};
 
 /// A declarator can be parsed with or without an identifier.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -100,8 +97,9 @@ fn parse_declarator_recursively(
         // Array
         //
         Some(tok) if tok.has_type(TokenType::OpenSqBracket) => {
-            let size = parse_array_size(parser, driver)?;
-            AstDeclaratorKind::AbstractArray { size }
+            let size_expr = parse_array_size_expression(parser, driver)?;
+            let size_expr = size_expr.map(Box::new);
+            AstDeclaratorKind::AbstractArray { size_expr }
         }
 
         // Function
@@ -145,12 +143,12 @@ fn parse_declarator_recursively(
     // Are there any array suffixes?
     //
     while parser.token_stream.next_token_has_type(TokenType::OpenSqBracket) {
-        let size = parse_array_size(parser, driver)?;
-
+        let size_expr = parse_array_size_expression(parser, driver)?;
         let end_decl_loc = parser.token_stream.prev_token_source_location().unwrap();
         let loc = start_decl_loc.merge_with(end_decl_loc);
 
-        let kind = AstDeclaratorKind::Array { decl: Box::new(declarator), size };
+        let size_expr = size_expr.map(Box::new);
+        let kind = AstDeclaratorKind::Array { decl: Box::new(declarator), size_expr };
 
         declarator = AstDeclarator::new(kind, loc);
     }
@@ -224,52 +222,20 @@ fn parse_function_parameters(parser: &mut Parser, driver: &mut Driver) -> ParseR
     Ok(params)
 }
 
-fn parse_array_size(parser: &mut Parser, driver: &mut Driver) -> ParseResult<usize> {
+fn parse_array_size_expression(parser: &mut Parser, driver: &mut Driver) -> ParseResult<Option<AstFullExpression>> {
     _ = utils::expect_token(TokenType::OpenSqBracket, parser, driver)?;
 
     // We allow zero-length arrays (with the zero constant omitted) so check if the next token is the
     // closing square bracket before trying to parse an integer literal, i.e. we're parsing '[]'.
     //
-    let size = if parser.token_stream.next_token_has_type(TokenType::CloseSqBracket) {
-        0
+    let size_expr = if parser.token_stream.next_token_has_type(TokenType::CloseSqBracket) {
+        Ok(None)
     } else {
-        // TODO: Allow constant expression for array declaration, e.g. int arr[10 + 1];
-
-        // The array size can be an integer literal or a char literal (which evaluates to 'int').
-        if let Some(peek_next_token) = parser.token_stream.peek_next_token() {
-            match peek_next_token.token_type {
-                TokenType::IntegerLiteral { .. } => {
-                    let literal = literal::parse_integer_literal(parser, driver)?;
-
-                    let AstExpression::IntegerLiteral { value, .. } = literal else {
-                        ICE!("Should have parsed an IntegerLiteral");
-                    };
-
-                    value as usize
-                }
-
-                TokenType::CharLiteral { .. } => {
-                    let literal = literal::parse_char_literal(parser, driver)?;
-
-                    let AstExpression::CharLiteral { value, .. } = literal else {
-                        ICE!("Should have parsed a CharLiteral");
-                    };
-
-                    value as usize
-                }
-
-                _ => {
-                    add_error(driver, "Expected an integer constant", peek_next_token.location);
-                    return Err(ParseError);
-                }
-            }
-        } else {
-            add_error_at_eof(parser, driver, "Expected an integer constant");
-            return Err(ParseError);
-        }
+        let full_expr = expr::parse_full_expression(parser, driver)?;
+        Ok(Some(full_expr))
     };
 
     _ = utils::expect_token(TokenType::CloseSqBracket, parser, driver)?;
 
-    Ok(size)
+    size_expr
 }

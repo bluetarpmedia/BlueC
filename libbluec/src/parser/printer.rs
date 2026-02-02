@@ -6,7 +6,7 @@ use crate::parser::meta::AstMetadata;
 use crate::parser::*;
 
 /// Prints the AST with indentation
-pub fn print(ast_root: &AstRoot, metadata: Option<&AstMetadata>) {
+pub fn print(ast_root: &AstRoot, metadata: &AstMetadata) {
     println!("TranslationUnit");
     for decl in &ast_root.0 {
         print_declaration(decl, metadata, 1);
@@ -14,7 +14,7 @@ pub fn print(ast_root: &AstRoot, metadata: Option<&AstMetadata>) {
     println!("{}|", make_close_indent(1));
 }
 
-fn print_declaration(decl: &AstDeclaration, metadata: Option<&AstMetadata>, level: usize) {
+fn print_declaration(decl: &AstDeclaration, metadata: &AstMetadata, level: usize) {
     match decl {
         AstDeclaration::Variable(var_decl) => print_variable_declaration(var_decl, metadata, level),
         AstDeclaration::Function(func_decl) => print_function(func_decl, metadata, level),
@@ -22,7 +22,7 @@ fn print_declaration(decl: &AstDeclaration, metadata: Option<&AstMetadata>, leve
     }
 }
 
-fn print_variable_declaration(var_decl: &AstVariableDeclaration, metadata: Option<&AstMetadata>, level: usize) {
+fn print_variable_declaration(var_decl: &AstVariableDeclaration, metadata: &AstMetadata, level: usize) {
     let indent = make_indent(level);
     print!("{}", indent);
 
@@ -90,7 +90,7 @@ fn print_variable_declaration(var_decl: &AstVariableDeclaration, metadata: Optio
                 if idx > 0 && idx.is_multiple_of(VALUES_PER_LINE) {
                     print!("\n{indent}    ");
                 }
-                
+
                 print!("{val}");
                 first = false;
             }
@@ -106,9 +106,17 @@ fn print_variable_declaration(var_decl: &AstVariableDeclaration, metadata: Optio
     }
 }
 
-fn print_variable_initializer(init: &AstVariableInitializer, metadata: Option<&AstMetadata>, level: usize) {
+fn print_variable_initializer(init: &AstVariableInitializer, metadata: &AstMetadata, level: usize) {
     match init {
-        AstVariableInitializer::Scalar(full_expr) => print_full_expression(full_expr, metadata, level),
+        AstVariableInitializer::Scalar(full_expr) => {
+            let indent = make_indent(level);
+            print!("{indent}Scalar");
+            print_node_type(&full_expr.node_id, metadata);
+            println!();
+
+            print_full_expression(full_expr, metadata, level + 1);
+            println!("{}|", make_close_indent(level + 1));
+        }
 
         AstVariableInitializer::Aggregate { node_id, init } => {
             let indent = make_indent(level);
@@ -125,7 +133,7 @@ fn print_variable_initializer(init: &AstVariableInitializer, metadata: Option<&A
     }
 }
 
-fn print_function(function: &AstFunction, metadata: Option<&AstMetadata>, level: usize) {
+fn print_function(function: &AstFunction, metadata: &AstMetadata, level: usize) {
     let indent = make_indent(level);
 
     let is_decl = function.body.is_none();
@@ -182,7 +190,7 @@ fn print_function(function: &AstFunction, metadata: Option<&AstMetadata>, level:
     }
 }
 
-fn print_type_alias_declaration(alias_decl: &AstTypeAliasDeclaration, metadata: Option<&AstMetadata>, level: usize) {
+fn print_type_alias_declaration(alias_decl: &AstTypeAliasDeclaration, metadata: &AstMetadata, level: usize) {
     let indent = make_indent(level);
     println!("{indent}TypeAliasDecl");
 
@@ -196,7 +204,7 @@ fn print_type_alias_declaration(alias_decl: &AstTypeAliasDeclaration, metadata: 
     }
 }
 
-fn print_block(block: &AstBlock, metadata: Option<&AstMetadata>, level: usize) {
+fn print_block(block: &AstBlock, metadata: &AstMetadata, level: usize) {
     let block_items = &block.0;
     for item in block_items {
         match item {
@@ -206,7 +214,7 @@ fn print_block(block: &AstBlock, metadata: Option<&AstMetadata>, level: usize) {
     }
 }
 
-fn print_statement(stmt: &AstStatement, metadata: Option<&AstMetadata>, level: usize) {
+fn print_statement(stmt: &AstStatement, metadata: &AstMetadata, level: usize) {
     match stmt {
         AstStatement::Expression(expr) => print_expression_statement(expr, metadata, level),
         AstStatement::Labeled { node_id: _, label_name, stmt } => {
@@ -248,14 +256,14 @@ fn print_statement(stmt: &AstStatement, metadata: Option<&AstMetadata>, level: u
     }
 }
 
-fn print_expression_statement(expr: &AstFullExpression, metadata: Option<&AstMetadata>, level: usize) {
+fn print_expression_statement(expr: &AstFullExpression, metadata: &AstMetadata, level: usize) {
     let indent = make_indent(level);
     println!("{indent}ExprStatement");
     print_full_expression(expr, metadata, level + 1);
     println!("{}|", make_close_indent(level + 1));
 }
 
-fn print_labeled_statement(label_name: &String, stmt: &AstStatement, metadata: Option<&AstMetadata>, level: usize) {
+fn print_labeled_statement(label_name: &String, stmt: &AstStatement, metadata: &AstMetadata, level: usize) {
     let indent = make_indent(level);
     println!("{indent}Labeled(name=\"{}\")", label_name);
 
@@ -264,7 +272,7 @@ fn print_labeled_statement(label_name: &String, stmt: &AstStatement, metadata: O
     println!("{}|", make_close_indent(level + 1));
 }
 
-fn print_compound_statement(block: &AstBlock, metadata: Option<&AstMetadata>, level: usize) {
+fn print_compound_statement(block: &AstBlock, metadata: &AstMetadata, level: usize) {
     let indent = make_indent(level);
     println!("{indent}Compound");
     print_block(block, metadata, level + 1);
@@ -281,7 +289,7 @@ fn print_if_statement(
     controlling_expr: &AstFullExpression,
     then_stmt: &AstStatement,
     else_stmt: &Option<Box<AstStatement>>,
-    metadata: Option<&AstMetadata>,
+    metadata: &AstMetadata,
     level: usize,
 ) {
     let indent = make_indent(level);
@@ -316,7 +324,7 @@ fn print_switch_statement(
     node_id: &AstNodeId,
     controlling_expr: &AstFullExpression,
     body: &AstStatement,
-    metadata: Option<&AstMetadata>,
+    metadata: &AstMetadata,
     level: usize,
 ) {
     let indent = make_indent(level);
@@ -344,7 +352,7 @@ fn print_while_statement(
     node_id: &AstNodeId,
     controlling_expr: &AstFullExpression,
     body: &AstStatement,
-    metadata: Option<&AstMetadata>,
+    metadata: &AstMetadata,
     level: usize,
 ) {
     let indent = make_indent(level);
@@ -372,7 +380,7 @@ fn print_do_while_statement(
     node_id: &AstNodeId,
     body: &AstStatement,
     controlling_expr: &AstFullExpression,
-    metadata: Option<&AstMetadata>,
+    metadata: &AstMetadata,
     level: usize,
 ) {
     let indent = make_indent(level);
@@ -402,7 +410,7 @@ fn print_for_statement(
     controlling_expr: &Option<AstFullExpression>,
     post_expr: &Option<AstFullExpression>,
     body: &AstStatement,
-    metadata: Option<&AstMetadata>,
+    metadata: &AstMetadata,
     level: usize,
 ) {
     let indent = make_indent(level);
@@ -503,7 +511,7 @@ fn print_switch_case_statement(
     switch_node_id: &AstNodeId,
     constant_expr: &AstFullExpression,
     stmt: &AstStatement,
-    metadata: Option<&AstMetadata>,
+    metadata: &AstMetadata,
     level: usize,
 ) {
     let indent = make_indent(level);
@@ -523,7 +531,7 @@ fn print_switch_case_statement(
 fn print_switch_default_statement(
     switch_node_id: &AstNodeId,
     stmt: &AstStatement,
-    metadata: Option<&AstMetadata>,
+    metadata: &AstMetadata,
     level: usize,
 ) {
     let indent = make_indent(level);
@@ -532,18 +540,18 @@ fn print_switch_default_statement(
     println!("{}|", make_close_indent(level + 1));
 }
 
-fn print_return_statement(expr: &AstFullExpression, metadata: Option<&AstMetadata>, level: usize) {
+fn print_return_statement(expr: &AstFullExpression, metadata: &AstMetadata, level: usize) {
     let indent = make_indent(level);
     println!("{indent}Return");
     print_full_expression(expr, metadata, level + 1);
     println!("{}|", make_close_indent(level + 1));
 }
 
-fn print_full_expression(full_expr: &AstFullExpression, metadata: Option<&AstMetadata>, level: usize) {
+fn print_full_expression(full_expr: &AstFullExpression, metadata: &AstMetadata, level: usize) {
     print_expression(&full_expr.expr, metadata, level);
 }
 
-fn print_expression(expr: &AstExpression, metadata: Option<&AstMetadata>, level: usize) {
+fn print_expression(expr: &AstExpression, metadata: &AstMetadata, level: usize) {
     let indent = make_indent(level);
     match expr {
         AstExpression::BinaryOperation { node_id, op, left, right } => {
@@ -566,7 +574,7 @@ fn print_expression(expr: &AstExpression, metadata: Option<&AstMetadata>, level:
             println!("{}|", make_close_indent(level + 1));
         }
 
-        AstExpression::Cast { target_type, expr, .. } => {
+        AstExpression::Cast { node_id, target_type, expr } => {
             let target_type_str = target_type.to_string();
 
             if target_type_str.is_empty() {
@@ -575,7 +583,7 @@ fn print_expression(expr: &AstExpression, metadata: Option<&AstMetadata>, level:
                 print!("{indent}Cast(to=\"{}\")", target_type_str);
             }
 
-            print_resolved_type(target_type);
+            print_node_type(node_id, metadata);
             println!();
 
             print_expression(expr, metadata, level + 1);
@@ -617,9 +625,7 @@ fn print_expression(expr: &AstExpression, metadata: Option<&AstMetadata>, level:
 
                 print!("{indent}CompoundAssignment ('{token_type}'");
 
-                if let Some(metadata) = metadata
-                    && let Some(comp_node_type) = metadata.get_node_type(computation_node_id)
-                {
+                if let Some(comp_node_type) = metadata.try_get_node_type(computation_node_id) {
                     print!(" [Computation Type = '{comp_node_type}']")
                 }
 
@@ -742,21 +748,18 @@ fn print_expression(expr: &AstExpression, metadata: Option<&AstMetadata>, level:
 
             // If we've performed typechecking then we don't need to print its kind, since we can print its
             // resolved AstType instead.
-            if metadata.is_some() {
+            if metadata.try_get_node_type(node_id).is_some() {
                 print!("IntegerLiteral({literal}");
-                if *literal_base != 10 {
-                    print!(" [{value}]");
-                }
-                print!(")");
-                print_node_type(node_id, metadata);
-                println!();
             } else {
                 print!("IntegerLiteral({kind} = {literal}");
-                if *literal_base != 10 {
-                    print!(" [{value}]");
-                }
-                println!(")");
             }
+
+            if *literal_base != 10 {
+                print!(" [{value}]");
+            }
+            print!(")");
+            print_node_type(node_id, metadata);
+            println!();
         }
 
         AstExpression::FloatLiteral { node_id, literal, literal_base, kind, value } => {
@@ -778,11 +781,13 @@ fn print_resolved_type(declared_type: &AstDeclaredType) {
     }
 }
 
-fn print_node_type(node_id: &AstNodeId, metadata: Option<&AstMetadata>) {
-    if let Some(metadata) = metadata
-        && let Some(node_type) = metadata.get_node_type(node_id)
-    {
-        print!(" [Type = '{node_type}']")
+fn print_node_type(node_id: &AstNodeId, metadata: &AstMetadata) {
+    if let Some(node_type) = metadata.try_get_node_type(node_id) {
+        print!(" [Type = '{node_type}']");
+    }
+
+    if metadata.is_expr_flag_set(*node_id, AstExpressionFlag::IsConstant) {
+        print!(" [ConstantExpr]");
     }
 }
 

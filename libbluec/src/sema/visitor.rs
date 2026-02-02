@@ -4,7 +4,7 @@
 
 use crate::parser::{
     AstBlock, AstBlockItem, AstDeclaration, AstExpression, AstForInitializer, AstFullExpression, AstFunction, AstRoot,
-    AstStatement, AstVariableInitializer,
+    AstStatement, AstVariableDeclaration, AstVariableInitializer,
 };
 
 /// Visits all function definitions in the AST and, for each one, calls the `visitor_func` with the `AstFunction`.
@@ -73,60 +73,47 @@ where
     }
 }
 
-/// Visits each sub-expression recursively in the full expression.
+/// Visits each sub-expression recursively in the full expression using pre-order traversal (root, left, right).
 pub fn visit_expressions_in_full_expression<F>(full_expr: &mut AstFullExpression, visitor_func: &mut F)
 where
     F: FnMut(&mut AstExpression),
 {
-    visitor_func(&mut full_expr.expr);
-
     visit_expression(&mut full_expr.expr, visitor_func);
 }
 
+/// Visits an expression and its children, if it has any, using pre-order traversal (root, left, right).
 fn visit_expression<F>(expr: &mut AstExpression, visitor_func: &mut F)
 where
     F: FnMut(&mut AstExpression),
 {
+    visitor_func(expr);
+
     match expr {
         AstExpression::UnaryOperation { expr, .. } => {
-            visitor_func(expr);
             visit_expression(expr, visitor_func);
         }
         AstExpression::BinaryOperation { left, right, .. } => {
-            visitor_func(left);
             visit_expression(left, visitor_func);
-
-            visitor_func(right);
             visit_expression(right, visitor_func);
         }
         AstExpression::Assignment { lhs, rhs, .. } => {
-            visitor_func(lhs);
             visit_expression(lhs, visitor_func);
-
-            visitor_func(rhs);
             visit_expression(rhs, visitor_func);
         }
         AstExpression::Conditional { expr, consequent, alternative, .. } => {
-            visitor_func(expr);
             visit_expression(expr, visitor_func);
-
-            visitor_func(consequent);
             visit_expression(consequent, visitor_func);
-
-            visitor_func(alternative);
             visit_expression(alternative, visitor_func);
         }
         AstExpression::FunctionCall { args, .. } => {
             for arg in args {
-                visitor_func(arg);
                 visit_expression(arg, visitor_func);
             }
         }
         AstExpression::Cast { expr, .. } => {
-            visitor_func(expr);
             visit_expression(expr, visitor_func);
         }
-        _ => (),
+        _ => (), // Already visited the expression above, and these expression kinds have no child expressions
     }
 }
 
@@ -176,12 +163,56 @@ where
             visit_statement(body, visitor_func);
         }
 
-        AstStatement::Null => visitor_func(stmt),
-        AstStatement::Expression(..) => visitor_func(stmt),
-        AstStatement::Break { .. } => visitor_func(stmt),
-        AstStatement::Continue { .. } => visitor_func(stmt),
-        AstStatement::Goto { .. } => visitor_func(stmt),
-        AstStatement::Return(..) => visitor_func(stmt),
+        _ => (), // Already visited the statement above, and these statements have no child statements
+    }
+}
+
+/// Visits all variable declarations in the AST and, for each one, calls the `visitor_func` with the
+/// [AstVariableDeclaration].
+///
+/// Variable declarations may exist at file scope or block scope.
+pub fn visit_variable_declarations<F>(ast_root: &mut AstRoot, visitor_func: &mut F)
+where
+    F: FnMut(&mut AstVariableDeclaration),
+{
+    for decl in &mut ast_root.0 {
+        match decl {
+            AstDeclaration::Variable(var_decl) => {
+                visitor_func(var_decl);
+            }
+
+            AstDeclaration::Function(func) => {
+                if let Some(ref mut block) = func.body {
+                    let block_items = &mut block.0;
+                    for block_item in block_items {
+                        match block_item {
+                            AstBlockItem::Declaration(decl) => {
+                                if let AstDeclaration::Variable(var_decl) = decl {
+                                    visitor_func(var_decl);
+                                }
+                            }
+
+                            AstBlockItem::Statement(stmt) => visit_statement(stmt, &mut |stmt: &mut AstStatement| {
+                                // The only statement that can contain variable initializers is 'for'.
+                                //
+                                if let AstStatement::For { init, .. } = stmt
+                                    && let AstForInitializer::Declaration(decls) = init.as_mut()
+                                    && !decls.is_empty()
+                                {
+                                    for decl in decls {
+                                        if let AstDeclaration::Variable(var_decl) = decl {
+                                            visitor_func(var_decl);
+                                        }
+                                    }
+                                }
+                            }),
+                        }
+                    }
+                }
+            }
+
+            AstDeclaration::TypeAlias(_) => (),
+        }
     }
 }
 

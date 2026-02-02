@@ -16,6 +16,7 @@ const INDENT: &str = "    ";
 pub enum AsmSectionDirective {
     Bss,
     Data,
+    ReadOnlyString { is_null_terminated: bool },
     ReadOnlyData { align: usize },
     Text,
 }
@@ -51,20 +52,27 @@ impl AsmFileWriter {
     }
 
     /// Writes a section directive.
-    pub fn write_section_directive(&mut self, directive: AsmSectionDirective, is_string: bool) -> Result<()> {
+    pub fn write_section_directive(&mut self, directive: AsmSectionDirective) -> Result<()> {
         match directive {
             AsmSectionDirective::Bss => self.writeln_with_indent(".bss"),
             AsmSectionDirective::Data => self.writeln_with_indent(".data"),
-            AsmSectionDirective::ReadOnlyData { align } => {
+            AsmSectionDirective::ReadOnlyString { is_null_terminated } => {
                 if cfg!(target_os = "macos") {
-                    if is_string {
+                    if is_null_terminated {
                         self.writeln_with_indent(".cstring")
                     } else {
-                        match align {
-                            1 => self.writeln_with_indent(".const"),
-                            4 | 8 | 16 => self.writeln_with_indent(&format!(".literal{align}")),
-                            _ => ICE!("Invalid ReadOnlyData alignment {align}"),
-                        }
+                        self.writeln_with_indent(".const")
+                    }
+                } else {
+                    self.writeln_with_indent(".section .rodata")
+                }
+            }
+            AsmSectionDirective::ReadOnlyData { align } => {
+                if cfg!(target_os = "macos") {
+                    match align {
+                        1 => self.writeln_with_indent(".const"),
+                        4 | 8 | 16 => self.writeln_with_indent(&format!(".literal{align}")),
+                        _ => ICE!("Invalid ReadOnlyData alignment {align}"),
                     }
                 } else {
                     self.writeln_with_indent(".section .rodata")

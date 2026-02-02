@@ -1,6 +1,5 @@
 [
     {"filename": "stmt_label_label_all_statements.c", "exit_code": 100},
     {"filename": "stmt_label_label_token.c", "exit_code": 1},
-    {"filename": "stmt_label_unused_label.c", "exit_code": 0},
     {"filename": "stmt_label_whitespace_after_label.c", "exit_code": 1}
 ]

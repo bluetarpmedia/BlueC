@@ -1,9 +1,4 @@
 [
     {"filename": "basic_syntax_multi_digit.c", "exit_code": 100},
-    {"filename": "basic_syntax_newlines.c", "exit_code": 0},
-    {"filename": "basic_syntax_no_newlines.c", "exit_code": 0},
-    {"filename": "basic_syntax_return_0.c", "exit_code": 0},
-    {"filename": "basic_syntax_return_2.c", "exit_code": 2},
-    {"filename": "basic_syntax_spaces.c", "exit_code": 0},
-    {"filename": "basic_syntax_tabs.c", "exit_code": 0}
+    {"filename": "basic_syntax_return_2.c", "exit_code": 2}
 ]

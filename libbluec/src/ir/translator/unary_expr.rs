@@ -20,8 +20,8 @@ pub fn translate_unary_operation(
         ICE!("Expected an AstExpression::UnaryOperation");
     };
 
-    // If the unary operator is Negate, and the subexpression is an integer or floating-point literal, then
-    // we apply the negation ourselves and return a `BtValue::Constant` value.
+    // If the unary operator is Negate, and the subexpression is an arithmetic literal, then we apply the negation
+    // ourselves and return a `BtValue::Constant` value.
     //
     // That saves us emitting unnecessary instructions, and also allows us to handle edge cases like
     // i32::MIN (-2147483648) which is parsed as Negate(2147483648_u64).
@@ -38,6 +38,12 @@ pub fn translate_unary_operation(
                 _ => ICE!("Invalid AstType '{data_type}' for float literal"),
             };
 
+            return EvalExpr::Value(val);
+        } else if let AstExpression::CharLiteral { node_id, value, .. } = **ast_unary_expr {
+            let data_type = translator.get_ast_type_from_node(&node_id);
+            assert!(data_type == &AstType::Int);
+
+            let val = BtValue::Constant(BtConstantValue::Int32(-value));
             return EvalExpr::Value(val);
         } else if let AstExpression::IntegerLiteral { node_id, value, .. } = **ast_unary_expr {
             // We're negating so the literal has to fit inside a 64-bit signed integer range.

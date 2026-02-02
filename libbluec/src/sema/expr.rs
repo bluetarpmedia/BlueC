@@ -6,7 +6,8 @@ use crate::compiler_driver;
 use crate::compiler_driver::Warning;
 use crate::parser;
 use crate::parser::{
-    AstBinaryOp, AstBinaryOpFamily, AstExpression, AstFullExpression, AstFunction, AstNodeId, AstStatement,
+    AstBinaryOp, AstBinaryOpFamily, AstExpression, AstExpressionFlag, AstFullExpression, AstFunction, AstNodeId,
+    AstStatement,
 };
 
 use super::visitor;
@@ -106,7 +107,7 @@ pub fn warn_about_assignment_in_condition_missing_parens(
 
 fn is_assignment_without_parens(full_expr: &AstFullExpression, metadata: &mut parser::AstMetadata) -> bool {
     if let AstExpression::Assignment { node_id, .. } = &full_expr.expr {
-        return !metadata.expr_has_parens(*node_id);
+        return !metadata.is_expr_flag_set(*node_id, AstExpressionFlag::HasParens);
     }
 
     false
@@ -143,7 +144,7 @@ fn is_binary_expr_with_op_missing_parens(
 ) -> bool {
     if let AstExpression::BinaryOperation { node_id, op, .. } = expr
         && *op == find_op
-        && !metadata.expr_has_parens(*node_id)
+        && !metadata.is_expr_flag_set(*node_id, AstExpressionFlag::HasParens)
     {
         return true;
     }
@@ -153,7 +154,7 @@ fn is_binary_expr_with_op_missing_parens(
 
 fn is_binary_expr_missing_parens(expr: &AstExpression, metadata: &mut parser::AstMetadata) -> Option<AstBinaryOp> {
     if let AstExpression::BinaryOperation { node_id, op, .. } = expr
-        && !metadata.expr_has_parens(*node_id)
+        && !metadata.is_expr_flag_set(*node_id, AstExpressionFlag::HasParens)
     {
         return Some(*op);
     }

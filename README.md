@@ -5,7 +5,7 @@
 [![Tests](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/bluetarpmedia/4a3049e2f6a53832726ab63f0b395357/raw/bluec-junit-tests.json)](https://github.com/bluetarpmedia/BlueC/actions/workflows/build-bluec.yml)
 [![Build documentation](https://github.com/bluetarpmedia/BlueC/actions/workflows/build-docs.yml/badge.svg)](https://github.com/bluetarpmedia/BlueC/actions/workflows/build-docs.yml)
 
-The initial goal is to write a fully conforming C17 compiler, from the preprocessor stage through to the assembly code emission stage, supporting multiple targets, with a focus on friendly diagnostics, and using no `unsafe` Rust and no third-party dependencies.
+The initial goal is to write a fully conforming C17 optimizing compiler, from the preprocessor stage through to the assembly code emission stage, supporting multiple targets, with a focus on friendly diagnostics, and using no `unsafe` Rust and no third-party dependencies.
 
 See the [Status and Roadmap](#status-and-roadmap) section for current progress and [Design Goals](#design-goals) for further information about design choices.
 
@@ -164,7 +164,7 @@ The BlueC compiler pipeline is as follows.
 | Lexer | Hand-written | [lexer.rs](src/lexer.rs) |
 | Parser | Hand-written, recursive descent with precedence climbing for binary operations | [parser.rs](src/parser.rs) |
 | Sema | Semantic analysis of the C AST produced by the Parser | [sema.rs](src/sema.rs) |
-| IR translation | Lowers the C AST into a custom three-address code (TAC) intermediate representation, called BlueTac | [ir.rs](src/ir.rs) |
+| IR lowering | Lowers the C AST into a custom three-address code (TAC) intermediate representation, called BlueTac | [ir.rs](src/ir.rs) |
 | Optimizer | Todo! Lowers the high-level IR to SSA form; applies a series of optimization transformations (see below) | |
 | Codegen | Generates an `x86_64` AST from the IR for the `System V AMD64 ABI` | [codegen.rs](src/codegen.rs) |
 | Code emission | Writes the `x86_64` assembly code to an output file, in AT&T syntax (Intel syntax coming later) | [x86_emit.rs](src/codegen/x86/emit.rs) |
@@ -172,80 +172,122 @@ The BlueC compiler pipeline is as follows.
 
 ## Status and Roadmap
 
-* ✅ BlueC library and compiler driver executable
-* ✅ Expressions and logical, bitwise, relational & arithmetic operators
-* ✅ Variable, function and `typedef` declarations
-* ✅ Symbol Table for identifier & type alias resolution, which allows us to solve the `type-identifier: name` grammar ambiguity problem
-* ✅ If, compound, expression, return, and null (empty) statements
-* ✅ Goto and labeled statements
-* ✅ For, while, do-while loop statements
-* ✅ Semantic analysis for type checking, expression annotation, and validating label names, goto statement targets, switch cases
-* ✅ Compile-time evaluation of constant expressions
-* ✅ Switch statements
-* ✅ Function calls
-* ✅ File scope declarations and storage-specifiers
-* ✅ Literals
-  * ✅ Integer: Decimal, Hex, Octal, Binary and suffixes.
-  * ✅ Floating Point: Decimal and Hex
-  * ✅ Character
-  * ✅ String
-* Types
-  * ✅ `char` (8-bit)
-  * ✅ `short` (16-bit)
-  * ✅ `int` (32-bit)
-  * ✅ `long` (64-bit)
-  * ✅ `long long` (64-bit)
-  * ✅ `signed` and `unsigned`
-  * ✅ `float`, `double` and `long double` <br>
-  `long double` is effectively an alias for `double`; this is Standard-conforming but in future we may support 80-bit and/or 128-bit long doubles for certain targets
-  * ✅ Pointers
-  * ✅ Function pointers
-  * ✅ Arrays
-  * `_Bool`, `void`
-  * Structs
-  * Enums
-  * Unions
-* Type qualifiers (`const`, `volatile`, `restrict`, `_Atomic`)
-* CI improvements
-  * Fuzzing
-  * Miri
-* Optimization in various stages
+* Compiler driver
+  * ✅ Single-file compilation to object file
+  * ✅ Single and multi-file compilation and linking
+  * ✅ Write `x86_64` assembly to `.s` file
+* Language support
+  * ✅ Literals
+    * ✅ Integer: Decimal, Hex, Octal, Binary and suffixes.
+    * ✅ Floating Point: Decimal and Hex
+    * ✅ Character
+    * ✅ String
+  * ✅ Expressions
+  * ✅ Declarations, storage-specifiers, and `typedef`
+  * ✅ Statements
+      * ✅ Expression
+      * ✅ Compound
+      * ✅ Control (if, switch, while, do-while, for, break, continue, goto, return)
+      * ✅ Labeled
+  * Types
+    * ✅ `char` (8-bit)
+    * ✅ `short` (16-bit)
+    * ✅ `int` (32-bit)
+    * ✅ `long` (64-bit)
+    * ✅ `long long` (64-bit)
+    * ✅ `signed` and `unsigned`
+    * ✅ `float`, `double` and `long double` <br>
+    `long double` is effectively an alias for `double`; this is Standard-conforming but in future we may support 80-bit and/or 128-bit long doubles for certain targets
+    * ✅ Pointers
+    * ✅ Function pointers
+    * ✅ Arrays
+    * `_Bool`, `void`
+    * Structs
+    * Enums
+    * Unions
+  * Type qualifiers (`const`, `volatile`, `restrict`, `_Atomic`)
+* Sema
+  * ✅ Type checking
+  * ✅ Compile-time constant expression evaluator
+  * ✅ Constant folding
+  * ✅ Symbol Table for identifier & type alias resolution, which allows us to solve the `type-identifier: name` grammar ambiguity problem
+* Warning diagnostics (`-W` or `-Wno-`)
+  * ✅ array-bounds
+  * ✅ bitwise-op-parentheses
+  * ✅ compare-distinct-pointer-types
+  * ✅ conditional-type-mismatch
+  * ✅ constant-conversion
+  * ✅ duplicate-decl-specifier
+  * ✅ excess-initializers
+  * ✅ extern-initializer
+  * ✅ implicit-conversion
+  * ✅ implicit-float-conversion
+  * ✅ implicit-int-conversion
+  * ✅ implicitly-unsigned-literal
+  * ✅ logical-op-parentheses
+  * ✅ many-braces-around-scalar-init
+  * ✅ missing-braces
+  * ✅ missing-declarations
+  * ✅ multichar
+  * ✅ non-literal-null-conversion
+  * ✅ parentheses
+  * ✅ pointer-integer-compare
+  * ✅ pointer-to-int-cast
+  * ✅ pointer-type-mismatch
+  * ✅ sign-conversion
+  * ✅ uninitialized
+  * ✅ unknown-escape-sequence
+  * ✅ unused-function
+  * ✅ unused-local-typedef
+  * ✅ unused-variable
+* Front-end improvements
   * String interning
-  * Refactor BlueTac IR, and add BlueTac SSA form
+  * Custom preprocessor
+  * C23 features
+  * Bytecode interpreter for constant expression evaluation
+  * Extensions! (See below)
+* Optimizer
+  * Refactor BlueTac IR, add SSA form, build CFG
+  * Inlining, loop optimization, common sub-expression elimination
   * Constant folding and propagation
-  * Dead code elimination (DCE)
   * Dead store elimination
-  * Switch statement jump table and binary tree
+  * Dead code elimination
+      * Including unreachable code elimination
+* Back-end
+  * ✅ Emit AT&T `x86_64` for System V AMD64 ABI for macOS and Linux
+  * Switch statement jump table and binary tree heuristics
   * Tail recursion
   * Instruction selection
   * Instruction scheduling
   * Register allocation
-* Emit either `x86_64` Intel syntax or AT&T syntax
-* Microsoft `x86_64` ABI and use `link.exe` on Windows
-* AArch64 (ARM64) and WebAssembly targets
-* Extensions! (See below)
-* Bytecode interpreter for constant expression evaluation
-* Custom preprocessor
-* Sanitizers
-* C23 features
+  * Emit either `x86_64` Intel syntax or AT&T syntax
+  * Sanitizers
+  * More targets
+    * Microsoft Windows `x86_64` ABI
+    * `AArch64` (ARM64)
+    * WebAssembly
+* CI
+  * ✅ Linux
+  * macOS
+  * Fuzzing
+  * Miri
 
 ## Extensions
 
 Ideas for non-standard extensions:
 
 * Embedded DSL: define your own DSL grammar inside your `.c` source file, compiler generates the DSL parser at compile-time, call the generated DSL parser function at runtime with runtime-supplied input data.
-* `--strict` mode which removes various undefined behaviour:
-  * Compile-time: Diagnose uninitialized variables (unless data flow analysis proves they are set before read).
-  * Runtime: Checked arithmetic.
-  * Runtime: Null pointer tests.
-  * Runtime: Experiment with fat pointers for potential spatial bounds safety and use-after-free safety.
+* A compilation mode which adds extra checks at runtime to detect UB:
+  * Checked arithmetic
+  * Null pointer tests
+  * Experiment with fat pointers for potential spatial bounds safety and use-after-free safety.
 * More `constexpr` / `consteval`-style support beyond what C23 allows.
 * Reflection and generation.
 * Pattern matching.
 * Rust interop (like an in-built version of `cbindgen`)
   * `use <path to Cargo.toml>;`
   * BlueC then scans and finds all `#[repr(C)]` `pub structs` and `#[no_mangle]` `pub extern "C" functions` in the crate.
-* Linear types.
+* Linear types (ensure a variable is used exactly once).
 
 ## References
 

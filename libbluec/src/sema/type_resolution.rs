@@ -5,9 +5,13 @@
 use crate::ICE;
 use crate::compiler_driver::{Diagnostic, Driver, Error, Warning};
 use crate::core::{SourceIdentifier, SourceLocation};
-use crate::parser::{AstBasicTypeSpecifier, AstDeclarator, AstDeclaratorKind, AstDeclaredType, AstType};
+use crate::parser::{
+    AstBasicTypeSpecifier, AstConstantInteger, AstConstantValue, AstDeclarator, AstDeclaratorKind, AstDeclaredType,
+    AstFullExpression, AstType,
+};
+use crate::sema::constant_eval;
 
-use super::symbol_table::SymbolTable;
+use super::type_check::TypeChecker;
 
 /// An error returned by `resolve_type`. Error diagnostics are emitted to the compiler driver.
 pub enum ResolutionError {
@@ -19,8 +23,8 @@ pub enum ResolutionError {
 /// Resolves the given `AstDeclaredType` to its canonical `AstType`.
 pub fn resolve_declared_type(
     declared_type: &AstDeclaredType,
-    mut symbols: Option<&mut SymbolTable>,
-    mut driver: Option<&mut Driver>,
+    chk: &mut TypeChecker,
+    driver: &mut Driver,
 ) -> Result<AstType, ResolutionError> {
     if let Some(resolved_type) = &declared_type.resolved_type {
         return Ok(resolved_type.clone());
@@ -37,22 +41,18 @@ pub fn resolve_declared_type(
     let resolved_type = if type_specifiers.len() == 1
         && let AstBasicTypeSpecifier::Alias { alias_name, .. } = &type_specifiers[0]
     {
-        if let Some(ref mut symbols) = symbols {
-            // Mark the alias as being used.
-            symbols.set_symbol_used(alias_name);
+        // Mark the alias as being used.
+        chk.symbols.set_symbol_used(alias_name);
 
-            let symbol = symbols.get(alias_name).expect("Symbol should exist for alias");
-            symbol.data_type.clone()
-        } else {
-            return Err(ResolutionError::SymbolTableRequired);
-        }
+        let symbol = chk.symbols.get(alias_name).expect("Symbol should exist for alias");
+        symbol.data_type.clone()
     } else {
-        resolve_builtin_type_specifiers(declared_type, &mut driver)?
+        resolve_builtin_type_specifiers(declared_type, driver)?
     };
 
     // If there's a declarator then it can augment the basic type, e.g. a function or pointer.
     let resolved_type = if let Some(declarator) = &declared_type.declarator {
-        resolve_declarator(resolved_type, declarator, &mut symbols, &mut driver)?
+        resolve_declarator(resolved_type, declarator, chk, driver)?
     } else {
         resolved_type
     };
@@ -62,7 +62,7 @@ pub fn resolve_declared_type(
 
 fn resolve_builtin_type_specifiers(
     declared_type: &AstDeclaredType,
-    driver: &mut Option<&mut Driver>,
+    driver: &mut Driver,
 ) -> Result<AstType, ResolutionError> {
     let type_specifiers = &declared_type.basic_type.0;
 
@@ -103,10 +103,8 @@ fn resolve_builtin_type_specifiers(
                     || float_count > 1
                     || double_count > 1
                 {
-                    if let Some(driver) = driver {
-                        let specifier = SourceIdentifier(specifier, *loc);
-                        Error::cannot_combine_type_specifier(specifier, driver);
-                    }
+                    let specifier = SourceIdentifier(specifier, *loc);
+                    Error::cannot_combine_type_specifier(specifier, driver);
                     sema_err = true;
                 }
 
@@ -121,10 +119,8 @@ fn resolve_builtin_type_specifiers(
                         || float_count > 0;
 
                     if invalid_combination {
-                        if let Some(driver) = driver {
-                            let specifier = SourceIdentifier(specifier, *loc);
-                            Error::cannot_combine_type_specifier(specifier, driver);
-                        }
+                        let specifier = SourceIdentifier(specifier, *loc);
+                        Error::cannot_combine_type_specifier(specifier, driver);
                         sema_err = true;
                     }
                 }
@@ -136,10 +132,8 @@ fn resolve_builtin_type_specifiers(
                         short_count > 0 || int_count > 0 || long_count > 0 || float_count > 0 || double_count > 0;
 
                     if invalid_combination {
-                        if let Some(driver) = driver {
-                            let specifier = SourceIdentifier(specifier, *loc);
-                            Error::cannot_combine_type_specifier(specifier, driver);
-                        }
+                        let specifier = SourceIdentifier(specifier, *loc);
+                        Error::cannot_combine_type_specifier(specifier, driver);
                         sema_err = true;
                     }
                 }
@@ -154,17 +148,13 @@ fn resolve_builtin_type_specifiers(
                 let combine_with_void = void_count == 1 && type_specifiers.len() > 1;
 
                 if combine_short_long || combine_signed_unsigned || combine_with_float || combine_with_void {
-                    if let Some(driver) = driver {
-                        let specifier = SourceIdentifier(specifier, *loc);
-                        Error::cannot_combine_type_specifier(specifier, driver);
-                    }
+                    let specifier = SourceIdentifier(specifier, *loc);
+                    Error::cannot_combine_type_specifier(specifier, driver);
                     sema_err = true;
                 }
 
                 // Warn if 'signed' or 'unsigned' is repeated.
-                if (signed_count > 1 || unsigned_count > 1)
-                    && let Some(driver) = driver
-                {
+                if signed_count > 1 || unsigned_count > 1 {
                     let specifier = SourceIdentifier(specifier, *loc);
                     Warning::duplicate_decl_specifier(specifier, driver);
                 }
@@ -251,17 +241,17 @@ fn resolve_integer_data_type(
 fn resolve_declarator(
     ast_type: AstType,
     declarator: &AstDeclarator,
-    symbols: &mut Option<&mut SymbolTable>,
-    driver: &mut Option<&mut Driver>,
+    chk: &mut TypeChecker,
+    driver: &mut Driver,
 ) -> Result<AstType, ResolutionError> {
-    resolve_declarator_recursively(ast_type, declarator, symbols, driver)
+    resolve_declarator_recursively(ast_type, declarator, chk, driver)
 }
 
 fn resolve_declarator_recursively(
     ast_type: AstType,
     declarator: &AstDeclarator,
-    symbols: &mut Option<&mut SymbolTable>,
-    driver: &mut Option<&mut Driver>,
+    chk: &mut TypeChecker,
+    driver: &mut Driver,
 ) -> Result<AstType, ResolutionError> {
     match &declarator.kind {
         AstDeclaratorKind::Ident(_) => Ok(ast_type),
@@ -271,33 +261,35 @@ fn resolve_declarator_recursively(
             Ok(derived_type)
         }
 
-        AstDeclaratorKind::AbstractArray { size } => {
+        AstDeclaratorKind::AbstractArray { size_expr } => {
             if ast_type.is_function() {
                 emit_cannot_declare_array_of_function_error(declarator.loc, &ast_type, driver);
                 return Err(ResolutionError::SemanticError);
             }
 
-            let derived_type = AstType::new_array(ast_type, *size);
+            let size = resolve_array_size(size_expr, chk, driver)?;
+            let derived_type = AstType::new_array(ast_type, size);
             Ok(derived_type)
         }
 
         AstDeclaratorKind::Pointer(referent) => {
             let derived_type = AstType::new_pointer_to(ast_type);
-            resolve_declarator_recursively(derived_type, referent, symbols, driver)
+            resolve_declarator_recursively(derived_type, referent, chk, driver)
         }
 
-        AstDeclaratorKind::Array { decl, size } => {
+        AstDeclaratorKind::Array { decl, size_expr } => {
             if ast_type.is_function() {
                 emit_cannot_declare_array_of_function_error(decl.loc, &ast_type, driver);
                 return Err(ResolutionError::SemanticError);
             }
 
-            let derived_type = AstType::new_array(ast_type, *size);
-            resolve_declarator_recursively(derived_type, decl, symbols, driver)
+            let size = resolve_array_size(size_expr, chk, driver)?;
+            let derived_type = AstType::new_array(ast_type, size);
+            resolve_declarator_recursively(derived_type, decl, chk, driver)
         }
 
         AstDeclaratorKind::AbstractFunction { params } => {
-            let param_types = resolve_function_param_types(params, symbols, driver)?;
+            let param_types = resolve_function_param_types(params, chk, driver)?;
             let fn_derived_type = AstType::new_fn(ast_type, param_types);
             Ok(fn_derived_type)
         }
@@ -310,7 +302,7 @@ fn resolve_declarator_recursively(
 
             match decl.kind {
                 AstDeclaratorKind::Ident(_) => {
-                    let param_types = resolve_function_param_types(params, symbols, driver)?;
+                    let param_types = resolve_function_param_types(params, chk, driver)?;
                     let fn_derived_type = AstType::Function { return_type: Box::new(ast_type), params: param_types };
                     Ok(fn_derived_type)
                 }
@@ -319,9 +311,9 @@ fn resolve_declarator_recursively(
                 | AstDeclaratorKind::Pointer(_)
                 | AstDeclaratorKind::AbstractArray { .. }
                 | AstDeclaratorKind::Array { .. } => {
-                    let param_types = resolve_function_param_types(params, symbols, driver)?;
+                    let param_types = resolve_function_param_types(params, chk, driver)?;
                     let fn_type = AstType::Function { return_type: Box::new(ast_type), params: param_types };
-                    resolve_declarator_recursively(fn_type, decl, symbols, driver)
+                    resolve_declarator_recursively(fn_type, decl, chk, driver)
                 }
 
                 AstDeclaratorKind::AbstractFunction { .. } | AstDeclaratorKind::Function { .. } => {
@@ -338,16 +330,13 @@ fn resolve_declarator_recursively(
 
 fn resolve_function_param_types(
     params: &[AstDeclaredType],
-    symbols: &mut Option<&mut SymbolTable>,
-    driver: &mut Option<&mut Driver>,
+    chk: &mut TypeChecker,
+    driver: &mut Driver,
 ) -> Result<Vec<AstType>, ResolutionError> {
-    let symbols = symbols.as_mut().expect("Symbols is required");
-    let driver = driver.as_mut().expect("Driver is required");
-
     params
         .iter()
         .map(|param_declared_type| {
-            let ty = resolve_declared_type(param_declared_type, Some(symbols), Some(driver))?;
+            let ty = resolve_declared_type(param_declared_type, chk, driver)?;
 
             // Function type decays to function pointer
             let ty = if ty.is_function() { AstType::new_pointer_to(ty) } else { ty };
@@ -357,22 +346,57 @@ fn resolve_function_param_types(
         .collect()
 }
 
-fn emit_cannot_return_function_error(loc: SourceLocation, driver: &mut Option<&mut Driver>) {
-    if let Some(driver) = driver {
-        let err = "Function cannot return a function".to_string();
-        driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
+fn resolve_array_size(
+    size_expr: &Option<Box<AstFullExpression>>,
+    chk: &mut TypeChecker,
+    driver: &mut Driver,
+) -> Result<usize, ResolutionError> {
+    if let Some(size_expr) = size_expr {
+        let constant_value = constant_eval::evaluate_constant_full_expr(size_expr, chk, driver);
+
+        let Some(constant_value) = constant_value else {
+            let err = "Array size must be a constant integer expression".to_string();
+            let loc = chk.metadata.get_source_location(&size_expr.node_id);
+            driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
+            return Err(ResolutionError::SemanticError);
+        };
+
+        if constant_value.get_ast_type().is_integer() {
+            if constant_value.has_negative_value() {
+                let err = "Array size cannot be negative".to_string();
+                let loc = chk.metadata.get_source_location(&size_expr.node_id);
+                driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
+                return Err(ResolutionError::SemanticError);
+            }
+
+            let constant_value = constant_value.cast_to(&AstType::UnsignedLongLong);
+            let AstConstantValue::Integer(const_int) = constant_value else {
+                ICE!("Expected a constant integer");
+            };
+            let AstConstantInteger::UnsignedLongLong(value) = const_int else {
+                ICE!("Expected an unsigned long long");
+            };
+
+            Ok(value as usize)
+        } else {
+            let err = "Array size must be a constant integer expression".to_string();
+            let loc = chk.metadata.get_source_location(&size_expr.node_id);
+            driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
+            Err(ResolutionError::SemanticError)
+        }
+    } else {
+        Ok(0)
     }
 }
 
-fn emit_cannot_declare_array_of_function_error(
-    loc: SourceLocation,
-    fn_type: &AstType,
-    driver: &mut Option<&mut Driver>,
-) {
-    if let Some(driver) = driver {
-        let err = format!("Cannot declare an array of function type '{fn_type}'");
-        let mut diag = Diagnostic::error_at_location(err, loc);
-        diag.add_note("Did you mean to declare an array of function pointers instead?".to_string(), None);
-        driver.add_diagnostic(diag);
-    }
+fn emit_cannot_return_function_error(loc: SourceLocation, driver: &mut Driver) {
+    let err = "Function cannot return a function".to_string();
+    driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
+}
+
+fn emit_cannot_declare_array_of_function_error(loc: SourceLocation, fn_type: &AstType, driver: &mut Driver) {
+    let err = format!("Cannot declare an array of function type '{fn_type}'");
+    let mut diag = Diagnostic::error_at_location(err, loc);
+    diag.add_note("Did you mean to declare an array of function pointers instead?".to_string(), None);
+    driver.add_diagnostic(diag);
 }

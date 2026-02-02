@@ -161,6 +161,22 @@ impl AsmConstant {
     pub fn is_string(&self) -> bool {
         matches!(self.value, AsmConstantInitializer::AsciiString { .. })
     }
+
+    /// Is this a null-terminated string constant?
+    ///
+    /// A null-terminated string constant ends with the null character escape sequence "\000" and does not contain
+    /// any other null character escape sequences inside it.
+    pub fn is_null_terminated_string(&self) -> bool {
+        if let AsmConstantInitializer::AsciiString { value, .. } = &self.value {
+            if !value.ends_with("\\000") {
+                return false;
+            }
+
+            value.matches(r"\000").count() == 1
+        } else {
+            false
+        }
+    }
 }
 
 /// A constant/static initializer value for an `AsmStaticStorageVariable` or `AsmConstant`.

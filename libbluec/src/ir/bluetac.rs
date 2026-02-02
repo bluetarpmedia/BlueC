@@ -345,6 +345,11 @@ impl BtType {
         }
     }
 
+    /// Is this type an arithmetic type (integer or floating-point)?
+    pub fn is_arithmetic(&self) -> bool {
+        self.is_integer() || self.is_floating_point()
+    }
+
     /// Is this type an integer (signed or unsigned) type?
     pub fn is_integer(&self) -> bool {
         matches!(
@@ -437,7 +442,7 @@ impl BtType {
 }
 
 /// An IR value is either a constant or a variable.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum BtValue {
     Constant(BtConstantValue),
     Variable(String),
@@ -459,6 +464,61 @@ impl From<AstConstantInteger> for BtValue {
 }
 
 impl BtValue {
+    /// Creates a new constant Int8 value
+    pub fn new_constant_i8(value: i8) -> Self {
+        BtValue::Constant(BtConstantValue::Int8(value))
+    }
+
+    /// Creates a new constant Int16 value
+    pub fn new_constant_i16(value: i16) -> Self {
+        BtValue::Constant(BtConstantValue::Int16(value))
+    }
+
+    /// Creates a new constant Int32 value
+    pub fn new_constant_i32(value: i32) -> Self {
+        BtValue::Constant(BtConstantValue::Int32(value))
+    }
+
+    /// Creates a new constant Int64 value
+    pub fn new_constant_i64(value: i64) -> Self {
+        BtValue::Constant(BtConstantValue::Int64(value))
+    }
+
+    /// Creates a new constant UInt8 value
+    pub fn new_constant_u8(value: u8) -> Self {
+        BtValue::Constant(BtConstantValue::UInt8(value))
+    }
+
+    /// Creates a new constant UInt16 value
+    pub fn new_constant_u16(value: u16) -> Self {
+        BtValue::Constant(BtConstantValue::UInt16(value))
+    }
+
+    /// Creates a new constant UInt32 value
+    pub fn new_constant_u32(value: u32) -> Self {
+        BtValue::Constant(BtConstantValue::UInt32(value))
+    }
+
+    /// Creates a new constant UInt64 value
+    pub fn new_constant_u64(value: u64) -> Self {
+        BtValue::Constant(BtConstantValue::UInt64(value))
+    }
+
+    /// Creates a new constant Float32 value
+    pub fn new_constant_f32(value: f32) -> Self {
+        BtValue::Constant(BtConstantValue::Float32(value))
+    }
+
+    /// Creates a new constant Float64 value
+    pub fn new_constant_f64(value: f64) -> Self {
+        BtValue::Constant(BtConstantValue::Float64(value))
+    }
+
+    /// Is the value a constant value?
+    pub fn is_constant(&self) -> bool {
+        matches!(self, BtValue::Constant(_))
+    }
+
     /// Gets the IR type of the value.
     pub fn get_type(&self, symbols: &SymbolTable) -> BtType {
         match self {

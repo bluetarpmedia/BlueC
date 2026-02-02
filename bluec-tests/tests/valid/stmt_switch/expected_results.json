@@ -1,90 +1,22 @@
 [
-    {
-        "filename": "stmt_switch_case_block.c",
-        "exit_code": 1
-    },
-    {
-        "filename": "stmt_switch_duffs_device.c",
-        "exit_code": 1
-    },
-    {
-        "filename": "stmt_switch_switch_assign_in_condition.c",
-        "exit_code": 2
-    },
-    {
-        "filename": "stmt_switch_switch_break.c",
-        "exit_code": 10
-    },
-    {
-        "filename": "stmt_switch_switch_decl.c",
-        "exit_code": 1
-    },
-    {
-        "filename": "stmt_switch_switch_default_fallthrough.c",
-        "exit_code": 0
-    },
-    {
-        "filename": "stmt_switch_switch_default_not_last.c",
-        "exit_code": 0
-    },
-    {
-        "filename": "stmt_switch_switch_default_only.c",
-        "exit_code": 1
-    },
-    {
-        "filename": "stmt_switch_switch_default.c",
-        "exit_code": 22
-    },
-    {
-        "filename": "stmt_switch_switch_empty.c",
-        "exit_code": 12
-    },
-    {
-        "filename": "stmt_switch_switch_fallthrough.c",
-        "exit_code": 6
-    },
-    {
-        "filename": "stmt_switch_switch_goto_mid_case.c",
-        "exit_code": 1
-    },
-    {
-        "filename": "stmt_switch_switch_in_loop.c",
-        "exit_code": 1
-    },
-    {
-        "filename": "stmt_switch_switch_nested_cases.c",
-        "exit_code": 1
-    },
-    {
-        "filename": "stmt_switch_switch_nested_not_taken.c",
-        "exit_code": 2
-    },
-    {
-        "filename": "stmt_switch_switch_nested_switch.c",
-        "exit_code": 1
-    },
-    {
-        "filename": "stmt_switch_switch_no_case.c",
-        "exit_code": 4
-    },
-    {
-        "filename": "stmt_switch_switch_not_taken.c",
-        "exit_code": 1
-    },
-    {
-        "filename": "stmt_switch_switch_single_case.c",
-        "exit_code": 1
-    },
-    {
-        "filename": "stmt_switch_switch_with_continue_2.c",
-        "exit_code": 5
-    },
-    {
-        "filename": "stmt_switch_switch_with_continue.c",
-        "exit_code": 5
-    },
-    {
-        "filename": "stmt_switch_switch.c",
-        "exit_code": 3
-    }
+    {"filename": "stmt_switch_case_block.c", "exit_code": 1},
+    {"filename": "stmt_switch_duffs_device.c", "exit_code": 1},
+    {"filename": "stmt_switch_switch_assign_in_condition.c", "exit_code": 2},
+    {"filename": "stmt_switch_switch_break.c", "exit_code": 10},
+    {"filename": "stmt_switch_switch_decl.c", "exit_code": 1},
+    {"filename": "stmt_switch_switch_default_only.c", "exit_code": 1},
+    {"filename": "stmt_switch_switch_default.c", "exit_code": 22},
+    {"filename": "stmt_switch_switch_empty.c", "exit_code": 12},
+    {"filename": "stmt_switch_switch_fallthrough.c", "exit_code": 6},
+    {"filename": "stmt_switch_switch_goto_mid_case.c", "exit_code": 1},
+    {"filename": "stmt_switch_switch_in_loop.c", "exit_code": 1},
+    {"filename": "stmt_switch_switch_nested_cases.c", "exit_code": 1},
+    {"filename": "stmt_switch_switch_nested_not_taken.c", "exit_code": 2},
+    {"filename": "stmt_switch_switch_nested_switch.c", "exit_code": 1},
+    {"filename": "stmt_switch_switch_no_case.c", "exit_code": 4},
+    {"filename": "stmt_switch_switch_not_taken.c", "exit_code": 1},
+    {"filename": "stmt_switch_switch_single_case.c", "exit_code": 1},
+    {"filename": "stmt_switch_switch_with_continue_2.c", "exit_code": 5},
+    {"filename": "stmt_switch_switch_with_continue.c", "exit_code": 5},
+    {"filename": "stmt_switch_switch.c", "exit_code": 3}
 ]

@@ -2,7 +2,11 @@
 //
 //! The `meta` module defines metadata that the parser generates, such as source code spans for AST nodes.
 
-use std::collections::{HashMap, HashSet};
+mod expression_flags;
+
+use std::collections::HashMap;
+
+pub use expression_flags::{AstExpressionFlag, AstExpressionFlags};
 
 use crate::ICE;
 use crate::core::SourceLocation;
@@ -15,7 +19,7 @@ pub struct AstMetadata {
     switch_cases: HashMap<AstNodeId, HashMap<AstConstantInteger, AstNodeId>>,
     switch_defaults: HashMap<AstNodeId, SourceLocation>,
     node_types: HashMap<AstNodeId, AstType>,
-    expr_has_parens: HashSet<AstNodeId>,
+    expr_flags: HashMap<AstNodeId, AstExpressionFlags>,
 }
 
 impl Default for AstMetadata {
@@ -32,7 +36,7 @@ impl AstMetadata {
             switch_cases: HashMap::new(),
             switch_defaults: HashMap::new(),
             node_types: HashMap::new(),
-            expr_has_parens: HashSet::new(),
+            expr_flags: HashMap::new(),
         }
     }
 
@@ -41,9 +45,20 @@ impl AstMetadata {
         let _ = self.node_types.insert(node_id, data_type);
     }
 
-    /// Gets a node's data type.
-    pub fn get_node_type(&self, node_id: &AstNodeId) -> Option<&AstType> {
+    /// If a data type has been set for this node, returns `Some(&AstType)`, or otherwise returns `None`.
+    pub fn try_get_node_type(&self, node_id: &AstNodeId) -> Option<&AstType> {
         self.node_types.get(node_id)
+    }
+
+    /// Gets a node's data type.
+    ///
+    /// Pre: Expects the data type to previously have been set; emits an ICE otherwise.
+    pub fn get_node_type(&self, node_id: &AstNodeId) -> &AstType {
+        if let Some(data_type) = self.node_types.get(node_id) {
+            data_type
+        } else {
+            ICE!("Cannot find data type for AST node '{node_id}'")
+        }
     }
 
     /// Adds the source location metadata for the given node.
@@ -52,6 +67,8 @@ impl AstMetadata {
     }
 
     /// Gets the source location metadata for the given node.
+    ///
+    /// Pre: Expects the source location to previously have been set; emits an ICE otherwise.
     pub fn get_source_location(&self, node_id: &AstNodeId) -> SourceLocation {
         if let Some(loc) = self.source_location_nodes.get(node_id) {
             *loc
@@ -60,14 +77,39 @@ impl AstMetadata {
         }
     }
 
-    /// Records that an expression is wrapped in parentheses in the original source code.
-    pub fn set_expr_has_parens(&mut self, node_id: AstNodeId) {
-        self.expr_has_parens.insert(node_id);
+    /// Propagates the constant expression flag from a child sub-expression to a parent expression.
+    pub fn propagate_const_flag_from_child(&mut self, child_node_id: AstNodeId, parent_node_id: AstNodeId) {
+        if self.is_expr_flag_set(child_node_id, AstExpressionFlag::IsConstant) {
+            self.set_expr_flag(parent_node_id, AstExpressionFlag::IsConstant);
+        }
     }
 
-    /// Returns whether an expression is wrapped in parentheses in the original source code.
-    pub fn expr_has_parens(&self, node_id: AstNodeId) -> bool {
-        self.expr_has_parens.contains(&node_id)
+    /// If all child sub-expressions have the constant expression flag set, then propagates the flag to the parent.
+    pub fn propagate_const_flag_from_children(&mut self, child_node_ids: &[AstNodeId], parent_node_id: AstNodeId) {
+        let all_set = child_node_ids
+            .iter()
+            .all(|child_node_id| self.is_expr_flag_set(*child_node_id, AstExpressionFlag::IsConstant));
+
+        if all_set {
+            self.set_expr_flag(parent_node_id, AstExpressionFlag::IsConstant);
+        } else {
+            self.clear_expr_flag(parent_node_id, AstExpressionFlag::IsConstant);
+        }
+    }
+
+    /// Sets a metadata flag for the given expression.
+    pub fn set_expr_flag(&mut self, node_id: AstNodeId, flag: AstExpressionFlag) {
+        self.expr_flags.entry(node_id).and_modify(|flags| flags.insert(flag)).or_insert(AstExpressionFlags::from(flag));
+    }
+
+    /// Clears a metadata flag for the given expression.
+    pub fn clear_expr_flag(&mut self, node_id: AstNodeId, flag: AstExpressionFlag) {
+        self.expr_flags.entry(node_id).and_modify(|flags| flags.remove(flag));
+    }
+
+    /// Is the metadata flag set for the given expression?
+    pub fn is_expr_flag_set(&self, node_id: AstNodeId, flag: AstExpressionFlag) -> bool {
+        self.expr_flags.get(&node_id).is_some_and(|flags| flags.contains(flag))
     }
 
     /// Adds metadata about a switch `case` statement.

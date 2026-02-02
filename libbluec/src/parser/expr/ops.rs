@@ -23,6 +23,7 @@ pub fn parse_prefix_unary_operation(parser: &mut Parser, driver: &mut Driver) ->
 
     let node_id = AstNodeId::new();
     parser.metadata.add_source_location(node_id, unary_op_token.location.merge_with(end_loc));
+    parser.metadata.propagate_const_flag_from_child(unary_expr.node_id(), node_id);
 
     // We parse dereference and address-of as unary operations but output dedicated AstExpressions for them,
     // rather than storing them as `AstExpression::UnaryOperation`s. This makes it easier to handle them later

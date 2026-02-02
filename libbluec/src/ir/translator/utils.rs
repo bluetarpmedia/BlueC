@@ -2,60 +2,61 @@
 //
 //! The `utils` module defines utility functions for the BlueTac translator.
 
-use crate::compiler_driver::Driver;
-use crate::parser::AstVariableInitializer;
-use crate::sema::constant_eval;
+use super::{BtConstantValue, BtType, BtValue};
 
-use super::BlueTacTranslator;
+/// Attempts to convert a constant integer value to the given [BtType], but only if the destination [BtType] can hold
+/// the value.
+pub fn try_lossless_convert_integer<T>(value: T, dst_type: &BtType) -> Option<BtValue>
+where
+    T: Copy
+        + TryInto<i8>
+        + TryInto<i16>
+        + TryInto<i32>
+        + TryInto<i64>
+        + TryInto<u8>
+        + TryInto<u16>
+        + TryInto<u32>
+        + TryInto<u64>,
+{
+    debug_assert!(dst_type.is_arithmetic());
 
-/// Merges adjacent null string escape codes ("\\000") into a single string.
-///
-/// { "abc\\000", "\\000", "\\000", "def" }  -->  { "abc\\000", "\\000\\000", "def" }
-pub fn merge_adjacent_nulls(strings: &mut Vec<String>) {
-    if strings.is_empty() {
-        return;
-    }
+    match dst_type {
+        BtType::Int8 => Some(BtValue::Constant(BtConstantValue::Int8(<T as TryInto<i8>>::try_into(value).ok()?))),
+        BtType::Int16 => Some(BtValue::Constant(BtConstantValue::Int16(<T as TryInto<i16>>::try_into(value).ok()?))),
+        BtType::Int32 => Some(BtValue::Constant(BtConstantValue::Int32(<T as TryInto<i32>>::try_into(value).ok()?))),
+        BtType::Int64 => Some(BtValue::Constant(BtConstantValue::Int64(<T as TryInto<i64>>::try_into(value).ok()?))),
 
-    *strings = strings.drain(..).fold(Vec::new(), |mut acc, current| {
-        if let Some(prev) = acc.last_mut() {
-            let is_null = current == "\\000";
-            let prev_is_only_nulls = prev.as_bytes().chunks(4).all(|c| c == b"\\000");
+        BtType::UInt8 => Some(BtValue::Constant(BtConstantValue::UInt8(<T as TryInto<u8>>::try_into(value).ok()?))),
+        BtType::UInt16 => Some(BtValue::Constant(BtConstantValue::UInt16(<T as TryInto<u16>>::try_into(value).ok()?))),
+        BtType::UInt32 => Some(BtValue::Constant(BtConstantValue::UInt32(<T as TryInto<u32>>::try_into(value).ok()?))),
+        BtType::UInt64 => Some(BtValue::Constant(BtConstantValue::UInt64(<T as TryInto<u64>>::try_into(value).ok()?))),
 
-            if is_null && prev_is_only_nulls {
-                prev.push_str(&current);
+        BtType::Float32 => {
+            // f32 exactly represents all integers in [-2^24, +2^24] (+/- 16,777,216), so convert our input to
+            // an i32 first.
+            //
+            let value_i32 = <T as TryInto<i32>>::try_into(value).ok()?;
+
+            if (-(1 << 24)..=(1 << 24)).contains(&value_i32) {
+                Some(BtValue::Constant(BtConstantValue::Float32(value_i32 as f32)))
             } else {
-                acc.push(current);
+                None
             }
-        } else {
-            acc.push(current);
         }
 
-        acc
-    });
-}
+        BtType::Float64 => {
+            // f64 exactly represents all integers in [-2^53, +2^53] (+/- 9,007,199,254,740,992), so convert our input
+            // to an i64 first.
+            //
+            let value_i64 = <T as TryInto<i64>>::try_into(value).ok()?;
 
-/// Is the given variable initializer a constant initializer?
-pub fn is_constant_initializer(
-    init: &AstVariableInitializer,
-    translator: &mut BlueTacTranslator,
-    driver: &mut Driver,
-) -> bool {
-    match init {
-        AstVariableInitializer::Scalar(full_expr) => {
-            let ctx = constant_eval::ConstantEvalContext::new(
-                &translator.metadata,
-                &mut translator.symbols,
-                &mut translator.constants,
-                driver,
-            );
-
-            let constant_value = constant_eval::evaluate_constant_full_expr(full_expr, ctx);
-            constant_value.is_some()
+            if (-(1 << 53)..=(1 << 53)).contains(&value_i64) {
+                Some(BtValue::Constant(BtConstantValue::Float64(value_i64 as f64)))
+            } else {
+                None
+            }
         }
 
-        AstVariableInitializer::Aggregate { init, .. } => {
-            init.iter().all(|ini| is_constant_initializer(ini, translator, driver))
-        }
+        _ => None,
     }
 }
-

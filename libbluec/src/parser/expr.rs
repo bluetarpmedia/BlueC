@@ -16,7 +16,8 @@ use super::recursive_descent::literal;
 use super::recursive_descent::peek;
 use super::recursive_descent::utils;
 use super::{
-    AstAssignmentOp, AstBinaryOp, AstDeclaredType, AstExpression, AstFullExpression, AstNodeId, AstUniqueName,
+    AstAssignmentOp, AstBinaryOp, AstDeclaredType, AstExpression, AstExpressionFlag, AstFullExpression, AstNodeId,
+    AstUniqueName,
 };
 use super::{ParseError, ParseResult, Parser};
 use super::{add_error, add_error_at_eof};
@@ -35,6 +36,7 @@ pub fn parse_full_expression(parser: &mut Parser, driver: &mut Driver) -> ParseR
 
     let node_id = AstNodeId::new();
     parser.metadata.add_source_location(node_id, start_loc.merge_with(end_loc));
+    parser.metadata.propagate_const_flag_from_child(expr.node_id(), node_id);
 
     Ok(AstFullExpression { node_id, expr })
 }
@@ -162,9 +164,6 @@ fn parse_ternary_expression(
     // Get the location of the '?' token.
     let loc = parser.token_stream.prev_token_source_location().unwrap();
 
-    let node_id = AstNodeId::new();
-    parser.metadata.add_source_location(node_id, loc);
-
     let consequent = parse_expression(parser, driver)?; // Note: precedence == 0
 
     let colon_token = parser.token_stream.take_token_if_expected(lexer::TokenType::Colon);
@@ -181,6 +180,13 @@ fn parse_ternary_expression(
         return Err(ParseError);
     }
     let alternative = alternative.unwrap();
+
+    let node_id = AstNodeId::new();
+    parser.metadata.add_source_location(node_id, loc);
+    parser.metadata.propagate_const_flag_from_children(
+        &[condition.node_id(), consequent.node_id(), alternative.node_id()],
+        node_id,
+    );
 
     Ok(AstExpression::Conditional {
         node_id,
@@ -199,10 +205,11 @@ fn parse_binary_expression(
     parser: &mut Parser,
     driver: &mut Driver,
 ) -> ParseResult<AstExpression> {
+    let rhs = parse_expression_with_precedence(parser, driver, rhs_precedence)?;
+
     let node_id = AstNodeId::new();
     parser.metadata.add_source_location(node_id, op_loc);
-
-    let rhs = parse_expression_with_precedence(parser, driver, rhs_precedence)?;
+    parser.metadata.propagate_const_flag_from_children(&[lhs.node_id(), rhs.node_id()], node_id);
 
     Ok(AstExpression::BinaryOperation { node_id, op, left: Box::new(lhs), right: Box::new(rhs) })
 }
@@ -274,6 +281,7 @@ fn parse_cast_expression(parser: &mut Parser, driver: &mut Driver) -> ParseResul
 
     let node_id = AstNodeId::new();
     parser.metadata.add_source_location(node_id, open_paren_loc);
+    parser.metadata.propagate_const_flag_from_child(expr_to_cast.node_id(), node_id);
 
     Ok(AstExpression::Cast { node_id, target_type, expr: Box::new(expr_to_cast) })
 }
@@ -458,7 +466,7 @@ fn parse_parenthesised_expression(parser: &mut Parser, driver: &mut Driver) -> P
 
     // Track that the expression was wrapped in parentheses so that later we can warn about mixing different binary
     // operators without parentheses.
-    parser.metadata.set_expr_has_parens(expr.node_id());
+    parser.metadata.set_expr_flag(expr.node_id(), AstExpressionFlag::HasParens);
 
     Ok(expr)
 }

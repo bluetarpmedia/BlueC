@@ -3,14 +3,14 @@
 //! The `expr` module defines functions to translate AST expressions into the BlueTac IR.
 
 use crate::ICE;
+use crate::core::SourceLocation;
 use crate::parser::{AstAssignmentOp, AstExpression, AstFloatLiteralKind, AstFullExpression, AstType, AstUniqueName};
 use crate::sema::symbol_table::SymbolAttributes;
 use crate::sema::type_conversion;
 
-use super::super::{BtBinaryOp, BtConstantValue, BtInstruction, BtUnaryOp, BtValue};
-use super::binary_expr;
-use super::unary_expr;
+use super::super::{BtBinaryOp, BtConstantValue, BtInstruction, BtType, BtUnaryOp, BtValue};
 use super::{BlueTacTranslator, EvalExpr};
+use super::{binary_expr, unary_expr, utils};
 
 /// Translates an AST full expression into BlueTac IR and performs lvalue-to-rvalue conversion on the result, if
 /// necessary.
@@ -38,6 +38,7 @@ pub fn translate_expression(
     instructions: &mut Vec<BtInstruction>,
 ) -> EvalExpr {
     match expr {
+        // TODO: CharLiterals can be translated to i8 / u8
         AstExpression::CharLiteral { value, .. } => EvalExpr::Value(BtValue::Constant(BtConstantValue::Int32(*value))),
 
         AstExpression::StringLiteral { .. } => translate_string_literal(translator, expr),
@@ -76,9 +77,18 @@ pub fn translate_expression(
                 return EvalExpr::Value(expr_value);
             }
 
-            let src_type = expr_data_type.clone();
-            let casted = add_cast_to_temp_var(translator, expr_value, &src_type, dst_type, instructions);
-            EvalExpr::Value(casted)
+            // If we can transform a constant value's type to match the cast-to `dst_type` then we can avoid
+            // performing the cast.
+            if expr_value.is_constant()
+                && dst_type.is_arithmetic()
+                && let Some(transformed_constant) = try_transform_constant_value_type(&expr_value, &dst_type.into())
+            {
+                EvalExpr::Value(transformed_constant)
+            } else {
+                let src_type = expr_data_type.clone();
+                let casted = add_cast_to_temp_var(translator, expr_value, &src_type, dst_type, instructions);
+                EvalExpr::Value(casted)
+            }
         }
 
         AstExpression::Deref { expr, .. } => {
@@ -191,6 +201,28 @@ pub fn translate_expression_to_value(
     }
 }
 
+/// Attempt to transform a constant value's type to the given `dst_type`, but only if the value can be converted without
+/// loss.
+fn try_transform_constant_value_type(value: &BtValue, dst_type: &BtType) -> Option<BtValue> {
+    let BtValue::Constant(constant_value) = value else {
+        ICE!("Expected a BtValue::Constant");
+    };
+
+    debug_assert!(dst_type.is_arithmetic());
+
+    match constant_value {
+        BtConstantValue::Int8(value) => utils::try_lossless_convert_integer(*value, dst_type),
+        BtConstantValue::Int16(value) => utils::try_lossless_convert_integer(*value, dst_type),
+        BtConstantValue::Int32(value) => utils::try_lossless_convert_integer(*value, dst_type),
+        BtConstantValue::Int64(value) => utils::try_lossless_convert_integer(*value, dst_type),
+        BtConstantValue::UInt8(value) => utils::try_lossless_convert_integer(*value, dst_type),
+        BtConstantValue::UInt16(value) => utils::try_lossless_convert_integer(*value, dst_type),
+        BtConstantValue::UInt32(value) => utils::try_lossless_convert_integer(*value, dst_type),
+        BtConstantValue::UInt64(value) => utils::try_lossless_convert_integer(*value, dst_type),
+        _ => None,
+    }
+}
+
 fn translate_string_literal(translator: &mut BlueTacTranslator, expr: &AstExpression) -> EvalExpr {
     let AstExpression::StringLiteral { node_id, ascii, .. } = expr else {
         ICE!("Expected an AstExpression::StringLiteral");
@@ -217,8 +249,7 @@ fn translate_string_literal(translator: &mut BlueTacTranslator, expr: &AstExpres
 
     // Add the constant string to the symbol table (it may already exist).
     let const_name = translator.constants.make_const_symbol_name(constant_idx);
-    let loc = translator.metadata.get_source_location(node_id);
-    let attrs = SymbolAttributes::constant(loc);
+    let attrs = SymbolAttributes::constant(SourceLocation::none());
     _ = translator.symbols.add(AstUniqueName::new(const_name.clone()), data_type, attrs);
 
     EvalExpr::Value(BtValue::Variable(const_name))

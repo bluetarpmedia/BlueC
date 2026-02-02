@@ -4,8 +4,6 @@
     {"filename": "stmt_compound_compound_subtract_in_block.c", "exit_code": 1},
     {"filename": "stmt_compound_declaration_only.c", "exit_code": 1},
     {"filename": "stmt_compound_empty_blocks.c", "exit_code": 30},
-    {"filename": "stmt_compound_empty_function_body.c", "exit_code": 0},
-    {"filename": "stmt_compound_goto_before_declaration.c", "exit_code": 0},
     {"filename": "stmt_compound_goto_inner_scope.c", "exit_code": 1},
     {"filename": "stmt_compound_goto_outer_scope.c", "exit_code": 1},
     {"filename": "stmt_compound_goto_sibling_scope.c", "exit_code": 11},

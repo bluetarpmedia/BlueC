@@ -16,10 +16,10 @@ mod meta;
 mod token_stream;
 
 #[cfg(test)]
-mod tests;
+pub(super) mod tests;
 
 pub use abstract_syntax_tree::*;
-pub use meta::AstMetadata;
+pub use meta::{AstExpressionFlag, AstExpressionFlags, AstMetadata};
 
 use identifier_resolution::{DeclaredIdentifier, SearchScope};
 
@@ -218,7 +218,7 @@ pub fn parse(driver: &mut Driver, tokens: Vec<lexer::Token>) {
 
     // If client wants to print the parsed AST then we're done.
     if driver.options().print_ast {
-        printer::print(&ast, None);
+        printer::print(&ast, &metadata);
         return;
     }
 

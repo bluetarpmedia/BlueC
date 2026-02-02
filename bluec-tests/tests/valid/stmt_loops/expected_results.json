@@ -1,138 +1,32 @@
 [
-    {
-        "filename": "stmt_loops_break_immediate.c",
-        "exit_code": 1
-    },
-    {
-        "filename": "stmt_loops_break.c",
-        "exit_code": 1
-    },
-    {
-        "filename": "stmt_loops_compound_assignment_controlling_expression.c",
-        "exit_code": 1
-    },
-    {
-        "filename": "stmt_loops_compound_assignment_for_loop.c",
-        "exit_code": 1
-    },
-    {
-        "filename": "stmt_loops_continue_empty_post.c",
-        "exit_code": 30
-    },
-    {
-        "filename": "stmt_loops_continue.c",
-        "exit_code": 1
-    },
-    {
-        "filename": "stmt_loops_do_while_break_immediate.c",
-        "exit_code": 10
-    },
-    {
-        "filename": "stmt_loops_do_while.c",
-        "exit_code": 16
-    },
-    {
-        "filename": "stmt_loops_duffs_device.c",
-        "exit_code": 1
-    },
-    {
-        "filename": "stmt_loops_empty_expression.c",
-        "exit_code": 0
-    },
-    {
-        "filename": "stmt_loops_empty_loop_body.c",
-        "exit_code": 252
-    },
-    {
-        "filename": "stmt_loops_for_absent_condition.c",
-        "exit_code": 0
-    },
-    {
-        "filename": "stmt_loops_for_absent_post.c",
-        "exit_code": 0
-    },
-    {
-        "filename": "stmt_loops_for_decl.c",
-        "exit_code": 101
-    },
-    {
-        "filename": "stmt_loops_for_multiple_decl_1.c",
-        "exit_code": 10
-    },
-    {
-        "filename": "stmt_loops_for_multiple_decl_2.c",
-        "exit_code": 15
-    },
-    {
-        "filename": "stmt_loops_for_nested_shadow.c",
-        "exit_code": 1
-    },
-    {
-        "filename": "stmt_loops_for_shadow.c",
-        "exit_code": 1
-    },
-    {
-        "filename": "stmt_loops_for.c",
-        "exit_code": 16
-    },
-    {
-        "filename": "stmt_loops_goto_bypass_condition.c",
-        "exit_code": 10
-    },
-    {
-        "filename": "stmt_loops_goto_bypass_init_exp.c",
-        "exit_code": 1
-    },
-    {
-        "filename": "stmt_loops_goto_bypass_post_exp.c",
-        "exit_code": 11
-    },
-    {
-        "filename": "stmt_loops_label_loop_body.c",
-        "exit_code": 1
-    },
-    {
-        "filename": "stmt_loops_label_loops_breaks_and_continues.c",
-        "exit_code": 12
-    },
-    {
-        "filename": "stmt_loops_loop_header_postfix_and_prefix.c",
-        "exit_code": 1
-    },
-    {
-        "filename": "stmt_loops_loop_in_switch.c",
-        "exit_code": 123
-    },
-    {
-        "filename": "stmt_loops_multi_break.c",
-        "exit_code": 1
-    },
-    {
-        "filename": "stmt_loops_multi_continue_same_loop.c",
-        "exit_code": 1
-    },
-    {
-        "filename": "stmt_loops_nested_break.c",
-        "exit_code": 250
-    },
-    {
-        "filename": "stmt_loops_nested_continue.c",
-        "exit_code": 24
-    },
-    {
-        "filename": "stmt_loops_nested_loop.c",
-        "exit_code": 1
-    },
-    {
-        "filename": "stmt_loops_null_for_header.c",
-        "exit_code": 4
-    },
-    {
-        "filename": "stmt_loops_post_exp_incr.c",
-        "exit_code": 21
-    },
-    {
-        "filename": "stmt_loops_while.c",
-        "exit_code": 6
-    }
+    {"filename": "stmt_loops_break_immediate.c", "exit_code": 1},
+    {"filename": "stmt_loops_break.c", "exit_code": 1},
+    {"filename": "stmt_loops_compound_assignment_controlling_expression.c", "exit_code": 1},
+    {"filename": "stmt_loops_compound_assignment_for_loop.c", "exit_code": 1},
+    {"filename": "stmt_loops_continue_empty_post.c", "exit_code": 30},
+    {"filename": "stmt_loops_continue.c", "exit_code": 1},
+    {"filename": "stmt_loops_do_while_break_immediate.c", "exit_code": 10},
+    {"filename": "stmt_loops_do_while.c", "exit_code": 16},
+    {"filename": "stmt_loops_empty_loop_body.c", "exit_code": 252},
+    {"filename": "stmt_loops_for_decl.c", "exit_code": 101},
+    {"filename": "stmt_loops_for_multiple_decl_1.c", "exit_code": 10},
+    {"filename": "stmt_loops_for_multiple_decl_2.c", "exit_code": 15},
+    {"filename": "stmt_loops_for_nested_shadow.c", "exit_code": 1},
+    {"filename": "stmt_loops_for_shadow.c", "exit_code": 1},
+    {"filename": "stmt_loops_for.c", "exit_code": 16},
+    {"filename": "stmt_loops_goto_bypass_condition.c", "exit_code": 10},
+    {"filename": "stmt_loops_goto_bypass_init_exp.c", "exit_code": 1},
+    {"filename": "stmt_loops_goto_bypass_post_exp.c", "exit_code": 11},
+    {"filename": "stmt_loops_label_loop_body.c", "exit_code": 1},
+    {"filename": "stmt_loops_label_loops_breaks_and_continues.c", "exit_code": 12},
+    {"filename": "stmt_loops_loop_header_postfix_and_prefix.c", "exit_code": 1},
+    {"filename": "stmt_loops_loop_in_switch.c", "exit_code": 123},
+    {"filename": "stmt_loops_multi_break.c", "exit_code": 1},
+    {"filename": "stmt_loops_multi_continue_same_loop.c", "exit_code": 1},
+    {"filename": "stmt_loops_nested_break.c", "exit_code": 250},
+    {"filename": "stmt_loops_nested_continue.c", "exit_code": 24},
+    {"filename": "stmt_loops_nested_loop.c", "exit_code": 1},
+    {"filename": "stmt_loops_null_for_header.c", "exit_code": 4},
+    {"filename": "stmt_loops_post_exp_incr.c", "exit_code": 21},
+    {"filename": "stmt_loops_while.c", "exit_code": 6}
 ]

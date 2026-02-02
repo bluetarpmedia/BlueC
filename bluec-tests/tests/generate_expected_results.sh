@@ -62,13 +62,17 @@ for src in "$dir"/*.c; do
         exit
     fi
 
-    if [ "$first" = true ]; then
-        first=false
-    else
-        printf ',\n'
-    fi
+    # No need to print the result for a test case that returns 0, since our integration test runner will assume that
+    # a process returning zero means success.
+    if [ "$exit_code" != "0" ]; then
+        if [ "$first" = true ]; then
+            first=false
+        else
+            printf ',\n'
+        fi
 
-    printf '    {"filename": "%s", "exit_code": %d}' "$combined_name" "$exit_code"
+        printf '    {"filename": "%s", "exit_code": %d}' "$combined_name" "$exit_code"
+    fi
 done
 
 printf '\n]\n'

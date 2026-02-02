@@ -27,6 +27,11 @@ impl SourceLocation {
         Self { file_pos, length: length as u32 }
     }
 
+    /// Creates a new source location which indicates a 'null' / no value.
+    pub fn none() -> Self {
+        Self { file_pos: FilePosition::from(0), length: 0 }
+    }
+
     /// Merges this and the `other` location into a new location, taking the union of the two.
     pub fn merge_with(self, other: SourceLocation) -> Self {
         let this_start = self.file_pos;

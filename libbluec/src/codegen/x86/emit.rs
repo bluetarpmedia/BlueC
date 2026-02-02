@@ -42,7 +42,7 @@ fn emit_asm_root(writer: &mut AsmFileWriter, asm_root: &AsmRoot) -> Result<()> {
 fn emit_asm_function(writer: &mut AsmFileWriter, function: &AsmFunction) -> Result<()> {
     let function_name = &function.name;
 
-    writer.write_section_directive(AsmSectionDirective::Text, false)?;
+    writer.write_section_directive(AsmSectionDirective::Text)?;
 
     if function.is_global {
         writer.write_global_directive(function_name)?;
@@ -73,9 +73,9 @@ fn emit_asm_static_variable(writer: &mut AsmFileWriter, static_var: &AsmStaticSt
     // Section is either .bss or .data depending on whether the static variable's value is zero.
     let bss = static_var.init_value.len() == 1 && static_var.init_value[0].is_zero();
     if bss {
-        writer.write_section_directive(AsmSectionDirective::Bss, false)?;
+        writer.write_section_directive(AsmSectionDirective::Bss)?;
     } else {
-        writer.write_section_directive(AsmSectionDirective::Data, false)?;
+        writer.write_section_directive(AsmSectionDirective::Data)?;
     }
 
     // Alignment
@@ -129,10 +129,13 @@ fn emit_asm_static_variable(writer: &mut AsmFileWriter, static_var: &AsmStaticSt
 
 fn emit_asm_constant(writer: &mut AsmFileWriter, constant: &AsmConstant) -> Result<()> {
     // Readonly data section
-    //      This is either `.rodata` on Linux or `.literal4/8/16` or `.cstring` on macOS)
     //
-    let is_string = constant.is_string();
-    writer.write_section_directive(AsmSectionDirective::ReadOnlyData { align: constant.alignment }, is_string)?;
+    if constant.is_string() {
+        let is_null_terminated = constant.is_null_terminated_string();
+        writer.write_section_directive(AsmSectionDirective::ReadOnlyString { is_null_terminated })?;
+    } else {
+        writer.write_section_directive(AsmSectionDirective::ReadOnlyData { align: constant.alignment })?;
+    }
 
     // Alignment
     if constant.alignment > 1 {

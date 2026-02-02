@@ -22,8 +22,7 @@ fn invalid_declarators() {
     assert!(parse("(*my_ptr").is_none());
     assert!(parse("((*my_ptr)").is_none());
 
-    assert!(parse("array[-1]").is_none());
-    assert!(parse("array[2.5f]").is_none());
+    assert!(parse("array[;]").is_none());
     assert!(parse("array[array2]").is_none());
     assert!(parse("array[(void)]").is_none());
 }
@@ -50,21 +49,27 @@ fn variable_pointer_declarators() {
 
 #[test]
 fn array_declarators() {
-    assert!(is_array(parse("arr[]"), 0));
-    assert!(is_array(parse("zero[0]"), 0));
-    assert!(is_array(parse("one[1]"), 1));
-    assert!(is_array(parse("two[2]"), 2));
-    assert!(is_array(parse("char_lit_as_size['A']"), 65));
-    assert!(is_array(parse("char_lit_as_size['\\n']"), 10));
-    assert!(is_array(parse("(eleven[11])"), 11));
-    assert!(is_array(parse("((fifteen[15]))"), 15));
+    assert!(is_array(parse("arr[]")));
+    assert!(is_array(parse("zero[0]")));
+    assert!(is_array(parse("one[1]")));
+    assert!(is_array(parse("two[2]")));
+    assert!(is_array(parse("char_lit_as_size['A']")));
+    assert!(is_array(parse("char_lit_as_size['\\n']")));
+    assert!(is_array(parse("(eleven[11])")));
+    assert!(is_array(parse("((fifteen[15]))")));
+    assert!(is_array(parse("arr[3 + 3]")));
+    assert!(is_array(parse("arr[2 * 100]")));
+    assert!(is_array(parse("arr[-5]"))); // This is valid to parse but sema typecheck would return error
 
-    assert!(is_2d_array(parse("x[][3]"), 3, 0));
-    assert!(is_2d_array(parse("y[0][4]"), 4, 0));
-    assert!(is_2d_array(parse("coords[3][4]"), 4, 3));
-    assert!(is_3d_array(parse("lots[22][33][44]"), 44, 33, 22));
-    assert!(is_3d_array(parse("lits['A']['B']['C']"), 67, 66, 65));
-    assert!(is_3d_array(parse("hex_lits['\\xA']['\\xB']['\\xFF']"), 255, 11, 10));
+    assert!(is_2d_array(parse("x[][3]")));
+    assert!(is_2d_array(parse("y[0][4]")));
+    assert!(is_2d_array(parse("coords[3][4]")));
+    assert!(is_2d_array(parse("coords[3 + 1][4 - 1]")));
+
+    assert!(is_3d_array(parse("lots[22][33][44]")));
+    assert!(is_3d_array(parse("lots[20 + 2 + 1][30 + 3 + 1][40 + 4 + 1]")));
+    assert!(is_3d_array(parse("lits['A']['B']['C']")));
+    assert!(is_3d_array(parse("hex_lits['\\xA']['\\xB']['\\xFF']")));
 }
 
 #[test]
@@ -81,17 +86,19 @@ fn abstract_pointer_declarators() {
 
 #[test]
 fn abstract_array_declarators() {
-    assert!(is_abstract_array(parse("[]"), 0));
-    assert!(is_abstract_array(parse("[0]"), 0));
-    assert!(is_abstract_array(parse("[1]"), 1));
-    assert!(is_abstract_array(parse("[2]"), 2));
-    assert!(is_abstract_array(parse("([11])"), 11));
-    assert!(is_abstract_array(parse("(([15]))"), 15));
+    assert!(is_abstract_array(parse("[]")));
+    assert!(is_abstract_array(parse("[0]")));
+    assert!(is_abstract_array(parse("[1]")));
+    assert!(is_abstract_array(parse("[2]")));
+    assert!(is_abstract_array(parse("([11])")));
+    assert!(is_abstract_array(parse("(([15]))")));
+    assert!(is_abstract_array(parse("[1 + 2 + 3]")));
 
-    assert!(is_abstract_2d_array(parse("[][3]"), 3, 0));
-    assert!(is_abstract_2d_array(parse("[0][4]"), 4, 0));
-    assert!(is_abstract_2d_array(parse("[5][8]"), 8, 5));
-    assert!(is_abstract_2d_array(parse("[100][200]"), 200, 100));
+    assert!(is_abstract_2d_array(parse("[][3]")));
+    assert!(is_abstract_2d_array(parse("[0][4]")));
+    assert!(is_abstract_2d_array(parse("[5][8]")));
+    assert!(is_abstract_2d_array(parse("[100][200]")));
+    assert!(is_abstract_2d_array(parse("[100 - 100][200 - 200]")));
 }
 
 #[test]
@@ -273,60 +280,32 @@ fn is_abstract_pointer(declarator: Option<AstDeclarator>, expected_count: i32) -
     }
 }
 
-fn is_array(declarator: Option<AstDeclarator>, expected_size: usize) -> bool {
+fn is_array(declarator: Option<AstDeclarator>) -> bool {
     let declarator = declarator.unwrap();
-
-    match declarator.kind {
-        AstDeclaratorKind::Array { size, .. } => size == expected_size,
-
-        _ => return false,
-    }
+    matches!(declarator.kind, AstDeclaratorKind::Array { .. })
 }
 
-fn is_2d_array(declarator: Option<AstDeclarator>, dim1: usize, dim2: usize) -> bool {
+fn is_2d_array(declarator: Option<AstDeclarator>) -> bool {
     let declarator = declarator.unwrap();
 
-    if let AstDeclaratorKind::Array { decl, size } = declarator.kind {
-        assert_eq!(size, dim1);
-
-        is_array(Some(*decl), dim2)
-    } else {
-        false
-    }
+    if let AstDeclaratorKind::Array { decl, .. } = declarator.kind { is_array(Some(*decl)) } else { false }
 }
 
-fn is_3d_array(declarator: Option<AstDeclarator>, dim1: usize, dim2: usize, dim3: usize) -> bool {
+fn is_3d_array(declarator: Option<AstDeclarator>) -> bool {
     let declarator = declarator.unwrap();
 
-    if let AstDeclaratorKind::Array { decl, size } = declarator.kind {
-        assert_eq!(size, dim1);
-
-        is_2d_array(Some(*decl), dim2, dim3)
-    } else {
-        false
-    }
+    if let AstDeclaratorKind::Array { decl, .. } = declarator.kind { is_2d_array(Some(*decl)) } else { false }
 }
 
-fn is_abstract_array(declarator: Option<AstDeclarator>, expected_size: usize) -> bool {
+fn is_abstract_array(declarator: Option<AstDeclarator>) -> bool {
     let declarator = declarator.unwrap();
-
-    match declarator.kind {
-        AstDeclaratorKind::AbstractArray { size, .. } => size == expected_size,
-
-        _ => return false,
-    }
+    matches!(declarator.kind, AstDeclaratorKind::AbstractArray { .. })
 }
 
-fn is_abstract_2d_array(declarator: Option<AstDeclarator>, dim1: usize, dim2: usize) -> bool {
+fn is_abstract_2d_array(declarator: Option<AstDeclarator>) -> bool {
     let declarator = declarator.unwrap();
 
-    if let AstDeclaratorKind::Array { decl, size } = declarator.kind {
-        assert_eq!(size, dim1);
-
-        is_abstract_array(Some(*decl), dim2)
-    } else {
-        false
-    }
+    if let AstDeclaratorKind::Array { decl, .. } = declarator.kind { is_abstract_array(Some(*decl)) } else { false }
 }
 
 fn is_variable_pointer(declarator: Option<AstDeclarator>, expected_count: i32, expected_identifier: &str) -> bool {

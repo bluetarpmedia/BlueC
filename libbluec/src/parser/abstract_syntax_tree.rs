@@ -41,10 +41,19 @@ pub enum AstDeclaration {
 impl AstDeclaration {
     /// Gets the declared type of the declaration.
     pub fn get_declared_type(&self) -> &AstDeclaredType {
-        match &self {
+        match self {
             AstDeclaration::Variable(var_decl) => &var_decl.declared_type,
             AstDeclaration::Function(fn_decl) => &fn_decl.declared_type,
             AstDeclaration::TypeAlias(alias_decl) => alias_decl.decl.get_declared_type(),
+        }
+    }
+
+    /// Gets the unique name of the declaration.
+    pub fn unique_name(&self) -> &AstUniqueName {
+        match self {
+            AstDeclaration::Variable(var_decl) => &var_decl.unique_name,
+            AstDeclaration::Function(fn_decl) => &fn_decl.unique_name,
+            AstDeclaration::TypeAlias(alias_decl) => alias_decl.decl.unique_name(),
         }
     }
 }
@@ -159,7 +168,7 @@ pub enum AstForInitializer {
 }
 
 /// A full expression is an expression that is not a subexpression of another expression.
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct AstFullExpression {
     pub node_id: AstNodeId,
     pub expr: AstExpression,
@@ -173,7 +182,7 @@ impl AstFullExpression {
 }
 
 /// An expression, which may in fact be a subexpression inside a tree of a larger expression.
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum AstExpression {
     UnaryOperation {
         node_id: AstNodeId,
@@ -299,6 +308,27 @@ impl AstExpression {
         )
     }
 
+    /// Is the AST expression a literal?
+    pub fn is_literal(&self) -> bool {
+        matches!(
+            self,
+            AstExpression::CharLiteral { .. }
+                | AstExpression::StringLiteral { .. }
+                | AstExpression::IntegerLiteral { .. }
+                | AstExpression::FloatLiteral { .. }
+        )
+    }
+
+    /// Is the AST expression an arithmetic (character, integer or floating-point) literal?
+    pub fn is_arithmetic_literal(&self) -> bool {
+        matches!(
+            self,
+            AstExpression::CharLiteral { .. }
+                | AstExpression::IntegerLiteral { .. }
+                | AstExpression::FloatLiteral { .. }
+        )
+    }
+
     /// Is the AST expression a string literal?
     pub fn is_string_literal(&self) -> bool {
         matches!(self, AstExpression::StringLiteral { .. })
@@ -320,13 +350,24 @@ impl AstExpression {
         }
     }
 
-    /// Is the AST expression an arithmetic (integer or floating-point) literal?
-    pub fn is_arithmetic_literal(&self) -> bool {
-        matches!(
-            self,
-            AstExpression::CharLiteral { .. }
-                | AstExpression::IntegerLiteral { .. }
-                | AstExpression::FloatLiteral { .. }
-        )
+    /// Is the AST expression an identifier of the given declared name?
+    pub fn is_identifier_with_name(&self, declared_name: &str) -> bool {
+        if let AstExpression::Identifier { name, .. } = self { name == declared_name } else { false }
+    }
+
+    /// Is the AST expression a binary operation?
+    pub fn is_binary_expr(&self) -> bool {
+        matches!(self, AstExpression::BinaryOperation { .. })
+    }
+
+    /// Is the AST expression a binary operation with the given operator?
+    pub fn is_binary_expr_with_op(&self, op: AstBinaryOp) -> bool {
+        if let AstExpression::BinaryOperation { op: binary_op, .. } = self
+            && *binary_op == op
+        {
+            true
+        } else {
+            false
+        }
     }
 }

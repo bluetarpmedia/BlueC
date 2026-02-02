@@ -1,17 +1,13 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 
-use std::io::BufReader;
-use std::io::Cursor;
 use std::vec;
 
-use crate::compiler_driver;
-use crate::lexer;
-use crate::parser;
-use crate::parser::AstType;
+use crate::compiler_driver::Driver;
 use crate::parser::recursive_descent;
+use crate::parser::tests::utils;
+use crate::parser::{AstType, Parser};
 
 use super::super::type_check;
-use super::super::type_resolution;
 
 #[test]
 fn invalid_types() {
@@ -32,7 +28,7 @@ fn invalid_types() {
 
 #[test]
 fn simple_variables() {
-    let mut driver = compiler_driver::Driver::for_testing();
+    let mut driver = Driver::for_testing();
 
     verify_types(&mut driver, "int a;", vec![AstType::Int]);
     verify_types(&mut driver, "int (a);", vec![AstType::Int]);
@@ -50,7 +46,7 @@ fn simple_variables() {
 
 #[test]
 fn pointer_variables() {
-    let mut driver = compiler_driver::Driver::for_testing();
+    let mut driver = Driver::for_testing();
 
     verify_types(&mut driver, "int*a;", vec![AstType::new_pointer_to(AstType::Int)]);
     verify_types(&mut driver, "int *a;", vec![AstType::new_pointer_to(AstType::Int)]);
@@ -99,7 +95,7 @@ fn pointer_variables() {
 
 #[test]
 fn arrays() {
-    let mut driver = compiler_driver::Driver::for_testing();
+    let mut driver = Driver::for_testing();
 
     verify_types(&mut driver, "int array[3];", vec![AstType::new_array(AstType::Int, 3)]);
     verify_types(&mut driver, "int array[3][5];", vec![AstType::new_array(AstType::new_array(AstType::Int, 5), 3)]);
@@ -136,7 +132,7 @@ fn arrays() {
 
 #[test]
 fn functions() {
-    let mut driver = compiler_driver::Driver::for_testing();
+    let mut driver = Driver::for_testing();
 
     verify_types(&mut driver, "int main(void);", vec![AstType::new_fn(AstType::Int, vec![])]);
     verify_types(&mut driver, "void no_op(void);", vec![AstType::new_fn(AstType::Void, vec![])]);
@@ -192,7 +188,7 @@ fn functions() {
 
 #[test]
 fn function_pointers() {
-    let mut driver = compiler_driver::Driver::for_testing();
+    let mut driver = Driver::for_testing();
 
     verify_types(&mut driver, "int (*fn)(void);", vec![AstType::new_pointer_to(AstType::new_fn(AstType::Int, vec![]))]);
 
@@ -229,7 +225,7 @@ fn function_pointers() {
 
 #[test]
 fn type_aliases() {
-    let mut driver = compiler_driver::Driver::for_testing();
+    let mut driver = Driver::for_testing();
 
     verify_types(&mut driver, "typedef float* MyF32Ptr;", vec![AstType::new_pointer_to(AstType::Float)]);
     verify_types(
@@ -254,7 +250,7 @@ fn type_aliases() {
 
 #[test]
 fn string_round_trip() {
-    let mut driver = compiler_driver::Driver::for_testing();
+    let mut driver = Driver::for_testing();
 
     {
         let expected_t = AstType::new_array(AstType::new_array(AstType::new_array(AstType::Int, 55), 44), 33);
@@ -264,8 +260,8 @@ fn string_round_trip() {
 }
 
 fn verify_sema_error(source: &str) {
-    let mut driver = compiler_driver::Driver::for_testing();
-    let mut parser = make_parser(&mut driver, source);
+    let mut driver = Driver::for_testing();
+    let mut parser = utils::make_parser(&mut driver, source);
     let parsed = recursive_descent::parse_translation_unit(&mut parser, &mut driver);
 
     if parsed.is_err() {
@@ -280,13 +276,15 @@ fn verify_sema_error(source: &str) {
     assert!(!driver.has_error_diagnostics(), "Did not expect errors after parsing");
 
     let mut ast_root = parsed.unwrap();
+    let Parser { metadata, .. } = parser;
+    let mut chk = type_check::TypeChecker::new(metadata);
 
-    _ = type_check::type_check(&mut ast_root, parser.metadata, &mut driver);
+    _ = type_check::type_check(&mut ast_root, &mut chk, &mut driver);
 
     assert!(driver.has_error_diagnostics(), "Expect errors after sema type checking");
 }
 
-fn verify_types(driver: &mut compiler_driver::Driver, source: &str, expected: Vec<AstType>) {
+fn verify_types(driver: &mut Driver, source: &str, expected: Vec<AstType>) {
     let types = parse_and_resolve_types(driver, source);
     if expected.is_empty() && types.is_none() {
         return;
@@ -301,8 +299,8 @@ fn verify_types(driver: &mut compiler_driver::Driver, source: &str, expected: Ve
     assert_eq!(types, expected);
 }
 
-fn parse_and_resolve_types(driver: &mut compiler_driver::Driver, source: &str) -> Option<Vec<AstType>> {
-    let mut parser = make_parser(driver, source);
+fn parse_and_resolve_types(driver: &mut Driver, source: &str) -> Option<Vec<AstType>> {
+    let mut parser = utils::make_parser(driver, source);
     let parsed = recursive_descent::parse_translation_unit(&mut parser, driver);
 
     if parsed.is_err() {
@@ -311,24 +309,16 @@ fn parse_and_resolve_types(driver: &mut compiler_driver::Driver, source: &str) -
         return None;
     }
     let mut ast_root = parsed.unwrap();
+    let Parser { metadata, .. } = parser;
+    let mut chk = type_check::TypeChecker::new(metadata);
 
-    let (mut symbols, ..) = type_check::type_check(&mut ast_root, parser.metadata, driver);
+    type_check::type_check(&mut ast_root, &mut chk, driver);
 
     let decls = ast_root.0;
     let types = decls
         .into_iter()
-        .filter_map(|decl| {
-            let declared_type = decl.get_declared_type();
-            type_resolution::resolve_declared_type(declared_type, Some(&mut symbols), Some(driver)).ok()
-        })
+        .filter_map(|decl| chk.symbols.get(decl.unique_name()).and_then(|sym| Some(sym.data_type.clone())))
         .collect();
 
     Some(types)
-}
-
-fn make_parser(driver: &mut compiler_driver::Driver, source: &str) -> parser::Parser {
-    let cursor = Cursor::new(source.as_bytes());
-    let mut reader = BufReader::new(cursor);
-    let tokens = lexer::lex_buf_reader(driver, &mut reader);
-    parser::Parser::new(tokens)
 }
