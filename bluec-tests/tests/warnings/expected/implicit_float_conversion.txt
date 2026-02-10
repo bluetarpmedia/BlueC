@@ -1,0 +1,22 @@
+warning: Implicit conversion from 'double' to 'float' loses precision
+         [-Wimplicit-float-conversion]
+   |
+   |     float f = d;
+   |               ^
+   |
+
+warning: Implicit conversion from 'double' to 'float' loses precision
+         [-Wimplicit-float-conversion]
+   |
+   |     f = d;
+   |         ^
+   |
+
+warning: Implicit conversion from 'double' to 'float' loses precision
+         [-Wimplicit-float-conversion]
+   |
+   |     f += d;
+   |          ^
+   |
+
+3 warnings generated

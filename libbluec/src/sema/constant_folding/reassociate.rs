@@ -111,7 +111,7 @@ fn rebuild_tree(
 
         chk.metadata.propagate_const_flag_from_children(&[left.node_id(), right.node_id()], node_id);
 
-        current_expr = AstExpression::BinaryOperation { op, left: Box::new(left), right: Box::new(right), node_id };
+        current_expr = AstExpression::BinaryOperation { node_id, op, left: Box::new(left), right: Box::new(right) };
     }
 
     current_expr

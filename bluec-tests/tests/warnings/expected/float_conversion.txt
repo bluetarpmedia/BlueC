@@ -1,0 +1,22 @@
+warning: Implicit conversion from 'float' to 'int' may change its value
+         [-Wfloat-conversion]
+   |
+   |     int x = f;
+   |             ^
+   |
+
+warning: Implicit conversion from 'float' to 'int' may change its value
+         [-Wfloat-conversion]
+   |
+   |     x = f;
+   |         ^
+   |
+
+warning: Implicit conversion from 'float' to 'int' may change its value
+         [-Wfloat-conversion]
+   |
+   |     x += f;
+   |          ^
+   |
+
+3 warnings generated

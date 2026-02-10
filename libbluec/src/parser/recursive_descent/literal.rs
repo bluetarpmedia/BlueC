@@ -10,7 +10,7 @@ use crate::lexer;
 use super::super::AstExpressionFlag;
 use super::hex_float;
 use super::utils;
-use super::{AstExpression, AstFloatLiteralKind, AstIntegerLiteralKind, AstNodeId};
+use super::{AstExpression, AstFloatLiteralKind, AstIntegerLiteralKind, AstNodeId, AstType};
 use super::{ParseError, ParseResult, Parser, add_error};
 
 /// Parses a character literal.
@@ -168,19 +168,28 @@ pub fn parse_float_literal(parser: &mut Parser, driver: &mut Driver) -> ParseRes
 
     // Convert the literal string into an f64.
     let value = match base {
-        lexer::NumericLiteralBase::Decimal => literal.parse::<f64>().map_err(|_parse_float_err| {
-            add_error(driver, "Cannot parse floating-point literal", token.location);
-            ParseError
-        }),
-        lexer::NumericLiteralBase::Hex => match suffix {
-            Some(suffix) => match suffix {
-                lexer::FloatLiteralSuffix::F => {
-                    parse_hex_float_literal_as_f32(&literal, token.location, driver).map(|value| value as f64)
-                }
-                lexer::FloatLiteralSuffix::L => parse_hex_float_literal_as_f64(&literal, token.location, driver),
-            },
-            None => parse_hex_float_literal_as_f64(&literal, token.location, driver),
+        // Decimal float literal
+        lexer::NumericLiteralBase::Decimal => match suffix {
+            Some(lexer::FloatLiteralSuffix::F) => {
+                parse_decimal_float_literal_as_f32(&literal, token.location, driver).map(|value| value as f64)
+            }
+            Some(lexer::FloatLiteralSuffix::L) => {
+                parse_decimal_float_literal_as_f64(&literal, true, token.location, driver).map(|value| value as f64)
+            }
+            _ => parse_decimal_float_literal_as_f64(&literal, false, token.location, driver),
         },
+
+        // Hex float literal
+        lexer::NumericLiteralBase::Hex => match suffix {
+            Some(lexer::FloatLiteralSuffix::F) => {
+                parse_hex_float_literal_as_f32(&literal, token.location, driver).map(|value| value as f64)
+            }
+            Some(lexer::FloatLiteralSuffix::L) => {
+                parse_hex_float_literal_as_f64(&literal, true, token.location, driver)
+            }
+            _ => parse_hex_float_literal_as_f64(&literal, false, token.location, driver),
+        },
+
         _ => ICE!("Invalid base for float literal"),
     }?;
 
@@ -199,28 +208,89 @@ pub fn parse_float_literal(parser: &mut Parser, driver: &mut Driver) -> ParseRes
     Ok(AstExpression::FloatLiteral { node_id, literal, literal_base: base.as_int(), value, kind })
 }
 
+fn parse_decimal_float_literal_as_f64(
+    literal: &str,
+    long_double: bool,
+    literal_loc: SourceLocation,
+    driver: &mut Driver,
+) -> ParseResult<f64> {
+    let value = literal.parse::<f64>().map_err(|_parse_float_err| {
+        add_error(driver, "Cannot parse floating-point literal", literal_loc);
+        ParseError
+    });
+
+    if let Ok(value) = value
+        && value.is_infinite()
+    {
+        let ty = if long_double { &AstType::LongDouble } else { &AstType::Double };
+        Warning::literal_range(ty, literal_loc, driver);
+    }
+
+    value
+}
+
+fn parse_decimal_float_literal_as_f32(
+    literal: &str,
+    literal_loc: SourceLocation,
+    driver: &mut Driver,
+) -> ParseResult<f32> {
+    let value = literal.parse::<f32>().map_err(|_parse_float_err| {
+        add_error(driver, "Cannot parse floating-point literal", literal_loc);
+        ParseError
+    });
+
+    if let Ok(value) = value
+        && value.is_infinite()
+    {
+        Warning::literal_range(&AstType::Float, literal_loc, driver);
+    }
+
+    value
+}
+
 #[cfg(feature = "hex-float-literal")]
-fn parse_hex_float_literal_as_f64(literal: &str, literal_loc: SourceLocation, driver: &mut Driver) -> ParseResult<f64> {
-    hex_float::parse_as_f64(literal)
+fn parse_hex_float_literal_as_f64(
+    literal: &str,
+    long_double: bool,
+    literal_loc: SourceLocation,
+    driver: &mut Driver,
+) -> ParseResult<f64> {
+    let value = hex_float::parse_as_f64(literal)
         .map_err(|parse_hex_float_err| match parse_hex_float_err {
             hex_float::ParseHexFloatErr::OutOfRange => {
-                add_error(driver, "Floating-point constant is too large for type 'double'", literal_loc)
+                let ty = if long_double { &AstType::LongDouble } else { &AstType::Double };
+                Warning::literal_range(ty, literal_loc, driver);
             }
             _ => add_error(driver, "Cannot parse floating-point literal", literal_loc),
         })
-        .map_err(|_| ParseError)
+        .map_err(|_| ParseError);
+
+    if let Ok(value) = value
+        && value.is_infinite()
+    {
+        let ty = if long_double { &AstType::LongDouble } else { &AstType::Double };
+        Warning::literal_range(ty, literal_loc, driver);
+    }
+
+    value
 }
 
 #[cfg(feature = "hex-float-literal")]
 fn parse_hex_float_literal_as_f32(literal: &str, literal_loc: SourceLocation, driver: &mut Driver) -> ParseResult<f32> {
-    hex_float::parse_as_f32(literal)
+    let value = hex_float::parse_as_f32(literal)
         .map_err(|parse_hex_float_err| match parse_hex_float_err {
-            hex_float::ParseHexFloatErr::OutOfRange => {
-                add_error(driver, "Floating-point constant is too large for type 'float'", literal_loc)
-            }
+            hex_float::ParseHexFloatErr::OutOfRange => Warning::literal_range(&AstType::Float, literal_loc, driver),
             _ => add_error(driver, "Cannot parse floating-point literal", literal_loc),
         })
-        .map_err(|_| ParseError)
+        .map_err(|_| ParseError);
+
+    if let Ok(value) = value
+        && value.is_infinite()
+    {
+        Warning::literal_range(&AstType::Float, literal_loc, driver);
+    }
+
+    value
 }
 
 #[cfg(not(feature = "hex-float-literal"))]

@@ -197,7 +197,7 @@ pub enum AstExpression {
     },
     Assignment {
         node_id: AstNodeId,
-        computation_node_id: AstNodeId,
+        computation_node_id: AstNodeId, // For a compound assignment; used by sema to annotate computation type
         op: AstAssignmentOp,
         lhs: Box<AstExpression>,
         rhs: Box<AstExpression>,
@@ -231,6 +231,7 @@ pub enum AstExpression {
         node_id: AstNodeId,
         target_type: AstDeclaredType,
         expr: Box<AstExpression>,
+        is_implicit: bool, // Was the cast expression added by sema/type checking
     },
     Identifier {
         node_id: AstNodeId,

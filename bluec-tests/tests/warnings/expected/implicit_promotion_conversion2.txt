@@ -1,0 +1,49 @@
+warning: Implicit conversion from promoted type 'int' to 'char' may change its value
+         [-Wimplicit-promotion-conversion]
+   |
+   |     a += -b;
+   |          ^^
+   |
+note: Expression was promoted to 'int' as part of C language integer promotion rules.
+      Wrap the expression in a cast to 'char' to silence this warning.
+   |
+   | (char)(...)
+   |
+
+warning: Implicit conversion from promoted type 'int' to 'char' may change its value
+         [-Wimplicit-promotion-conversion]
+   |
+   |     a += b + b;
+   |          ^^^^^
+   |
+note: Expression was promoted to 'int' as part of C language integer promotion rules.
+      Wrap the expression in a cast to 'char' to silence this warning.
+   |
+   | (char)(...)
+   |
+
+warning: Implicit conversion from promoted type 'int' to 'short' may change its value
+         [-Wimplicit-promotion-conversion]
+   |
+   |     x += -y;
+   |          ^^
+   |
+note: Expression was promoted to 'int' as part of C language integer promotion rules.
+      Wrap the expression in a cast to 'short' to silence this warning.
+   |
+   | (short)(...)
+   |
+
+warning: Implicit conversion from promoted type 'int' to 'short' may change its value
+         [-Wimplicit-promotion-conversion]
+   |
+   |     x += y * a;
+   |          ^^^^^
+   |
+note: Expression was promoted to 'int' as part of C language integer promotion rules.
+      Wrap the expression in a cast to 'short' to silence this warning.
+   |
+   | (short)(...)
+   |
+
+4 warnings generated

@@ -15,7 +15,7 @@ use super::Diagnostic;
 pub struct Warning;
 
 impl Warning {
-    /// Emits an implicit conversion warning for a numeric literal, optionally with a change in signedness.
+    /// Emits an implicit conversion warning for a constant that changes value.
     ///
     /// -Wconstant-conversion
     pub fn constant_conversion(
@@ -23,30 +23,130 @@ impl Warning {
         new_type: &AstType,
         old_value: &str,
         new_value: &str,
-        sign_change: bool,
         loc: SourceLocation,
         driver: &mut Driver,
     ) {
         let kind = WarningKind::ConstantConversion;
+        let message = format!(
+            "Implicit conversion from '{old_type}' to '{new_type}' changes value from {old_value} to {new_value}"
+        );
+        driver.add_diagnostic(Diagnostic::warning_at_location(kind, message, loc));
+    }
 
-        let message = if sign_change {
-            format!(
-                "Implicit conversion from '{old_type}' to '{new_type}' changes signedness \
-                    and value from {old_value} to {new_value}"
-            )
+    /// Emits a warning about an undefined division/remainder by zero.
+    ///
+    /// -Wdivision-by-zero
+    pub fn division_by_zero(
+        op: &AstBinaryOp,
+        op_loc: SourceLocation,
+        zero_expr_loc: SourceLocation,
+        driver: &mut Driver,
+    ) {
+        let kind = WarningKind::DivisionByZero;
+        let message = if *op == AstBinaryOp::Divide {
+            "Division by zero is undefined".to_string()
+        } else if *op == AstBinaryOp::Remainder {
+            "Remainder by zero is undefined".to_string()
         } else {
-            format!(
-                "Implicit conversion from '{old_type}' to '{new_type}' changes value from \
-                    {old_value} to {new_value}"
-            )
+            ICE!("AstBinaryOp should be Divide or Remainder");
         };
 
+        let mut diag = Diagnostic::warning_at_location(kind, message, op_loc);
+        diag.add_location(zero_expr_loc);
+        driver.add_diagnostic(diag);
+    }
+
+    /// Emits a warning that a shift count is negative.
+    ///
+    /// -Wshift-count-negative
+    pub fn shift_count_negative(loc: SourceLocation, driver: &mut Driver) {
+        let kind = WarningKind::ShiftCountNegative;
+        let message = "Shift count is negative".to_string();
         driver.add_diagnostic(Diagnostic::warning_at_location(kind, message, loc));
+    }
+
+    /// Emits a warning that a shift count is zero.
+    ///
+    /// -Wshift-count-zero
+    pub fn shift_count_zero(loc: SourceLocation, driver: &mut Driver) {
+        let kind = WarningKind::ShiftCountZero;
+        let message = "Shift count is zero and has no effect".to_string();
+        driver.add_diagnostic(Diagnostic::warning_at_location(kind, message, loc));
+    }
+
+    /// Emits a warning that a shift count is >= the valid number of bits for the type.
+    ///
+    /// -Wshift-count-overflow
+    pub fn shift_count_overflow(
+        bits_allowed: usize,
+        expr_promoted_to_int: bool,
+        loc: SourceLocation,
+        driver: &mut Driver,
+    ) {
+        let kind = WarningKind::ShiftCountOverflow;
+        let message = format!("Shift count >= width of the type in bits ({bits_allowed})");
+        let mut diag = Diagnostic::warning_at_location(kind, message, loc);
+        if expr_promoted_to_int {
+            let note = "Expression was promoted to 'int' as part of C language integer promotion rules.";
+            diag.add_note(note.into(), None);
+        }
+        driver.add_diagnostic(diag);
+    }
+
+    /// Emits a warning about an integer overflow in an expression.
+    ///
+    /// -Winteger-overflow
+    pub fn integer_overflow(int_type: &AstType, new_value: &str, loc: SourceLocation, driver: &mut Driver) {
+        let kind = WarningKind::IntegerOverflow;
+        let message = format!(
+            "Integer overflow in expression of type '{int_type}'; \
+            the value after overflow is {new_value}"
+        );
+        driver.add_diagnostic(Diagnostic::warning_at_location(kind, message, loc));
+    }
+
+    /// Emits a warning about a floating-point overflow in an expression.
+    ///
+    /// -Wfloating-point-overflow
+    pub fn floating_point_overflow(fp_type: &AstType, new_value: &str, loc: SourceLocation, driver: &mut Driver) {
+        let kind = WarningKind::FloatingPointOverflow;
+        let message = format!(
+            "Floating-point overflow in expression of type '{fp_type}'; \
+            the value after overflow is {new_value}"
+        );
+        driver.add_diagnostic(Diagnostic::warning_at_location(kind, message, loc));
+    }
+
+    /// Emits an implicit conversion warning where an expression that was promoted to 'int' is now implicitly
+    /// converted and loses precision.
+    ///
+    /// -Wimplicit-promotion-conversion
+    pub fn implicit_int_promotion_conversion(
+        old_type: &AstType,
+        new_type: &AstType,
+        loc: SourceLocation,
+        driver: &mut Driver,
+    ) {
+        let kind = WarningKind::ImplicitPromotionConversion;
+        let message =
+            format!("Implicit conversion from promoted type '{old_type}' to '{new_type}' may change its value");
+
+        let mut diag = Diagnostic::warning_at_location(kind, message, loc);
+
+        let note = format!(
+            "Expression was promoted to 'int' as part of C language integer promotion rules. \
+                Wrap the expression in a cast to '{new_type}' to silence this warning."
+        );
+        let suggested_code = format!("({new_type})(...)");
+        diag.add_note_with_suggested_code(note, suggested_code, None);
+
+        driver.add_diagnostic(diag);
     }
 
     /// Emits an implicit conversion warning for an arithmetic type, where the conversion either changes signedness
     /// or results in precision loss.
     ///
+    /// -Wimplicit-conversion
     /// -Wimplicit-int-conversion
     /// -Wimplicit-float-conversion
     /// -Wsign-conversion
@@ -56,11 +156,20 @@ impl Warning {
         loc: SourceLocation,
         driver: &mut Driver,
     ) {
+        let float_to_int = old_type.is_floating_point() && new_type.is_integer();
+        let int_to_float = old_type.is_integer() && new_type.is_floating_point();
+
         let precision_loss = new_type.bits() < old_type.bits();
         let sign_change = (old_type.is_signed_integer() && new_type.is_unsigned_integer())
             || (new_type.is_signed_integer() && old_type.is_unsigned_integer());
 
-        let (kind, message) = if sign_change && precision_loss {
+        let (kind, message) = if float_to_int {
+            let kind = WarningKind::FloatConversion; // Float-to-int
+            (kind, format!("Implicit conversion from '{old_type}' to '{new_type}' may change its value"))
+        } else if int_to_float {
+            let kind = WarningKind::ImplicitIntFloatConversion; // Int-to-float
+            (kind, format!("Implicit conversion from '{old_type}' to '{new_type}' may change its value"))
+        } else if sign_change && precision_loss {
             let kind = WarningKind::SignConversion;
             (
                 kind,
@@ -73,7 +182,7 @@ impl Warning {
             let kind = if old_type.is_integer() {
                 WarningKind::ImplicitIntConversion
             } else if old_type.is_floating_point() {
-                WarningKind::ImplicitFloatConversion
+                WarningKind::ImplicitFloatConversion // Float-to-float
             } else {
                 WarningKind::ImplicitConversion
             };
@@ -154,6 +263,19 @@ impl Warning {
         driver.add_diagnostic(Diagnostic::warning_at_location(kind, warning, variable.1));
     }
 
+    /// Emits a warning that a literal constant value is outside the type's valid range.
+    ///
+    /// -Wliteral-range
+    pub fn literal_range(literal_type: &AstType, loc: SourceLocation, driver: &mut Driver) {
+        let kind = WarningKind::LiteralRange;
+        let warning = if let Some(valid_range_str) = literal_type.valid_range_as_str() {
+            format!("Constant value is too large for literal type '{literal_type}'; valid range is {valid_range_str}")
+        } else {
+            format!("Constant value is too large for literal type '{literal_type}'")
+        };
+        driver.add_diagnostic(Diagnostic::warning_at_location(kind, warning, loc));
+    }
+
     /// Emits a warning that an integer literal is too large to be interpreted as signed and therefore is implicitly
     /// converted to unsigned.
     ///
@@ -163,6 +285,43 @@ impl Warning {
         let warning = "Integer literal is interpreted as unsigned because it is too large \
                        for a signed integer type";
         driver.add_diagnostic(Diagnostic::warning_at_location(kind, warning.to_string(), loc));
+    }
+
+    /// Emits a warning that the value result of an expression (with no side-effects) is unused.
+    ///
+    /// -Wunused-value
+    pub fn unused_value(loc: SourceLocation, driver: &mut Driver) {
+        let kind = WarningKind::UnusedValue;
+        let warning = "Expression result is unused; the statement has no effect".to_string();
+        driver.add_diagnostic(Diagnostic::warning_at_location(kind, warning, loc));
+    }
+
+    /// Emits a warning that the comparison result of an expression (with no side-effects) is unused.
+    ///
+    /// -Wunused-comparison
+    pub fn unused_comparison(op: AstBinaryOp, loc: SourceLocation, driver: &mut Driver) {
+        let kind = WarningKind::UnusedComparison;
+
+        let (warning, note) = if op == AstBinaryOp::EqualTo {
+            (
+                "Equality comparison result of expression is unused; the statement has no effect",
+                Some("Did you mean to use '=' for an assignment?"),
+            )
+        } else if op == AstBinaryOp::NotEqualTo {
+            (
+                "Inequality comparison result of expression is unused; the statement has no effect",
+                Some("Did you mean to use '|=' for an Or compound assignment?"),
+            )
+        } else {
+            ("Relational comparison result of expression is unused; the statement has no effect", None)
+        };
+
+        let mut diag = Diagnostic::warning_at_location(kind, warning.to_string(), loc);
+        if let Some(note) = note {
+            diag.add_note(note.to_string(), None);
+        }
+
+        driver.add_diagnostic(diag);
     }
 
     /// Emits a warning that a symbol is unused.
@@ -190,8 +349,8 @@ impl Warning {
     pub fn mixed_operators_missing_parens(
         child_expr_op: AstBinaryOp,
         parent_expr_op: AstBinaryOp,
-        child_expr_loc: SourceLocation,
-        parent_expr_loc: SourceLocation,
+        child_op_loc: SourceLocation,
+        parent_op_loc: SourceLocation,
         driver: &mut Driver,
     ) {
         let same_family = child_expr_op.family() == parent_expr_op.family();
@@ -230,19 +389,19 @@ impl Warning {
             WarningKind::Parentheses
         };
 
-        let mut diag = Diagnostic::warning_at_location(kind, warning, parent_expr_loc);
-        diag.add_location(child_expr_loc);
+        let mut diag = Diagnostic::warning_at_location(kind, warning, parent_op_loc);
+        diag.add_location(child_op_loc);
 
         let note = format!(
             "\
             Add parentheses around the '{child_op_str}' expression to clarify the precedence \
             of operations to readers of this source code."
         );
-        diag.add_note(note, Some(child_expr_loc));
+        diag.add_note(note, Some(child_op_loc));
 
         if add_note_about_parent_op {
             let note = format!("Or add parentheses around the '{parent_op_str}' expression to evaluate it first.");
-            diag.add_note(note, Some(parent_expr_loc));
+            diag.add_note(note, Some(parent_op_loc));
         }
 
         driver.add_diagnostic(diag);
@@ -290,7 +449,7 @@ impl Warning {
     /// Emits a warning that two different pointer types are being compared.
     ///
     /// -Wcompare-distinct-pointer-types
-    pub fn compare_different_pointer_types(
+    pub fn compare_distinct_pointer_types(
         a: &AstType,
         b: &AstType,
         cmp_loc: SourceLocation,
@@ -312,14 +471,14 @@ impl Warning {
     pub fn compare_pointer_and_integer(
         ptr_type: &AstType,
         int_type: &AstType,
-        cmp_loc: SourceLocation,
+        op_loc: SourceLocation,
         ptr_loc: SourceLocation,
         int_loc: SourceLocation,
         driver: &mut Driver,
     ) {
         let kind = WarningKind::PointerIntegerCompare;
         let warning = format!("Comparison between pointer type '{ptr_type}' and integer type '{int_type}'");
-        let mut diag = Diagnostic::warning_at_location(kind, warning, cmp_loc);
+        let mut diag = Diagnostic::warning_at_location(kind, warning, op_loc);
         diag.add_location(ptr_loc);
         diag.add_location(int_loc);
         driver.add_diagnostic(diag);
@@ -363,14 +522,14 @@ impl Warning {
     pub fn conditional_type_mismatch(
         a: &AstType,
         b: &AstType,
-        ternary_loc: SourceLocation,
+        ternary_op_loc: SourceLocation,
         a_loc: SourceLocation,
         b_loc: SourceLocation,
         driver: &mut Driver,
     ) {
         let kind = WarningKind::ConditionalTypeMismatch;
         let warning = format!("Type mismatch in conditional expression ('{a}' and '{b}')");
-        let mut diag = Diagnostic::warning_at_location(kind, warning, ternary_loc);
+        let mut diag = Diagnostic::warning_at_location(kind, warning, ternary_op_loc);
         diag.add_location(a_loc);
         diag.add_location(b_loc);
         driver.add_diagnostic(diag);
@@ -382,14 +541,14 @@ impl Warning {
     pub fn pointer_type_mismatch(
         a: &AstType,
         b: &AstType,
-        expr_loc: SourceLocation,
+        operator_loc: SourceLocation,
         a_loc: SourceLocation,
         b_loc: SourceLocation,
         driver: &mut Driver,
     ) {
         let kind = WarningKind::PointerTypeMismatch;
         let warning = format!("Pointer type mismatch ('{a}' and '{b}')");
-        let mut diag = Diagnostic::warning_at_location(kind, warning, expr_loc);
+        let mut diag = Diagnostic::warning_at_location(kind, warning, operator_loc);
         diag.add_location(a_loc);
         diag.add_location(b_loc);
         driver.add_diagnostic(diag);

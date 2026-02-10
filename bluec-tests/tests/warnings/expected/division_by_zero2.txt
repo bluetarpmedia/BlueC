@@ -1,0 +1,28 @@
+error: Initializer must be a constant expression for a variable with static storage
+       duration
+   |
+   | int a = 100 / 0;
+   |         ^^^^^^^
+   |
+
+error: Initializer must be a constant expression for a variable with static storage
+       duration
+   |
+   | int b = 1 / (1000 - 1000);
+   |         ^^^^^^^^^^^^^^^^^
+   |
+
+warning: Division by zero is undefined [-Wdivision-by-zero]
+   |
+   | int a = 100 / 0;
+   |             ^ ~
+   |
+
+warning: Division by zero is undefined [-Wdivision-by-zero]
+   |
+   | int b = 1 / (1000 - 1000);
+   |           ^ ~~~~~~~~~~~~~
+   |
+
+2 errors generated
+2 warnings generated

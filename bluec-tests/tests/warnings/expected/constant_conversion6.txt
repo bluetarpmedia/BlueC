@@ -1,0 +1,8 @@
+warning: Implicit conversion from 'int' to 'char' changes value from 194 to -62
+         [-Wconstant-conversion]
+   |
+   |     c += 'a' + 'a';
+   |          ^^^^^^^^^
+   |
+
+1 warning generated

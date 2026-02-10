@@ -43,13 +43,15 @@ impl Diagnostic {
 
     /// Creates an error diagnostic with the given error message and source code location.
     pub fn error_at_location(message: String, loc: SourceLocation) -> Self {
-        Self { kind: DiagnosticKind::Error, message, locations: vec![loc], notes: None }
+        let locations = if loc == SourceLocation::none() { Vec::new() } else { vec![loc] };
+        Self { kind: DiagnosticKind::Error, message, locations, notes: None }
     }
 
     /// Creates a new warning diagnostic with the given message and source code location.
     pub fn warning_at_location(kind: WarningKind, message: String, loc: SourceLocation) -> Self {
         let message = format!("{message} [-W{kind}]");
-        Self { kind: DiagnosticKind::Warning(kind), message, locations: vec![loc], notes: None }
+        let locations = if loc == SourceLocation::none() { Vec::new() } else { vec![loc] };
+        Self { kind: DiagnosticKind::Warning(kind), message, locations, notes: None }
     }
 
     /// Consumes the diagnostic and returns an equivalent with its kind set to `DiagnosticKind:Error`.

@@ -1,0 +1,37 @@
+warning: Expression result is unused; the statement has no effect [-Wunused-value]
+   |
+   |     -a;
+   |     ^^
+   |
+
+warning: Expression result is unused; the statement has no effect [-Wunused-value]
+   |
+   |     +a;
+   |     ^^
+   |
+
+warning: Expression result is unused; the statement has no effect [-Wunused-value]
+   |
+   |     ~a;
+   |     ^^
+   |
+
+warning: Expression result is unused; the statement has no effect [-Wunused-value]
+   |
+   |     !a;
+   |     ^^
+   |
+
+warning: Expression result is unused; the statement has no effect [-Wunused-value]
+   |
+   |     &a;
+   |     ^^
+   |
+
+warning: Expression result is unused; the statement has no effect [-Wunused-value]
+   |
+   |     *ptr;
+   |     ^^^^
+   |
+
+6 warnings generated

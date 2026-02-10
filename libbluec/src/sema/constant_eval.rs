@@ -2,14 +2,17 @@
 //
 //! The `constant_eval` module provides functionality to evaluate expressions at compile-time.
 
+mod binary_expr;
+
 use std::convert::TryFrom;
 
 use crate::ICE;
 use crate::compiler_driver::{Driver, Warning};
+use crate::core::SourceLocation;
 use crate::parser::{
-    AstAddressConstant, AstBinaryOp, AstConstantFp, AstConstantInteger, AstConstantValue, AstDeclaredType,
-    AstExpression, AstFloatLiteralKind, AstFullExpression, AstIntegerLiteralKind, AstStorageDuration, AstType,
-    AstUnaryOp, AstUniqueName,
+    AstAddressConstant, AstConstantFp, AstConstantInteger, AstConstantValue, AstExpression, AstExpressionFlag,
+    AstFloatLiteralKind, AstFullExpression, AstIntegerLiteralKind, AstStorageDuration, AstType, AstUnaryOp,
+    AstUniqueName,
 };
 
 use super::symbol_table::SymbolAttributes;
@@ -18,28 +21,58 @@ use super::type_resolution;
 
 // Future: sizeof, _Alignof
 
-/// Evaluates an AST full expression node at compile-time and produces value, or `None` if it cannot be evaluated.
-///
-/// There is no undefined behaviour when evaluating a constant expression. If UB would have occurred then `None` is
-/// returned.
-pub fn evaluate_constant_full_expr(
-    full_expr: &AstFullExpression,
-    chk: &mut TypeChecker,
-    driver: &mut Driver,
-) -> Option<AstConstantValue> {
-    evaluate_constant_expr(&full_expr.expr, chk, driver)
+/// A constant expression evaluator.
+pub struct Eval<'a, 'b> {
+    chk: &'a mut TypeChecker,
+    driver: &'b mut Driver,
+    emit_diagnostics: bool,
+    root_expression_sloc: SourceLocation,
 }
 
-/// Evaluates an AST expression node at compile-time and produces value, or `None` if it cannot be evaluated.
+impl<'a, 'b> Eval<'a, 'b> {
+    /// Creates a constant expression evaluator.
+    pub fn new(chk: &'a mut TypeChecker, driver: &'b mut Driver) -> Self {
+        Self { chk, driver, emit_diagnostics: true, root_expression_sloc: SourceLocation::none() }
+    }
+
+    /// Sets whether the evaluator should emit warning/error diagnostics during evaluation.
+    #[cfg(test)]
+    pub fn set_diagnostics_enabled(&mut self, enable: bool) {
+        self.emit_diagnostics = enable;
+    }
+
+    /// Evaluates an AST full expression node at compile-time and returns `Some` with an [AstConstantValue], or `None`
+    /// if the expression cannot be evaluated.
+    ///
+    /// There is no undefined behaviour when evaluating a constant expression. If UB would have occurred then `None` is
+    /// returned.
+    pub fn evaluate_full_expr(&mut self, full_expr: &AstFullExpression) -> Option<AstConstantValue> {
+        if self.emit_diagnostics {
+            self.root_expression_sloc = self.chk.metadata.get_source_location(&full_expr.node_id);
+        }
+        evaluate_constant_expr(&full_expr.expr, self)
+    }
+
+    /// Evaluates an AST expression node at compile-time and returns `Some` with an [AstConstantValue], or `None` if the
+    /// expression cannot be evaluated.
+    ///
+    /// There is no undefined behaviour when evaluating a constant expression. If UB would have occurred then `None` is
+    /// returned.
+    pub fn evaluate_expr(&mut self, expr: &AstExpression) -> Option<AstConstantValue> {
+        if self.emit_diagnostics {
+            self.root_expression_sloc = self.chk.metadata.get_source_location(&expr.node_id());
+        }
+        evaluate_constant_expr(expr, self)
+    }
+}
+
+/// Evaluates an AST expression node at compile-time and returns `Some` with an [AstConstantValue], or `None` if the
+/// expression cannot be evaluated.
 ///
 /// There is no undefined behaviour when evaluating a constant expression. If UB would have occurred then `None` is
 /// returned.
-pub fn evaluate_constant_expr(
-    expr: &AstExpression,
-    chk: &mut TypeChecker,
-    driver: &mut Driver,
-) -> Option<AstConstantValue> {
-    let value = evaluate_const_expr_recursively(expr, chk, driver)?;
+fn evaluate_constant_expr(expr: &AstExpression, eval: &mut Eval) -> Option<AstConstantValue> {
+    let value = evaluate_const_expr_recursively(expr, eval)?;
 
     match value {
         ConstantValue::Pointer(ty, init) => Some(AstConstantValue::Pointer(ty, init)),
@@ -132,73 +165,95 @@ pub fn evaluate_constant_expr(
     }
 }
 
-fn evaluate_const_expr_recursively(
-    expr: &AstExpression,
-    chk: &mut TypeChecker,
-    driver: &mut Driver,
-) -> Option<ConstantValue> {
+fn evaluate_const_expr_recursively(expr: &AstExpression, eval: &mut Eval) -> Option<ConstantValue> {
     match expr {
+        // A compound assignment expression is not itself a constant expression (because it assigns to an l-value).
+        // But if the `rhs` expression is a constant expression then we still want to validate the implicit cast from
+        // the `rhs` expression to the `lhs` l-value.
+        // (The sema type checker does not add the implicit cast to the type-checked AST, and instead we add the cast
+        // in IR lowering after translating the compound assignment expression.)
+        //
+        // E.g.
+        //      int i = 0;
+        //      i += 1.1f    // We want a warning to be emitted.
+        //
+        // So we evaluate the `rhs` constant expression here and then perform the implicit cast ourselves to a
+        // temporary, which means any diagnostics will be emitted for us.
+        //
+        AstExpression::Assignment { op, lhs, rhs, .. }
+            if op.is_compound_assignment()
+                && eval.chk.metadata.is_expr_flag_set(rhs.node_id(), AstExpressionFlag::IsConstant) =>
+        {
+            if let Some(rhs_value) = evaluate_const_expr_recursively(rhs, eval) {
+                let lhs_type = eval.chk.get_data_type(&lhs.node_id());
+
+                // We want any diagnostics to point to the `rhs` expression.
+                let orig_sloc = std::mem::replace(
+                    &mut eval.root_expression_sloc,
+                    eval.chk.metadata.get_source_location(&rhs.node_id()),
+                );
+
+                _ = rhs_value.cast_to(&lhs_type, true, eval); // Ignore the result, we only want the diagnostics
+
+                eval.root_expression_sloc = orig_sloc;
+            }
+
+            None // Not a constant expression
+        }
+
         // These expressions cannot be used in compile-time constant expressions.
         AstExpression::Identifier { .. } => None, // Future: C23 allows `constexpr` variables.
         AstExpression::FunctionCall { .. } => None, // Future: `constexpr` functions.
         AstExpression::Deref { .. } => None,
-        AstExpression::Assignment { .. } => None,
         AstExpression::Subscript { .. } => None,
+        AstExpression::Assignment { .. } => None,
 
         // Literals
-        AstExpression::CharLiteral { value, .. } => Some(ConstantValue::make_int(*value)),
+        AstExpression::CharLiteral { value, .. } => Some(ConstantValue::from(*value)),
         AstExpression::StringLiteral { ascii, .. } => Some(ConstantValue::String(ascii.clone())),
         AstExpression::IntegerLiteral { value, kind, .. } => match kind {
-            AstIntegerLiteralKind::Int => Some(ConstantValue::make_int(*value as i32)),
-            AstIntegerLiteralKind::Long | AstIntegerLiteralKind::LongLong => {
-                Some(ConstantValue::make_long(*value as i64))
-            }
-            AstIntegerLiteralKind::UnsignedInt => Some(ConstantValue::make_uint(*value as u32)),
+            AstIntegerLiteralKind::Int => Some(ConstantValue::from(*value as i32)),
+            AstIntegerLiteralKind::Long | AstIntegerLiteralKind::LongLong => Some(ConstantValue::from(*value as i64)),
+            AstIntegerLiteralKind::UnsignedInt => Some(ConstantValue::from(*value as u32)),
             AstIntegerLiteralKind::UnsignedLong | AstIntegerLiteralKind::UnsignedLongLong => {
-                Some(ConstantValue::make_ulong(*value))
+                Some(ConstantValue::from(*value))
             }
         },
         AstExpression::FloatLiteral { value, kind, .. } => match kind {
-            AstFloatLiteralKind::Float => Some(ConstantValue::make_float(*value as f32)),
-            AstFloatLiteralKind::Double | AstFloatLiteralKind::LongDouble => Some(ConstantValue::make_double(*value)),
+            AstFloatLiteralKind::Float => Some(ConstantValue::from(*value as f32)),
+            AstFloatLiteralKind::Double | AstFloatLiteralKind::LongDouble => Some(ConstantValue::from(*value)),
         },
 
         // Other expressions
-        AstExpression::AddressOf { .. } => evaluate_address_of(expr, chk, driver),
-        AstExpression::Cast { target_type, expr, .. } => evaluate_cast(target_type, expr, chk, driver),
-        AstExpression::UnaryOperation { op, expr, .. } => evaluate_unary_operation(op, expr, chk, driver),
-        AstExpression::BinaryOperation { op, left, right, .. } => {
-            evaluate_binary_operation(op, left, right, chk, driver)
-        }
+        AstExpression::AddressOf { .. } => evaluate_address_of(expr, eval),
+        AstExpression::Cast { .. } => evaluate_cast(expr, eval),
+        AstExpression::UnaryOperation { op, expr, .. } => evaluate_unary_operation(op, expr, eval),
+        AstExpression::BinaryOperation { .. } => evaluate_binary_operation(expr, eval),
         AstExpression::Conditional { expr, consequent, alternative, .. } => {
-            evaluate_conditional(expr, consequent, alternative, chk, driver)
+            evaluate_conditional(expr, consequent, alternative, eval)
         }
     }
 }
 
-fn evaluate_address_of(expr: &AstExpression, chk: &mut TypeChecker, driver: &mut Driver) -> Option<ConstantValue> {
+fn evaluate_address_of(expr: &AstExpression, eval: &mut Eval) -> Option<ConstantValue> {
     let AstExpression::AddressOf { node_id, expr } = expr else {
         ICE!("Expected AstExpression::AddressOf");
     };
 
-    let ptr_type = chk.get_data_type(node_id);
+    let ptr_type = eval.chk.get_data_type(node_id);
 
-    let init = evaluate_address_constant(expr, chk, driver)?;
+    let init = evaluate_address_constant(expr, eval)?;
 
     Some(ConstantValue::Pointer(ptr_type, init))
 }
 
-fn evaluate_address_constant(
-    expr: &AstExpression,
-    chk: &mut TypeChecker,
-    driver: &mut Driver,
-) -> Option<AstAddressConstant> {
+fn evaluate_address_constant(expr: &AstExpression, eval: &mut Eval) -> Option<AstAddressConstant> {
     match expr {
         // A static storage pointer can be initialized with the address of an object of static storage duration,
         // or a function designator.
         //
         AstExpression::Identifier { unique_name, .. } => {
-            let symbol = chk.symbols.get(unique_name).expect("Symbol should exist");
+            let symbol = eval.chk.symbols.get(unique_name).expect("Symbol should exist");
 
             if symbol.data_type.is_function() {
                 Some(AstAddressConstant::AddressOfFunction(unique_name.to_string()))
@@ -209,19 +264,19 @@ fn evaluate_address_constant(
             }
         }
 
-        AstExpression::AddressOf { expr, .. } => evaluate_address_constant(expr, chk, driver),
+        AstExpression::AddressOf { expr, .. } => evaluate_address_constant(expr, eval),
 
         // A static storage pointer can be initialized with the address of an array element.
         //
         AstExpression::Subscript { node_id, expr1, expr2, .. } => {
-            let expr1_t = chk.get_data_type(&expr1.node_id());
-            let expr2_t = chk.get_data_type(&expr2.node_id());
+            let expr1_t = eval.chk.get_data_type(&expr1.node_id());
+            let expr2_t = eval.chk.get_data_type(&expr2.node_id());
             debug_assert!(expr1_t.is_pointer() || expr2_t.is_pointer());
 
             let (ptr_expr, int_expr) = if expr1_t.is_pointer() { (expr1, expr2) } else { (expr2, expr1) };
 
-            let subscript_identifier = evaluate_address_constant(ptr_expr, chk, driver)?;
-            let subscript_index_value = evaluate_constant_expr(int_expr, chk, driver)?;
+            let subscript_identifier = evaluate_address_constant(ptr_expr, eval)?;
+            let subscript_index_value = evaluate_constant_expr(int_expr, eval)?;
 
             if !matches!(subscript_index_value, AstConstantValue::Integer(_)) {
                 return None;
@@ -238,7 +293,7 @@ fn evaluate_address_constant(
             };
 
             if let AstAddressConstant::AddressOfObject { object, .. } = subscript_identifier {
-                let Some(symbol) = chk.symbols.get(AstUniqueName::new(object.clone())) else {
+                let Some(symbol) = eval.chk.symbols.get(AstUniqueName::new(object.clone())) else {
                     ICE!("Symbol should exist for '{object}'");
                 };
 
@@ -251,11 +306,11 @@ fn evaluate_address_constant(
                 if let AstType::Array { count, .. } = symbol.data_type
                     && (subscript_index < 0 || (subscript_index > 0 && subscript_index as usize > count))
                 {
-                    let loc = chk.metadata.get_source_location(&int_expr.node_id());
-                    Warning::array_index_out_of_bounds(subscript_index, &symbol.data_type, loc, driver);
+                    let loc = eval.chk.metadata.get_source_location(&int_expr.node_id());
+                    Warning::array_index_out_of_bounds(subscript_index, &symbol.data_type, loc, eval.driver);
                 }
 
-                let subscript_expr_type = chk.get_data_type(node_id);
+                let subscript_expr_type = eval.chk.get_data_type(node_id);
                 let element_bytes = (subscript_expr_type.bits() / 8) as i32;
                 let byte_offset = subscript_index * element_bytes;
 
@@ -271,15 +326,15 @@ fn evaluate_address_constant(
             // Add the string literal to the constant table (may already exist).
             let mut constant_string = ascii.join("");
             constant_string.push_str("\\000"); // Append NULL
-            let constant_idx = chk.constants.add_string(&constant_string);
+            let constant_idx = eval.chk.constants.add_string(&constant_string);
 
             // Add the constant string to the symbol table (may already exist).
-            let loc = chk.metadata.get_source_location(literal_node_id);
+            let loc = eval.chk.metadata.get_source_location(literal_node_id);
             let attrs = SymbolAttributes::constant(loc);
-            let const_name = chk.constants.make_const_symbol_name(constant_idx);
-            let lit_data_type = chk.get_data_type(literal_node_id);
+            let const_name = eval.chk.constants.make_const_symbol_name(constant_idx);
+            let lit_data_type = eval.chk.get_data_type(literal_node_id);
             let unique_name = AstUniqueName::new(const_name.clone());
-            _ = chk.symbols.add(unique_name, lit_data_type, attrs);
+            _ = eval.chk.symbols.add(unique_name, lit_data_type, attrs);
 
             Some(AstAddressConstant::AddressOfObject { object: const_name, byte_offset: 0 })
         }
@@ -288,26 +343,21 @@ fn evaluate_address_constant(
     }
 }
 
-fn evaluate_cast(
-    declared_type: &AstDeclaredType,
-    expr: &AstExpression,
-    chk: &mut TypeChecker,
-    driver: &mut Driver,
-) -> Option<ConstantValue> {
-    let value = evaluate_const_expr_recursively(expr, chk, driver)?;
+fn evaluate_cast(expr: &AstExpression, eval: &mut Eval) -> Option<ConstantValue> {
+    let AstExpression::Cast { target_type, expr, is_implicit, .. } = expr else {
+        ICE!("Expected AstExpression::Cast");
+    };
 
-    let ast_type = type_resolution::resolve_declared_type(declared_type, chk, driver).ok()?;
+    let value = evaluate_const_expr_recursively(expr, eval)?;
 
-    value.cast_to(&ast_type)
+    let ast_type = type_resolution::resolve_declared_type(target_type, eval.chk, eval.driver).ok()?;
+
+    value.cast_to(&ast_type, *is_implicit, eval)
 }
 
-fn evaluate_unary_operation(
-    op: &AstUnaryOp,
-    expr: &AstExpression,
-    chk: &mut TypeChecker,
-    driver: &mut Driver,
-) -> Option<ConstantValue> {
-    let value = evaluate_const_expr_recursively(expr, chk, driver)?;
+fn evaluate_unary_operation(op: &AstUnaryOp, expr: &AstExpression, eval: &mut Eval) -> Option<ConstantValue> {
+    let value = evaluate_const_expr_recursively(expr, eval)?;
+
     match op {
         AstUnaryOp::Negate => Some(value.negate()),
         AstUnaryOp::Plus => Some(value),
@@ -320,34 +370,28 @@ fn evaluate_unary_operation(
     }
 }
 
-fn evaluate_binary_operation(
-    op: &AstBinaryOp,
-    left: &AstExpression,
-    right: &AstExpression,
-    chk: &mut TypeChecker,
-    driver: &mut Driver,
-) -> Option<ConstantValue> {
-    let lhs = evaluate_const_expr_recursively(left, chk, driver)?;
-    let rhs = evaluate_const_expr_recursively(right, chk, driver)?;
+fn evaluate_binary_operation(expr: &AstExpression, eval: &mut Eval) -> Option<ConstantValue> {
+    let AstExpression::BinaryOperation { node_id, op, left, right } = expr else {
+        ICE!("Expected AstExpression::BinaryOperation");
+    };
+
+    let mut lhs = evaluate_const_expr_recursively(left, eval)?;
+    let mut rhs = evaluate_const_expr_recursively(right, eval)?;
 
     let common_type = lhs.get_common_type(&rhs)?;
-
-    if common_type.is_pointer() {
-        lhs.binary_op(op, rhs)
-    } else {
-        let lhs = lhs.cast_to(&common_type)?;
-        let rhs = rhs.cast_to(&common_type)?;
-
-        lhs.binary_op(op, rhs)
+    if !common_type.is_pointer() {
+        lhs = lhs.cast_to(&common_type, true, eval)?;
+        rhs = rhs.cast_to(&common_type, true, eval)?;
     }
+
+    binary_expr::evaluate_binary_op(*node_id, right.node_id(), op, lhs, rhs, eval)
 }
 
 fn evaluate_conditional(
     expr: &AstExpression,
     consequent: &AstExpression,
     alternative: &AstExpression,
-    chk: &mut TypeChecker,
-    driver: &mut Driver,
+    eval: &mut Eval,
 ) -> Option<ConstantValue> {
     // We need do determine the common type of both `consequent` and `alternative` expressions, in case they have
     // different types, so that we can cast them to the common type.
@@ -357,14 +401,14 @@ fn evaluate_conditional(
     // alternative at compile-time because there can be no side-effects, even though strictly only the `true`
     // case expression should be evaluated.
     //
-    let consequent = evaluate_const_expr_recursively(consequent, chk, driver)?;
-    let alternative = evaluate_const_expr_recursively(alternative, chk, driver)?;
+    let consequent = evaluate_const_expr_recursively(consequent, eval)?;
+    let alternative = evaluate_const_expr_recursively(alternative, eval)?;
 
     let common_type = consequent.get_common_type(&alternative)?;
-    let consequent = consequent.cast_to(&common_type)?;
-    let alternative = alternative.cast_to(&common_type)?;
+    let consequent = consequent.cast_to(&common_type, true, eval)?;
+    let alternative = alternative.cast_to(&common_type, true, eval)?;
 
-    match evaluate_const_expr_recursively(expr, chk, driver) {
+    match evaluate_const_expr_recursively(expr, eval) {
         v if v.as_ref().is_some_and(|v| v.is_zero()) => Some(alternative),
         Some(_) => Some(consequent),
         None => None,
@@ -383,73 +427,132 @@ enum ConstantValue {
     String(Vec<String>),
 }
 
+macro_rules! impl_from_int {
+    ($($t:ty => ($signed:expr, $size:expr)),* $(,)?) => {
+        $(
+            impl From<$t> for ConstantValue {
+                fn from(value: $t) -> Self {
+                    ConstantValue::Int {
+                        value: value as i128,
+                        signed: $signed,
+                        size: $size,
+                    }
+                }
+            }
+        )*
+    };
+}
+
+impl_from_int!(
+    i8  => (true, 8),
+    i16 => (true, 16),
+    i32 => (true, 32),
+    i64 => (true, 64),
+    u8  => (false, 8),
+    u16 => (false, 16),
+    u32 => (false, 32),
+    u64 => (false, 64),
+);
+
+impl From<f32> for ConstantValue {
+    fn from(value: f32) -> Self {
+        ConstantValue::Float { value: value as f64, size: 32 }
+    }
+}
+
+impl From<f64> for ConstantValue {
+    fn from(value: f64) -> Self {
+        ConstantValue::Float { value, size: 64 }
+    }
+}
+
 impl ConstantValue {
-    /// Creates a 'char' integer constant value.
-    pub fn make_char(value: i8) -> Self {
-        ConstantValue::Int { value: value as i128, signed: true, size: 8 }
-    }
-
-    /// Creates a 'short' integer constant value.
-    pub fn make_short(value: i16) -> Self {
-        ConstantValue::Int { value: value as i128, signed: true, size: 16 }
-    }
-
-    /// Creates an 'int' constant value.
+    /// Creates a 32-bit integer constant value.
+    ///
+    /// Can also use `ConstantValue::from(i32)` but creating an 'int' is quite common in the evaluator.
     pub fn make_int(value: i32) -> Self {
         ConstantValue::Int { value: value as i128, signed: true, size: 32 }
     }
 
-    /// Creates a 'long' integer constant value.
-    pub fn make_long(value: i64) -> Self {
-        ConstantValue::Int { value: value as i128, signed: true, size: 64 }
-    }
+    /// Consumes this constant value and returns a `Some<ConstantValue>` version casted to the given `AstType`, or
+    /// returns `None` if the cast is not possible.
+    pub fn cast_to(self, target_type: &AstType, is_implicit_cast: bool, eval: &mut Eval) -> Option<Self> {
+        // Skip the cast if the constant value already has the target type.
+        if self.get_ast_type() == *target_type {
+            return Some(self);
+        }
 
-    /// Creates an 'unsigned char' integer constant value.
-    pub fn make_uchar(value: u8) -> Self {
-        ConstantValue::Int { value: value as i128, signed: false, size: 8 }
-    }
+        // Helper macro that performs a cast to an integer type and emits a warning if the implicit conversion changes
+        // the value.
+        macro_rules! cast_to_integer {
+            ($old_value:expr, $old_type:expr, $new_type_rs:ty) => {{
+                let new_value = $old_value as $new_type_rs;
 
-    /// Creates an 'unsigned short' integer constant value.
-    pub fn make_ushort(value: u16) -> Self {
-        ConstantValue::Int { value: value as i128, signed: false, size: 16 }
-    }
+                // Roundtrip to check if the cast has changed the constant value.
+                //
+                if eval.emit_diagnostics && is_implicit_cast {
+                    if $old_type.is_integer() && $old_value as i128 != new_value as i128 {
+                        warn_constant_conversion(&$old_type, target_type, $old_value as i128, new_value as i128, eval);
+                    } else if $old_type.is_floating_point() && $old_value as f64 != new_value as f64 {
+                        warn_constant_conversion(&$old_type, target_type, $old_value as f64, new_value as f64, eval);
+                    }
+                }
 
-    /// Creates an 'unsigned int' constant value.
-    pub fn make_uint(value: u32) -> Self {
-        ConstantValue::Int { value: value as i128, signed: false, size: 32 }
-    }
+                Some(Self::from(new_value))
+            }};
+        }
 
-    /// Creates an 'unsigned long' integer constant value.
-    pub fn make_ulong(value: u64) -> Self {
-        ConstantValue::Int { value: value as i128, signed: false, size: 64 }
-    }
+        // Helper macro that performs a cast to a floating-point type and emits a warning if the implicit conversion
+        // changes the value / causes precision loss.
+        macro_rules! cast_to_fp {
+            ($value:expr, $old_type:expr, $new_type_rs:ty) => {{
+                let new_value = $value as $new_type_rs;
 
-    /// Creates a 'float' 32-bit floating-point constant value.
-    pub fn make_float(value: f32) -> Self {
-        ConstantValue::Float { value: value as f64, size: 32 }
-    }
+                if eval.emit_diagnostics && is_implicit_cast {
+                    if $old_type.is_integer() {
+                        let roundtripped = new_value as i128;
+                        if roundtripped != $value as i128 {
+                            let old_val = $value.to_string();
+                            let new_val = new_value.to_string();
+                            let loc = eval.root_expression_sloc;
+                            Warning::constant_conversion(&$old_type, target_type, &old_val, &new_val, loc, eval.driver);
+                        }
+                    } else if $old_type.is_floating_point() {
+                        let roundtripped = new_value as f64;
+                        if roundtripped != $value as f64 {
+                            let loc = eval.root_expression_sloc;
+                            Warning::implicit_arithmetic_conversion(&$old_type, target_type, loc, eval.driver);
+                        }
+                    } else {
+                        ICE!("Unexpected cast to floating-point from {}", $old_type);
+                    };
+                }
 
-    /// Creates a 'double' 64-bit floating-point constant value.
-    pub fn make_double(value: f64) -> Self {
-        ConstantValue::Float { value, size: 64 }
-    }
+                Some(Self::from(new_value))
+            }};
+        }
 
-    /// Consumes the constant value and returns a `Some<ConstantValue>` version casted to the given `AstType`,
-    /// or returns `None` if the cast is not possible.
-    pub fn cast_to(self, cast_to_type: &AstType) -> Option<Self> {
-        macro_rules! make_cast {
-            ($value:expr) => {
-                match cast_to_type {
-                    AstType::Char | AstType::SignedChar => Some(Self::make_char($value as i8)),
-                    AstType::UnsignedChar => Some(Self::make_uchar($value as u8)),
-                    AstType::Short => Some(Self::make_short($value as i16)),
-                    AstType::UnsignedShort => Some(Self::make_ushort($value as u16)),
-                    AstType::Int => Some(Self::make_int($value as i32)),
-                    AstType::UnsignedInt => Some(Self::make_uint($value as u32)),
-                    AstType::Long | AstType::LongLong => Some(Self::make_long($value as i64)),
-                    AstType::UnsignedLong | AstType::UnsignedLongLong => Some(Self::make_ulong($value as u64)),
-                    AstType::Float => Some(Self::make_float($value as f32)),
-                    AstType::Double => Some(Self::make_double($value as f64)),
+        // Helper macro to avoid duplicating the match expression when casting from `self` (see below).
+        macro_rules! cast_value_to {
+            ($value:expr, $old_type:expr) => {
+                match target_type {
+                    // Cast to signed integer type
+                    AstType::Char | AstType::SignedChar => cast_to_integer!($value, $old_type, i8),
+                    AstType::Short => cast_to_integer!($value, $old_type, i16),
+                    AstType::Int => cast_to_integer!($value, $old_type, i32),
+                    AstType::Long | AstType::LongLong => cast_to_integer!($value, $old_type, i64),
+
+                    // Cast to unsigned integer type
+                    AstType::UnsignedChar => cast_to_integer!($value, $old_type, u8),
+                    AstType::UnsignedShort => cast_to_integer!($value, $old_type, u16),
+                    AstType::UnsignedInt => cast_to_integer!($value, $old_type, u32),
+                    AstType::UnsignedLong | AstType::UnsignedLongLong => cast_to_integer!($value, $old_type, u64),
+
+                    // Cast to floating-point type
+                    AstType::Float => cast_to_fp!($value, $old_type, f32),
+                    AstType::Double => cast_to_fp!($value, $old_type, f64),
+
+                    // Cast to pointer type
                     AstType::Pointer(_) => {
                         let init = if $value as u64 == 0 {
                             AstAddressConstant::NullPointer
@@ -457,19 +560,21 @@ impl ConstantValue {
                             AstAddressConstant::CastExpression($value as u64)
                         };
 
-                        Some(ConstantValue::Pointer(cast_to_type.clone(), init))
+                        Some(ConstantValue::Pointer(target_type.clone(), init))
                     }
+
                     _ => None,
                 }
             };
         }
 
+        // Cast from...
         match self {
-            ConstantValue::Int { value, .. } => make_cast!(value),
-            ConstantValue::Float { value, .. } => make_cast!(value),
-            ConstantValue::Pointer(_, init) => Some(ConstantValue::Pointer(cast_to_type.clone(), init)),
+            ConstantValue::Int { value, .. } => cast_value_to!(value, self.get_ast_type()),
+            ConstantValue::Float { value, .. } => cast_value_to!(value, self.get_ast_type()),
+            ConstantValue::Pointer(_, init) => Some(ConstantValue::Pointer(target_type.clone(), init)),
             ConstantValue::String(_) => {
-                if let AstType::Pointer(referent) = cast_to_type
+                if let AstType::Pointer(referent) = target_type
                     && (referent.as_ref() == &AstType::Char || referent.as_ref() == &AstType::UnsignedChar)
                 {
                     Some(self)
@@ -499,18 +604,37 @@ impl ConstantValue {
         matches!(self, ConstantValue::Pointer(..))
     }
 
-    /// Gets the `AstType` if this value is a pointer type, or returns `None`.
+    /// Gets the [AstType] of this constant value.
+    pub fn get_ast_type(&self) -> AstType {
+        match self {
+            ConstantValue::Int { signed, size, .. } => match (signed, size) {
+                (true, 8) => AstType::Char,
+                (true, 16) => AstType::Short,
+                (true, 32) => AstType::Int,
+                (true, 64) => AstType::Long,
+                (false, 8) => AstType::UnsignedChar,
+                (false, 16) => AstType::UnsignedShort,
+                (false, 32) => AstType::UnsignedInt,
+                (false, 64) => AstType::UnsignedLong,
+                _ => ICE!("No integer AstType for '{signed}' '{size}'"),
+            },
+            ConstantValue::Float { size, .. } => match size {
+                32 => AstType::Float,
+                64 => AstType::Double,
+                _ => ICE!("No floating-point AstType for '{size}'"),
+            },
+            ConstantValue::Pointer(ast_type, ..) => ast_type.clone(),
+            ConstantValue::String(..) => AstType::new_pointer_to(AstType::Char),
+        }
+    }
+
+    /// Gets the [AstType] if this value is a pointer type, or returns `None`.
     pub fn get_pointer_type(&self) -> Option<AstType> {
         if let ConstantValue::Pointer(ty, _) = self { Some(ty.clone()) } else { None }
     }
 
-    /// Gets the common `AstType` for this value and the given other constant value.
+    /// Gets the common [AstType] for this constant value and the given other constant value.
     pub fn get_common_type(&self, other: &ConstantValue) -> Option<AstType> {
-        // If either is floating-point then the common type is floating-point.
-        //
-        let this_is_fp = matches!(self, ConstantValue::Float { .. });
-        let other_is_fp = matches!(other, ConstantValue::Float { .. });
-
         if self.is_pointer() || other.is_pointer() {
             if self.is_pointer() == other.is_pointer() && self.get_pointer_type() == other.get_pointer_type() {
                 return self.get_pointer_type();
@@ -527,50 +651,10 @@ impl ConstantValue {
             return None;
         }
 
-        if this_is_fp || other_is_fp {
-            let mut common_fp_size = 0;
+        let this_type = self.get_ast_type();
+        let other_type = other.get_ast_type();
 
-            if let ConstantValue::Float { size, .. } = self {
-                common_fp_size = *size;
-            }
-
-            if let ConstantValue::Float { size, .. } = other
-                && *size > common_fp_size
-            {
-                common_fp_size = *size;
-            }
-
-            return match common_fp_size {
-                32 => Some(AstType::Float),
-                64 => Some(AstType::Double),
-                _ => ICE!("Floating-point size should be 32 or 64"),
-            };
-        }
-
-        let ConstantValue::Int { signed: this_signed, size: this_size, .. } = self else {
-            ICE!("Expected ConstantValue::Int");
-        };
-
-        let ConstantValue::Int { signed: other_signed, size: other_size, .. } = other else {
-            ICE!("Expected ConstantValue::Int");
-        };
-
-        let common_signed = *this_signed && *other_signed;
-        let common_size = std::cmp::max(*this_size, *other_size);
-
-        let ty = match (common_signed, common_size) {
-            (true, 8) => AstType::Char,
-            (true, 16) => AstType::Short,
-            (true, 32) => AstType::Int,
-            (true, 64) => AstType::Long,
-            (false, 8) => AstType::UnsignedChar,
-            (false, 16) => AstType::UnsignedShort,
-            (false, 32) => AstType::UnsignedInt,
-            (false, 64) => AstType::UnsignedLong,
-            _ => ICE!("Did not handle '{common_signed}' '{common_size}'"),
-        };
-
-        Some(ty)
+        Some(AstType::get_common_type(&this_type, &other_type))
     }
 
     /// Negates the value.
@@ -590,182 +674,17 @@ impl ConstantValue {
             _ => ICE!("Cannot apply bitwise not"),
         }
     }
-
-    /// Performs the given binary operation with the current value and the given other value.
-    pub fn binary_op(self, op: &AstBinaryOp, other: ConstantValue) -> Option<Self> {
-        // Check for pointer arithmetic first.
-        //
-        if self.is_pointer() && other.is_integer() {
-            return evaluate_pointer_integer_arithmetic(*op, self, other);
-        } else if self.is_integer() && other.is_pointer() {
-            return evaluate_pointer_integer_arithmetic(*op, other, self);
-        } else if self.is_pointer() && other.is_pointer() {
-            return evaluate_pointer_arithmetic(*op, self, other);
-        } else if self.is_pointer() || other.is_pointer() {
-            return None;
-        }
-
-        if let ConstantValue::Int { value: lhs, signed, size } = self {
-            let ConstantValue::Int { value: rhs, .. } = other else {
-                ICE!("Expected other to be ConstantValue::Int");
-            };
-
-            match op {
-                // Arithmetic
-                AstBinaryOp::Add => lhs.checked_add(rhs).map(|value| ConstantValue::Int { value, signed, size }),
-                AstBinaryOp::Subtract => lhs.checked_sub(rhs).map(|value| ConstantValue::Int { value, signed, size }),
-                AstBinaryOp::Multiply => lhs.checked_mul(rhs).map(|value| ConstantValue::Int { value, signed, size }),
-                AstBinaryOp::Divide => lhs.checked_div(rhs).map(|value| ConstantValue::Int { value, signed, size }),
-                AstBinaryOp::Remainder => lhs.checked_rem(rhs).map(|value| ConstantValue::Int { value, signed, size }),
-
-                // Bitwise
-                AstBinaryOp::BitwiseAnd => Some(lhs & rhs).map(|value| ConstantValue::Int { value, signed, size }),
-                AstBinaryOp::BitwiseOr => Some(lhs | rhs).map(|value| ConstantValue::Int { value, signed, size }),
-                AstBinaryOp::BitwiseXor => Some(lhs ^ rhs).map(|value| ConstantValue::Int { value, signed, size }),
-                AstBinaryOp::LeftShift => match rhs {
-                    0 => Some(ConstantValue::Int { value: lhs, signed, size }),
-                    n if n < 0 => None,
-                    _ => lhs.checked_shl(rhs as u32).map(|value| ConstantValue::Int { value, signed, size }),
-                },
-                AstBinaryOp::RightShift => match rhs {
-                    0 => Some(ConstantValue::Int { value: lhs, signed, size }),
-                    n if n < 0 => None,
-                    _ => lhs.checked_shr(rhs as u32).map(|value| ConstantValue::Int { value, signed, size }),
-                },
-
-                // Logical
-                AstBinaryOp::LogicalAnd => Some(Self::make_int((lhs != 0 && rhs != 0) as i32)),
-                AstBinaryOp::LogicalOr => Some(Self::make_int((lhs != 0 || rhs != 0) as i32)),
-
-                // Comparison
-                AstBinaryOp::EqualTo => Some(Self::make_int((lhs == rhs) as i32)),
-                AstBinaryOp::NotEqualTo => Some(Self::make_int((lhs != rhs) as i32)),
-                AstBinaryOp::LessThan => Some(Self::make_int((lhs < rhs) as i32)),
-                AstBinaryOp::LessThanOrEqualTo => Some(Self::make_int((lhs <= rhs) as i32)),
-                AstBinaryOp::GreaterThan => Some(Self::make_int((lhs > rhs) as i32)),
-                AstBinaryOp::GreaterThanOrEqualTo => Some(Self::make_int((lhs >= rhs) as i32)),
-            }
-        } else if let ConstantValue::Float { value: lhs, size: lhs_size } = self {
-            let ConstantValue::Float { value: rhs, size: rhs_size } = other else {
-                ICE!("Expected other to be ConstantValue::Float");
-            };
-
-            debug_assert!(lhs_size == rhs_size);
-
-            let make_fp = |value: f64, size: usize| ConstantValue::Float { value, size };
-
-            match op {
-                // Arithmetic
-                AstBinaryOp::Add => Some(make_fp(lhs + rhs, lhs_size)),
-                AstBinaryOp::Subtract => Some(make_fp(lhs - rhs, lhs_size)),
-                AstBinaryOp::Multiply => Some(make_fp(lhs * rhs, lhs_size)),
-                AstBinaryOp::Divide => Some(make_fp(lhs / rhs, lhs_size)),
-                AstBinaryOp::Remainder => None,
-
-                // Bitwise
-                AstBinaryOp::BitwiseAnd
-                | AstBinaryOp::BitwiseOr
-                | AstBinaryOp::BitwiseXor
-                | AstBinaryOp::LeftShift
-                | AstBinaryOp::RightShift => None,
-
-                // Logical
-                AstBinaryOp::LogicalAnd => Some(Self::make_int((lhs != 0.0 && rhs != 0.0) as i32)),
-                AstBinaryOp::LogicalOr => Some(Self::make_int((lhs != 0.0 || rhs != 0.0) as i32)),
-
-                // Comparison
-                AstBinaryOp::EqualTo => Some(Self::make_int((lhs == rhs) as i32)),
-                AstBinaryOp::NotEqualTo => Some(Self::make_int((lhs != rhs) as i32)),
-                AstBinaryOp::LessThan => Some(Self::make_int((lhs < rhs) as i32)),
-                AstBinaryOp::LessThanOrEqualTo => Some(Self::make_int((lhs <= rhs) as i32)),
-                AstBinaryOp::GreaterThan => Some(Self::make_int((lhs > rhs) as i32)),
-                AstBinaryOp::GreaterThanOrEqualTo => Some(Self::make_int((lhs >= rhs) as i32)),
-            }
-        } else {
-            None
-        }
-    }
 }
 
-fn evaluate_pointer_integer_arithmetic(
-    op: AstBinaryOp,
-    ptr_value: ConstantValue,
-    int_value: ConstantValue,
-) -> Option<ConstantValue> {
-    let valid_op = matches!(op, AstBinaryOp::Add | AstBinaryOp::Subtract);
-    if !valid_op {
-        return None;
-    }
-
-    let ConstantValue::Pointer(ty, address_constant) = ptr_value else {
-        return None;
-    };
-
-    let ConstantValue::Int { value, .. } = int_value else {
-        return None;
-    };
-
-    let AstType::Pointer(referent) = &ty else {
-        return None;
-    };
-
-    if let AstAddressConstant::AddressOfObject { object, byte_offset } = address_constant {
-        let referent_bytes = (referent.bits() / 8) as i32;
-
-        let new_byte_offset = if op == AstBinaryOp::Add {
-            byte_offset + (referent_bytes * value as i32)
-        } else {
-            byte_offset - (referent_bytes * value as i32)
-        };
-
-        let new_addr_const = AstAddressConstant::AddressOfObject { object, byte_offset: new_byte_offset };
-        Some(ConstantValue::Pointer(ty, new_addr_const))
-    } else {
-        None
-    }
-}
-
-fn evaluate_pointer_arithmetic(op: AstBinaryOp, lhs: ConstantValue, rhs: ConstantValue) -> Option<ConstantValue> {
-    let valid_op = matches!(op, AstBinaryOp::Subtract);
-    if !valid_op {
-        return None;
-    }
-
-    let ConstantValue::Pointer(lhs_type, lhs_address_constant) = lhs else {
-        return None;
-    };
-
-    let ConstantValue::Pointer(rhs_type, rhs_address_constant) = rhs else {
-        return None;
-    };
-
-    if lhs_type != rhs_type {
-        return None;
-    }
-
-    let AstAddressConstant::AddressOfObject { object: lhs_object, byte_offset: lhs_offset } = lhs_address_constant
-    else {
-        return None;
-    };
-
-    let AstAddressConstant::AddressOfObject { object: rhs_object, byte_offset: rhs_offset } = rhs_address_constant
-    else {
-        return None;
-    };
-
-    if lhs_object != rhs_object {
-        return None;
-    }
-
-    let AstType::Pointer(referent) = &lhs_type else {
-        return None;
-    };
-
-    let referent_bytes = (referent.bits() / 8) as i32;
-    debug_assert!(referent_bytes > 0);
-
-    let diff_bytes = lhs_offset - rhs_offset;
-    let ptr_diff = diff_bytes / referent_bytes;
-
-    Some(ConstantValue::make_int(ptr_diff))
+fn warn_constant_conversion<T: std::fmt::Display>(
+    old_type: &AstType,
+    new_type: &AstType,
+    old_value: T,
+    new_value: T,
+    eval: &mut Eval,
+) {
+    let old_value = old_value.to_string();
+    let new_value = new_value.to_string();
+    let loc = eval.root_expression_sloc;
+    Warning::constant_conversion(old_type, new_type, &old_value, &new_value, loc, eval.driver);
 }

@@ -1,0 +1,31 @@
+warning: Division by zero is undefined [-Wdivision-by-zero]
+   |
+   |     a /= 10 - 10;
+   |       ^^ ~~~~~~~
+   |
+
+warning: Implicit conversion from promoted type 'int' to 'short' may change its value
+         [-Wimplicit-promotion-conversion]
+   |
+   |     short b = (short)a / (short)0;
+   |               ^^^^^^^^^^^^^^^^^^^
+   |
+note: Expression was promoted to 'int' as part of C language integer promotion rules.
+      Wrap the expression in a cast to 'short' to silence this warning.
+   |
+   | (short)(...)
+   |
+
+warning: Division by zero is undefined [-Wdivision-by-zero]
+   |
+   |     short b = (short)a / (short)0;
+   |                        ^ ~~~~~~~~
+   |
+
+warning: Remainder by zero is undefined [-Wdivision-by-zero]
+   |
+   |     c = (int)b % (15 - 15);
+   |                ^ ~~~~~~~~~
+   |
+
+4 warnings generated

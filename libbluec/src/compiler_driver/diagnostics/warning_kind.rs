@@ -1,7 +1,7 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 //
 //! The `warning_kind` module defines the `WarningKind` enum.
-//! 
+//!
 //! An X-macro is used to generate the enum along with `WarningKind::as_str()` and `WarningKind::from_str()` to
 //! convert a `WarningKind` variant to and from its string representation.
 
@@ -61,8 +61,8 @@ define_warning_kind! {
     //
     Multichar                      => "multichar",
     UnknownEscapeSequence          => "unknown-escape-sequence",
-    ConstantConversion             => "constant-conversion",
     ImplicitlyUnsignedLiteral      => "implicitly-unsigned-literal",
+    LiteralRange                   => "literal-range",
     //
     // Declarations and initializers
     //
@@ -83,12 +83,27 @@ define_warning_kind! {
     BitwiseOpParentheses           => "bitwise-op-parentheses",
     Parentheses                    => "parentheses",
     ArrayBounds                    => "array-bounds",
+    UnusedValue                    => "unused-value",
+    UnusedComparison               => "unused-comparison",
+    //
+    // Arithmetic
+    //
+    DivisionByZero                 => "division-by-zero",
+    IntegerOverflow                => "integer-overflow",
+    FloatingPointOverflow          => "floating-point-overflow",
+    ShiftCountNegative             => "shift-count-negative",
+    ShiftCountOverflow             => "shift-count-overflow",
+    ShiftCountZero                 => "shift-count-zero",
     //
     // Conversions and casts
     //
+    ConstantConversion             => "constant-conversion",
     ImplicitConversion             => "implicit-conversion",
+    ImplicitPromotionConversion    => "implicit-promotion-conversion",
     ImplicitIntConversion          => "implicit-int-conversion",
     ImplicitFloatConversion        => "implicit-float-conversion",
+    ImplicitIntFloatConversion     => "implicit-int-float-conversion",
+    FloatConversion                => "float-conversion",
     SignConversion                 => "sign-conversion",
     PointerToIntCast               => "pointer-to-int-cast",
     NonLiteralNullConversion       => "non-literal-null-conversion",
@@ -118,10 +133,14 @@ impl WarningKind {
             WarningKind::ConditionalTypeMismatch,
             WarningKind::ConstantConversion,
             WarningKind::CompareDistinctPointerTypes,
+            WarningKind::DivisionByZero,
             WarningKind::DuplicateDeclSpecifier,
             WarningKind::ExcessInitializers,
             WarningKind::ExternInitializer,
+            WarningKind::FloatingPointOverflow,
             WarningKind::ImplicitlyUnsignedLiteral,
+            WarningKind::IntegerOverflow,
+            WarningKind::LiteralRange,
             WarningKind::ManyBracesAroundScalarInit,
             WarningKind::Multichar,
             WarningKind::NonLiteralNullConversion,
@@ -129,7 +148,12 @@ impl WarningKind {
             WarningKind::PointerIntegerCompare,
             WarningKind::PointerToIntCast,
             WarningKind::PointerTypeMismatch,
+            WarningKind::ShiftCountNegative,
+            WarningKind::ShiftCountOverflow,
+            WarningKind::ShiftCountZero,
             WarningKind::UnknownEscapeSequence,
+            WarningKind::UnusedValue,
+            WarningKind::UnusedComparison,
         ])
     }
 }

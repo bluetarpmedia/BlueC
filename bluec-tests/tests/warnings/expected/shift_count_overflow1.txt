@@ -1,0 +1,49 @@
+warning: Shift count >= width of the type in bits (32) [-Wshift-count-overflow]
+   |
+   |     char c = (char)(1 << 32);
+   |                          ^^
+   |
+
+warning: Shift count >= width of the type in bits (32) [-Wshift-count-overflow]
+   |
+   |     short s = (short)(1 << 32);
+   |                            ^^
+   |
+
+warning: Shift count >= width of the type in bits (32) [-Wshift-count-overflow]
+   |
+   |     int i = 1 << 32;
+   |                  ^^
+   |
+
+warning: Shift count >= width of the type in bits (64) [-Wshift-count-overflow]
+   |
+   |     long l = 1L << 64;
+   |                    ^^
+   |
+
+warning: Shift count >= width of the type in bits (32) [-Wshift-count-overflow]
+   |
+   |     c = 1 >> 40;
+   |              ^^
+   |
+
+warning: Shift count >= width of the type in bits (32) [-Wshift-count-overflow]
+   |
+   |     s = 1 >> 40;
+   |              ^^
+   |
+
+warning: Shift count >= width of the type in bits (32) [-Wshift-count-overflow]
+   |
+   |     i = 1 >> 40;
+   |              ^^
+   |
+
+warning: Shift count >= width of the type in bits (64) [-Wshift-count-overflow]
+   |
+   |     l = 1L >> 80;
+   |               ^^
+   |
+
+8 warnings generated

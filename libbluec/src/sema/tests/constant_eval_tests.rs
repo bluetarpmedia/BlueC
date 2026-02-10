@@ -310,25 +310,30 @@ fn casts() {
 }
 
 #[test]
-fn cannot_shift_by_negative() {
-    verify_expr_evaluates_to_i32("1024 << -1", None);
-    verify_expr_evaluates_to_i32("1024 >> -1", None);
-}
+fn overflow() {
+    verify_expr_evaluates_to_i64("9223372036854775807 * 2", Some(-2));
+    verify_expr_evaluates_to_i64("-9223372036854775807 * 2", Some(2));
+    verify_expr_evaluates_to_i64("9223372036854775807 + 1", Some(-9223372036854775808));
+    verify_expr_evaluates_to_i64("-9223372036854775808 - 1", Some(9223372036854775807));
+    verify_expr_evaluates_to_i64("9223372036854775807 * 9223372036854775807", Some(1));
+    verify_expr_evaluates_to_i64("-9223372036854775808 * 2", Some(0));
 
-#[test]
-fn cannot_overflow() {
-    assert!(evaluate_expr("9223372036854775807 * 2").is_none());
-    assert!(evaluate_expr("9223372036854775807 * 2").is_none());
-    assert!(evaluate_expr("9223372036854775807 + 1").is_none());
-    assert!(evaluate_expr("-9223372036854775808 - 1").is_none());
-    assert!(evaluate_expr("9223372036854775807 * 9223372036854775807").is_none());
-    assert!(evaluate_expr("-9223372036854775808 * 2").is_none());
-
+    verify_expr_evaluates_to_f64("1.7976931348623157E+308 * 1.1", Some(f64::INFINITY));
+    verify_expr_evaluates_to_f64("1.7976931348623157E+308 * -1.1", Some(f64::NEG_INFINITY));
     verify_expr_evaluates_to_f64("1.0e100000 * 2.0e100000", Some(f64::INFINITY));
     verify_expr_evaluates_to_f64("1.0e100000 * -2.0e100000", Some(f64::NEG_INFINITY));
 
+    verify_expr_evaluates_to_f32("3.40282347E+38f + 3.4e38f", Some(f32::INFINITY));
+    verify_expr_evaluates_to_f32("3.40282347E+38f * 1.1f", Some(f32::INFINITY));
+    verify_expr_evaluates_to_f32("3.40282347E+38f * -1.1f", Some(f32::NEG_INFINITY));
     verify_expr_evaluates_to_f32("1.0e38f * 1.0e38f", Some(f32::INFINITY));
     verify_expr_evaluates_to_f32("1.0e38f * -1.0e38f", Some(f32::NEG_INFINITY));
+}
+
+#[test]
+fn cannot_shift_by_negative() {
+    verify_expr_evaluates_to_i32("1024 << -1", None);
+    verify_expr_evaluates_to_i32("1024 >> -1", None);
 }
 
 #[test]
@@ -706,7 +711,9 @@ fn evaluate_expr<'a>(expression_source_code: &str) -> Option<AstConstantValue> {
     let expr = expr.unwrap();
 
     let mut chk = type_check::TypeChecker::default();
-    constant_eval::evaluate_constant_full_expr(&expr, &mut chk, &mut driver)
+    let mut eval = constant_eval::Eval::new(&mut chk, &mut driver);
+    eval.set_diagnostics_enabled(false);
+    eval.evaluate_full_expr(&expr)
 }
 
 fn parse_and_type_check(driver: &mut compiler_driver::Driver, source: &str) {

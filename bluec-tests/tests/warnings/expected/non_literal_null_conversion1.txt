@@ -2,7 +2,7 @@ warning: Expression evaluates to zero and is interpreted as a null pointer const
          type 'int *') [-Wnon-literal-null-conversion]
    |
    |     int *a = 10 - 10;
-   |                 ^
+   |              ^^^^^^^
    |
 
 1 warning generated

@@ -5,8 +5,8 @@ warning: Integer literal is interpreted as unsigned because it is too large for 
    |              ^^^^^^^^^^^^^^^^^^^
    |
 
-warning: Implicit conversion from 'unsigned long' to 'long' changes signedness and value
-         from 9323372036854775707 to -9123372036854775909 [-Wconstant-conversion]
+warning: Implicit conversion from 'unsigned long' to 'long' changes value from
+         9323372036854775707 to -9123372036854775909 [-Wconstant-conversion]
    |
    |     long a = 9323372036854775707;
    |              ^^^^^^^^^^^^^^^^^^^

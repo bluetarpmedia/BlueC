@@ -574,13 +574,17 @@ fn print_expression(expr: &AstExpression, metadata: &AstMetadata, level: usize) 
             println!("{}|", make_close_indent(level + 1));
         }
 
-        AstExpression::Cast { node_id, target_type, expr } => {
+        AstExpression::Cast { node_id, target_type, expr, is_implicit } => {
             let target_type_str = target_type.to_string();
 
             if target_type_str.is_empty() {
                 print!("{indent}Cast");
             } else {
                 print!("{indent}Cast(to=\"{}\")", target_type_str);
+            }
+
+            if *is_implicit {
+                print!(" [Implicit]");
             }
 
             print_node_type(node_id, metadata);
@@ -782,12 +786,18 @@ fn print_resolved_type(declared_type: &AstDeclaredType) {
 }
 
 fn print_node_type(node_id: &AstNodeId, metadata: &AstMetadata) {
+    print!(" [Id = {node_id}]");
+
     if let Some(node_type) = metadata.try_get_node_type(node_id) {
         print!(" [Type = '{node_type}']");
     }
 
     if metadata.is_expr_flag_set(*node_id, AstExpressionFlag::IsConstant) {
         print!(" [ConstantExpr]");
+    }
+
+    if metadata.is_expr_flag_set(*node_id, AstExpressionFlag::PromotedToInt) {
+        print!(" [PromotedToInt]");
     }
 }
 

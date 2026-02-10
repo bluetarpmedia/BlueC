@@ -6,11 +6,17 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum AstExpressionFlag {
-    /// Is the expression a constant (literal)?
+    /// The expression is a constant (literal).
     IsConstant = 1 << 0,
 
-    /// Is the expression enclosed in parentheses?
-    HasParens = 1 << 1,
+    /// The expression is an initializer for a static storage variable.
+    IsStaticStorageInit = 1 << 1,
+
+    /// The expression is enclosed in parentheses in the source code.
+    HasParens = 1 << 2,
+
+    /// The expression's type was promoted to 'int' due to integer promotion rules.
+    PromotedToInt = 1 << 3,
 }
 
 /// Metadata flags associated with an `AstExpression`.

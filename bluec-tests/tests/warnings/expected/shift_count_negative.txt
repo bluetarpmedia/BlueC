@@ -1,0 +1,37 @@
+warning: Shift count is negative [-Wshift-count-negative]
+   |
+   |     int a = 1 >> -1;
+   |                  ^^
+   |
+
+warning: Shift count is negative [-Wshift-count-negative]
+   |
+   |     a = 1 << (9 - 12);
+   |              ^^^^^^^^
+   |
+
+warning: '<<' has a lower precedence than '*' which means the '*' expression is
+         evaluated first. [-Wparentheses]
+   |
+   |     a = b << -5 * 1;
+   |           ^^    ~
+   |
+note: Add parentheses around the '*' expression to clarify the precedence of
+      operations to readers of this source code.
+   |
+   |     a = b << -5 * 1;
+   |                 ^
+   |
+note: Or add parentheses around the '<<' expression to evaluate it first.
+   |
+   |     a = b << -5 * 1;
+   |           ^^
+   |
+
+warning: Shift count is negative [-Wshift-count-negative]
+   |
+   |     a = b << -5 * 1;
+   |              ^^^^^^
+   |
+
+4 warnings generated

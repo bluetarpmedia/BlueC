@@ -15,7 +15,8 @@ use crate::parser::{AstConstantInteger, AstNodeId, AstType};
 /// AST metadata produced by the parser.
 #[derive(Debug)]
 pub struct AstMetadata {
-    source_location_nodes: HashMap<AstNodeId, SourceLocation>,
+    sloc_nodes: HashMap<AstNodeId, SourceLocation>,
+    operator_sloc_nodes: HashMap<AstNodeId, SourceLocation>,
     switch_cases: HashMap<AstNodeId, HashMap<AstConstantInteger, AstNodeId>>,
     switch_defaults: HashMap<AstNodeId, SourceLocation>,
     node_types: HashMap<AstNodeId, AstType>,
@@ -32,7 +33,8 @@ impl AstMetadata {
     /// Creates the AST metadata.
     pub fn new() -> Self {
         Self {
-            source_location_nodes: HashMap::new(),
+            sloc_nodes: HashMap::new(),
+            operator_sloc_nodes: HashMap::new(),
             switch_cases: HashMap::new(),
             switch_defaults: HashMap::new(),
             node_types: HashMap::new(),
@@ -63,17 +65,40 @@ impl AstMetadata {
 
     /// Adds the source location metadata for the given node.
     pub fn add_source_location(&mut self, node_id: AstNodeId, source_loc: SourceLocation) {
-        self.source_location_nodes.insert(node_id, source_loc);
+        self.sloc_nodes.insert(node_id, source_loc);
     }
 
     /// Gets the source location metadata for the given node.
     ///
     /// Pre: Expects the source location to previously have been set; emits an ICE otherwise.
     pub fn get_source_location(&self, node_id: &AstNodeId) -> SourceLocation {
-        if let Some(loc) = self.source_location_nodes.get(node_id) {
+        if let Some(loc) = self.sloc_nodes.get(node_id) {
             *loc
         } else {
             ICE!("Cannot find source location for AST node '{node_id}'")
+        }
+    }
+
+    /// Copies a source location from a child expression to a parent expression.
+    pub fn copy_source_location_from_child(&mut self, child_node_id: AstNodeId, parent_node_id: AstNodeId) {
+        if let Some(loc) = self.sloc_nodes.get(&child_node_id) {
+            self.add_source_location(parent_node_id, *loc);
+        }
+    }
+
+    /// Adds the source location metadata of the operator for the given binary/ternary expression node.
+    pub fn add_operator_sloc(&mut self, node_id: AstNodeId, source_loc: SourceLocation) {
+        self.operator_sloc_nodes.insert(node_id, source_loc);
+    }
+
+    /// Gets the source location metadata of the operator for the given binary/ternary expression node.
+    ///
+    /// Pre: Expects the source location to previously have been set; emits an ICE otherwise.
+    pub fn get_operator_sloc(&self, node_id: &AstNodeId) -> SourceLocation {
+        if let Some(loc) = self.operator_sloc_nodes.get(node_id) {
+            *loc
+        } else {
+            ICE!("Cannot find binary operator source location for AST node '{node_id}'")
         }
     }
 

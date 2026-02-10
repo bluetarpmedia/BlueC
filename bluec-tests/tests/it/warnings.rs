@@ -29,10 +29,10 @@ fn compile_source_file_and_expect_warnings(source_filename: &str) {
 
     let mut driver = Driver::new(source_filename, options);
     driver.set_flag(DriverFlag::PRINT_NO_SOURCE_LOC);
-    let driver_result = driver.run();
+    _ = driver.run();
 
-    assert!(driver_result.is_ok());
-    assert!(!driver.has_error_diagnostics());
+    // Don't check whether there are error diagnostics; some test cases may emit both errors and warnings.
+    // We only care about warning diagnostics in these particular tests.
     assert!(driver.warning_count() > 0);
 
     let mut buf: Vec<u8> = Vec::new();

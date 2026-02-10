@@ -8,16 +8,17 @@
 
 use crate::ICE;
 use crate::compiler_driver::{Diagnostic, Driver, Error, Warning};
+use crate::core::SourceLocation;
 use crate::parser::expr::ops;
 use crate::parser::{
     AstAssignmentOp, AstBinaryOp, AstBlock, AstBlockItem, AstConstantValue, AstDeclaration, AstExpression,
-    AstForInitializer, AstFullExpression, AstNodeId, AstRoot, AstStatement, AstStaticStorageInitializer,
-    AstStorageDuration, AstType, AstUnaryOp, AstUniqueName, AstVariableInitializer,
+    AstExpressionFlag, AstForInitializer, AstFullExpression, AstNodeId, AstRoot, AstStatement,
+    AstStaticStorageInitializer, AstStorageDuration, AstType, AstUnaryOp, AstUniqueName, AstVariableInitializer,
 };
 
 use super::super::constant_eval;
 use super::super::type_resolution;
-use super::checker::{CastWarningPolicy, TypeCheckError, TypeCheckResult, TypeChecker};
+use super::checker::{TypeCheckError, TypeCheckResult, TypeChecker};
 use super::symbols;
 use super::utils;
 
@@ -605,7 +606,7 @@ fn typecheck_cast_expression(
     chk: &mut TypeChecker,
     driver: &mut Driver,
 ) -> TypeCheckResult<AstType> {
-    let AstExpression::Cast { node_id, target_type, expr } = expr else {
+    let AstExpression::Cast { node_id, target_type, expr, .. } = expr else {
         ICE!("Expected cast expression");
     };
 
@@ -641,7 +642,7 @@ fn typecheck_cast_expression(
         Error::invalid_cast(expr_loc, &expr_type, &cast_to_type, driver);
     }
 
-    // Future: Warn about UB casting from a negative float literal to an unsigned int, e.g. `(unsigned int)-1`
+    // TODO: Warn about UB casting from a negative float literal to an unsigned int, e.g. `(unsigned int)-1`
 
     chk.set_data_type(node_id, &cast_to_type);
     Ok(cast_to_type)
@@ -731,6 +732,10 @@ fn typecheck_unary_operation(
                 // Cast the expression to 'int'.
                 let converted_expr =
                     convert_expression_type(&operand_expr.node_id(), operand_expr, &promoted_type, chk, driver)?;
+
+                // Take note that this expression's type was promoted to 'int' so that later on if we need to emit
+                // an "implicit-conversion" warning about this expression we can select the appropriate warning kind.
+                chk.metadata.set_expr_flag(*node_id, AstExpressionFlag::PromotedToInt);
 
                 *operand_expr = Box::new(converted_expr);
 
@@ -852,7 +857,15 @@ fn typecheck_binary_operation(
     // Determine the data type to cast the operands
     let operand_data_type = if cast_both_to_common_type {
         match utils::get_common_type(&left, &right, chk, driver) {
-            Ok(common_type) => common_type,
+            Ok((common_type, promoted_to_int)) => {
+                // Take note that this expression's type was promoted to 'int' so that we have that context in case
+                // later we need to emit a warning about this expression.
+                if promoted_to_int {
+                    chk.metadata.set_expr_flag(*node_id, AstExpressionFlag::PromotedToInt);
+                }
+
+                common_type
+            }
             Err(e) => match e {
                 utils::CommonTypeError::WarnDifferentPointerTypes { a_type, b_type } => {
                     utils::warn_compare_different_pointer_types(node_id, &left, &right, &a_type, &b_type, chk, driver);
@@ -865,18 +878,23 @@ fn typecheck_binary_operation(
                 }
 
                 utils::CommonTypeError::NoCommonType { a_type, b_type } => {
-                    let loc = chk.metadata.get_source_location(node_id);
-                    let a_loc = chk.metadata.get_source_location(&left.node_id());
-                    let b_loc = chk.metadata.get_source_location(&right.node_id());
-                    Error::incompatible_types(&a_type, &b_type, loc, a_loc, b_loc, driver);
+                    let a_node_id = left.node_id();
+                    let b_node_id = right.node_id();
+                    utils::error_incompatible_types(&a_type, &b_type, *node_id, a_node_id, b_node_id, chk, driver);
 
                     a_type
                 }
             },
         }
     } else {
-        let (promoted_type, _) = left_type.promote_if_rank_lower_than_int();
-        promoted_type
+        let (ty, promoted_to_int) = left_type.promote_if_rank_lower_than_int();
+
+        // As above
+        if promoted_to_int {
+            chk.metadata.set_expr_flag(*node_id, AstExpressionFlag::PromotedToInt);
+        }
+
+        ty
     };
 
     // If necessary, cast both operands to the binary operation's data type.
@@ -884,8 +902,8 @@ fn typecheck_binary_operation(
     //      But we still cast the lhs to the data type because the lhs may have been promoted to 'int'
     //      if it was a smaller integer type (_Bool, char, short).
     //
-    let left = chk.add_cast_if_needed(&operand_data_type, left, CastWarningPolicy::WarnOnImplicitConversion, driver);
-    let right = chk.add_cast_if_needed(&operand_data_type, right, CastWarningPolicy::WarnOnImplicitConversion, driver);
+    let left = chk.add_implicit_cast_if_needed(&operand_data_type, left);
+    let right = chk.add_implicit_cast_if_needed(&operand_data_type, right);
 
     // Determine the data type of the binary operation itself
     let binary_op_data_type = if op.is_relational() { AstType::Int } else { operand_data_type };
@@ -942,9 +960,9 @@ fn typecheck_ptr_and_int_binary_operation(
         utils::warn_compare_pointer_and_integer(node_id, &ptr_expr, &int_expr, &ptr_type, &int_type, chk, driver);
     }
 
-    // Cast the integer expression to a 'long' type. This helps us later with IR lowering.
+    // If necessary, cast the integer expression to a 'long' type. This helps us later with IR lowering.
     let original_int_expr = utils::take_boxed_expression(&mut int_expr);
-    int_expr = chk.add_cast_if_needed(&AstType::Long, original_int_expr, CastWarningPolicy::NoWarning, driver);
+    int_expr = chk.add_explicit_cast_if_needed(&AstType::Long, original_int_expr);
 
     // The data type of the binary operation is 'int' if the operation is relational or otherwise the pointer's type.
     let expression_type = if op.is_relational() { AstType::Int } else { ptr_type };
@@ -1058,24 +1076,27 @@ fn typecheck_assignment(
             }
         }
 
-        // Some operations use the lhs type as the computation type, including a function pointer with `+=` or `-=`
-        // and an integer rhs.
         let is_fn_ptr_incr_decr = lhs_type.is_function_pointer()
             && rhs_type.is_integer()
             && matches!(op, AstAssignmentOp::Addition | AstAssignmentOp::Subtraction);
 
-        let is_shift = matches!(op, AstAssignmentOp::LeftShift | AstAssignmentOp::RightShift);
-
-        if is_fn_ptr_incr_decr || is_shift {
-            chk.set_data_type(node_id, &lhs_type);
-            chk.set_data_type(computation_node_id, &lhs_type);
-
-            return Ok(lhs_type);
-        }
-
         // Work out the common type for the compound computation (e.g. the type of `lhs + rhs` if the op is `+=`).
         //      The IR lowering stage will use this type when translating the compound operation to IR.
-        let computation_type = utils::get_common_type(lhs, rhs, chk, driver).map_err(|_| TypeCheckError)?;
+        //      Remember, shift operations do not follow the C "Usual Arithmetic Conversions".
+        //
+        let (computation_type, promoted_to_int) = if op.is_shift() {
+            lhs_type.clone().promote_if_rank_lower_than_int()
+        } else if is_fn_ptr_incr_decr {
+            (lhs_type.clone(), false)
+        } else {
+            utils::get_common_type(lhs, rhs, chk, driver).map_err(|_| TypeCheckError)?
+        };
+
+        // Take note that the 'rhs' expression's type was promoted to 'int' so that we have that context in case later
+        // we need to emit a warning about this expression.
+        if promoted_to_int {
+            chk.metadata.set_expr_flag(rhs.node_id(), AstExpressionFlag::PromotedToInt);
+        }
 
         chk.set_data_type(node_id, &lhs_type);
         chk.set_data_type(computation_node_id, &computation_type);
@@ -1117,7 +1138,7 @@ fn typecheck_conditional(
     typecheck_expression_with_decay(alternative, chk, driver)?;
 
     let common_type = match utils::get_common_type(consequent, alternative, chk, driver) {
-        Ok(common_type) => common_type,
+        Ok((common_type, _)) => common_type,
         Err(e) => match e {
             utils::CommonTypeError::WarnDifferentPointerTypes { a_type, b_type } => {
                 utils::warn_pointer_type_mismatch(node_id, consequent, alternative, &a_type, &b_type, chk, driver);
@@ -1130,10 +1151,9 @@ fn typecheck_conditional(
             }
 
             utils::CommonTypeError::NoCommonType { a_type, b_type } => {
-                let loc = chk.metadata.get_source_location(node_id);
-                let a_loc = chk.metadata.get_source_location(&consequent.node_id());
-                let b_loc = chk.metadata.get_source_location(&alternative.node_id());
-                Error::incompatible_types(&a_type, &b_type, loc, a_loc, b_loc, driver);
+                let a_node_id = consequent.node_id();
+                let b_node_id = alternative.node_id();
+                utils::error_incompatible_types(&a_type, &b_type, *node_id, a_node_id, b_node_id, chk, driver);
 
                 a_type
             }
@@ -1145,10 +1165,9 @@ fn typecheck_conditional(
     let original_consequent = utils::take_boxed_expression(consequent);
     let original_alternative = utils::take_boxed_expression(alternative);
 
-    // Wrap each operand in a Cast
-    let cast_enable_warning = CastWarningPolicy::WarnOnImplicitConversion;
-    let casted_consequent = chk.add_cast_if_needed(&common_type, original_consequent, cast_enable_warning, driver);
-    let casted_alternative = chk.add_cast_if_needed(&common_type, original_alternative, cast_enable_warning, driver);
+    // Wrap each operand in a cast
+    let casted_consequent = chk.add_implicit_cast_if_needed(&common_type, original_consequent);
+    let casted_alternative = chk.add_implicit_cast_if_needed(&common_type, original_alternative);
 
     // Data type of the conditional is the common type of the consequent and alternative
     chk.set_data_type(node_id, &common_type);
@@ -1403,6 +1422,10 @@ fn evaluate_static_storage_initializer(
     // Merge consecutive ZeroBytes elements, e.g. `[ZeroBytes(4), ZeroBytes(4)]` becomes `[ZeroBytes(8)]`.
     eval = utils::combine_consecutive_zero_bytes(eval);
 
+    // Take note that the node is an initializer for a static storage variable, so that subsequent constant folding
+    // does not try and evaluate it again (in order to avoid duplicate warnings).
+    chk.metadata.set_expr_flag(*initializer.node_id(), AstExpressionFlag::IsStaticStorageInit);
+
     Ok(eval)
 }
 
@@ -1474,9 +1497,7 @@ fn evaluate_static_storage_scalar_initializer(
         return Ok(AstStaticStorageInitializer::from(constant_value));
     }
 
-    let original_value = constant_value.clone();
-
-    // Cast the constant value to the full expression's type and emit a warning.
+    // Cast the constant value to the full expression's type and emit a warning if needed.
     //      If the full expression's type is a pointer then we cast the constant value to u64.
     //
     let casted_value = if full_expr_type.is_pointer() {
@@ -1484,26 +1505,6 @@ fn evaluate_static_storage_scalar_initializer(
     } else {
         constant_value.cast_to(&full_expr_type)
     };
-
-    if casted_value != original_value {
-        let old_value = original_value.to_string();
-        let new_value = casted_value.to_string();
-        let sign_change = constant_value_type.is_integer()
-            && full_expr_type.is_integer()
-            && !constant_value_type.same_signedness(&full_expr_type);
-
-        let loc = chk.metadata.get_source_location(&full_expr.node_id);
-
-        Warning::constant_conversion(
-            &constant_value_type,
-            &full_expr_type,
-            &old_value,
-            &new_value,
-            sign_change,
-            loc,
-            driver,
-        );
-    }
 
     Ok(AstStaticStorageInitializer::from(casted_value))
 }
@@ -1515,7 +1516,8 @@ fn evaluate_constant_full_expression(
     chk: &mut TypeChecker,
     driver: &mut Driver,
 ) -> TypeCheckResult<AstConstantValue> {
-    let constant_value = constant_eval::evaluate_constant_full_expr(full_expr, chk, driver);
+    let mut eval = constant_eval::Eval::new(chk, driver);
+    let constant_value = eval.evaluate_full_expr(full_expr);
 
     if constant_value.is_none() {
         let loc = chk.metadata.get_source_location(&full_expr.node_id);
@@ -1549,7 +1551,8 @@ fn convert_expression_type(
     let original_expr = utils::take_expression(expr);
 
     // Cast the expression to the target type
-    Ok(chk.add_cast(target_type, Box::new(original_expr), CastWarningPolicy::WarnOnImplicitConversion, driver))
+    let is_implicit_cast = true;
+    Ok(chk.add_cast(target_type, Box::new(original_expr), is_implicit_cast))
 }
 
 /// Checks whether a conversion from a `source_type` to a `dest_type` is valid; emits a diagnostic if not.
@@ -1663,6 +1666,9 @@ fn make_zero_initializer(
     } else if element_type.is_scalar() {
         // If necessary, this 'int' will get promoted to the `element_type`.
         let mut constant_zero = AstFullExpression::new(AstExpression::new_int_literal(0));
+
+        chk.metadata.add_source_location(constant_zero.expr.node_id(), SourceLocation::none());
+        chk.metadata.add_source_location(constant_zero.node_id, SourceLocation::none());
 
         _ = typecheck_full_expression_for_result_type(&mut constant_zero, element_type, chk, driver)?;
 

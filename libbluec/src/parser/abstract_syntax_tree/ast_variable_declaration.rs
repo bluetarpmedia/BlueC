@@ -54,6 +54,11 @@ impl AstVariableInitializer {
             AstVariableInitializer::Aggregate { node_id, .. } => node_id,
         }
     }
+
+    /// Is the initializer an aggregate initializer?
+    pub fn is_aggregate(&self) -> bool {
+        matches!(self, AstVariableInitializer::Aggregate { .. })
+    }
 }
 
 /// A constant, compile-time initializer value for a static storage variable.

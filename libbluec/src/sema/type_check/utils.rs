@@ -98,12 +98,17 @@ pub enum CommonTypeError {
 }
 
 /// Gets the common `AstType` for the types of the two given expressions.
+///
+/// This follows the C language "Usual Arithmetic Conversions".
+///
+/// Returns a tuple of the common type and whether either 'a' or 'b' was promoted to 'int' as part of C language
+/// integer promotion rules.
 pub fn get_common_type(
     a: &AstExpression,
     b: &AstExpression,
     chk: &mut TypeChecker,
     driver: &mut Driver,
-) -> Result<AstType, CommonTypeError> {
+) -> Result<(AstType, bool), CommonTypeError> {
     let a_type = chk.get_data_type(&a.node_id());
     let b_type = chk.get_data_type(&b.node_id());
 
@@ -117,7 +122,7 @@ pub fn get_common_type(
     //
     if a_type.is_pointer() || b_type.is_pointer() {
         if a_type == b_type {
-            return Ok(a_type);
+            return Ok((a_type, false));
         }
 
         // If both types are pointers but not the same (see above), ask the caller to emit a warning.
@@ -126,11 +131,11 @@ pub fn get_common_type(
         }
 
         if is_null_pointer_constant(a, &b_type, chk, driver) {
-            return Ok(b_type);
+            return Ok((b_type, false));
         }
 
         if is_null_pointer_constant(b, &a_type, chk, driver) {
-            return Ok(a_type);
+            return Ok((a_type, false));
         }
 
         // If one of the types is an integer (and not a null pointer constant) then ask the caller to emit a warning.
@@ -141,10 +146,16 @@ pub fn get_common_type(
         return Err(CommonTypeError::NoCommonType { a_type, b_type });
     }
 
-    // Get the common type and then promote to `int` if the common type is smaller, like _Bool, char or short.
     let common_type = AstType::get_common_type(&a_type, &b_type);
-    let (common_type, _) = common_type.promote_if_rank_lower_than_int();
-    Ok(common_type)
+
+    if common_type == AstType::Int {
+        let int_rank = AstType::Int.integer_rank();
+        if a_type.integer_rank() < int_rank || b_type.integer_rank() < int_rank {
+            return Ok((AstType::Int, true));
+        }
+    }
+
+    Ok(common_type.promote_if_rank_lower_than_int())
 }
 
 /// Does the given `expr` expression evaluate as a null pointer constant value (zero)?
@@ -157,14 +168,17 @@ pub fn is_null_pointer_constant(
     match expr {
         AstExpression::IntegerLiteral { value, .. } => *value == 0,
 
-        _ => match constant_eval::evaluate_constant_expr(expr, chk, driver) {
-            Some(const_value) if const_value.is_zero() && const_value.get_ast_type().is_integer() => {
-                let loc = chk.metadata.get_source_location(&expr.node_id());
-                Warning::expression_interpreted_as_null_ptr_constant(loc, ptr_type, driver);
-                true
+        _ => {
+            let mut eval = constant_eval::Eval::new(chk, driver);
+            match eval.evaluate_expr(expr) {
+                Some(const_value) if const_value.is_zero() && const_value.get_ast_type().is_integer() => {
+                    let loc = chk.metadata.get_source_location(&expr.node_id());
+                    Warning::expression_interpreted_as_null_ptr_constant(loc, ptr_type, driver);
+                    true
+                }
+                _ => false,
             }
-            _ => false,
-        },
+        }
     }
 }
 
@@ -185,6 +199,22 @@ pub fn error_invalid_binary_expression_operands(
     Error::invalid_binary_expression_operands(op_loc, lhs_type, rhs_type, lhs_loc, rhs_loc, driver);
 }
 
+/// Emits an error that two operands 'a' and 'b' in an expression have incompatible types.
+pub fn error_incompatible_types(
+    a_type: &AstType,
+    b_type: &AstType,
+    expr_node_id: AstNodeId,
+    a_node_id: AstNodeId,
+    b_node_id: AstNodeId,
+    chk: &mut TypeChecker,
+    driver: &mut Driver,
+) {
+    let loc = chk.metadata.get_source_location(&expr_node_id);
+    let a_loc = chk.metadata.get_source_location(&a_node_id);
+    let b_loc = chk.metadata.get_source_location(&b_node_id);
+    Error::incompatible_types(a_type, b_type, loc, a_loc, b_loc, driver);
+}
+
 /// Emits a warning that two different pointer types are being compared.
 pub fn warn_compare_different_pointer_types(
     expr_node_id: &AstNodeId,
@@ -195,10 +225,10 @@ pub fn warn_compare_different_pointer_types(
     chk: &mut TypeChecker,
     driver: &mut Driver,
 ) {
-    let loc = chk.metadata.get_source_location(expr_node_id);
+    let loc = chk.metadata.get_operator_sloc(expr_node_id);
     let a_loc = chk.metadata.get_source_location(&left.node_id());
     let b_loc = chk.metadata.get_source_location(&right.node_id());
-    Warning::compare_different_pointer_types(left_type, right_type, loc, a_loc, b_loc, driver);
+    Warning::compare_distinct_pointer_types(left_type, right_type, loc, a_loc, b_loc, driver);
 }
 
 /// Emits a warning that a pointer and an integer are being compared.
@@ -211,7 +241,7 @@ pub fn warn_compare_pointer_and_integer(
     chk: &mut TypeChecker,
     driver: &mut Driver,
 ) {
-    let cmp_loc = chk.metadata.get_source_location(expr_node_id);
+    let op_loc = chk.metadata.get_operator_sloc(expr_node_id);
     let left_loc = chk.metadata.get_source_location(&left.node_id());
     let right_loc = chk.metadata.get_source_location(&right.node_id());
 
@@ -221,7 +251,7 @@ pub fn warn_compare_pointer_and_integer(
         (right_type, left_type, right_loc, left_loc)
     };
 
-    Warning::compare_pointer_and_integer(ptr_type, int_type, cmp_loc, ptr_loc, int_loc, driver);
+    Warning::compare_pointer_and_integer(ptr_type, int_type, op_loc, ptr_loc, int_loc, driver);
 }
 
 /// Emits a warning that a ternary condition's consequent and alternative types do not match.
@@ -234,10 +264,10 @@ pub fn warn_conditional_type_mismatch(
     chk: &mut TypeChecker,
     driver: &mut Driver,
 ) {
-    let loc = chk.metadata.get_source_location(expr_node_id);
+    let ternary_op_loc = chk.metadata.get_operator_sloc(expr_node_id);
     let a_loc = chk.metadata.get_source_location(&left.node_id());
     let b_loc = chk.metadata.get_source_location(&right.node_id());
-    Warning::conditional_type_mismatch(left_type, right_type, loc, a_loc, b_loc, driver);
+    Warning::conditional_type_mismatch(left_type, right_type, ternary_op_loc, a_loc, b_loc, driver);
 }
 
 /// Emits a warning that two pointers in an expression have different types.
@@ -250,10 +280,10 @@ pub fn warn_pointer_type_mismatch(
     chk: &mut TypeChecker,
     driver: &mut Driver,
 ) {
-    let loc = chk.metadata.get_source_location(expr_node_id);
+    let op_loc = chk.metadata.get_operator_sloc(expr_node_id);
     let a_loc = chk.metadata.get_source_location(&left.node_id());
     let b_loc = chk.metadata.get_source_location(&right.node_id());
-    Warning::pointer_type_mismatch(left_type, right_type, loc, a_loc, b_loc, driver);
+    Warning::pointer_type_mismatch(left_type, right_type, op_loc, a_loc, b_loc, driver);
 }
 
 /// Is the given unary operator incompatible with pointer operands?

@@ -352,7 +352,8 @@ fn resolve_array_size(
     driver: &mut Driver,
 ) -> Result<usize, ResolutionError> {
     if let Some(size_expr) = size_expr {
-        let constant_value = constant_eval::evaluate_constant_full_expr(size_expr, chk, driver);
+        let mut eval = constant_eval::Eval::new(chk, driver);
+        let constant_value = eval.evaluate_full_expr(size_expr);
 
         let Some(constant_value) = constant_value else {
             let err = "Array size must be a constant integer expression".to_string();

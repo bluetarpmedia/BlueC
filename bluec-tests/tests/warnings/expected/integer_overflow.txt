@@ -1,0 +1,29 @@
+warning: Integer overflow in expression of type 'int'; the value after overflow is 1
+         [-Winteger-overflow]
+   |
+   |     int i = 2147483647 * 2147483647;
+   |             ^^^^^^^^^^^^^^^^^^^^^^^
+   |
+
+warning: Integer overflow in expression of type 'long'; the value after overflow is -2
+         [-Winteger-overflow]
+   |
+   |     long l = 9223372036854775807L * 2;
+   |              ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+
+warning: Integer overflow in expression of type 'int'; the value after overflow is -10
+         [-Winteger-overflow]
+   |
+   |     i -= 2147483647 * 10;
+   |          ^^^^^^^^^^^^^^^
+   |
+
+warning: Integer overflow in expression of type 'long'; the value after overflow is -2
+         [-Winteger-overflow]
+   |
+   |     l -= 9223372036854775807L * 2;
+   |          ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+
+4 warnings generated

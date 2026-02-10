@@ -1,0 +1,43 @@
+warning: Constant value is too large for literal type 'float'; valid range is +/-
+         3.4028235e38 [-Wliteral-range]
+   |
+   |     f += 1e40f;
+   |          ^^^^^
+   |
+
+warning: Constant value is too large for literal type 'double'; valid range is +/-
+         1.7976931348623157e308 [-Wliteral-range]
+   |
+   |     d += 1e400;
+   |          ^^^^^
+   |
+
+warning: Constant value is too large for literal type 'long double'; valid range is +/-
+         1.7976931348623157e308 [-Wliteral-range]
+   |
+   |     ld += 1e400L;
+   |           ^^^^^^
+   |
+
+warning: Constant value is too large for literal type 'float'; valid range is +/-
+         3.4028235e38 [-Wliteral-range]
+   |
+   |     f = 0x1p150f;
+   |         ^^^^^^^^
+   |
+
+warning: Constant value is too large for literal type 'double'; valid range is +/-
+         1.7976931348623157e308 [-Wliteral-range]
+   |
+   |     d = 0x1p2000;
+   |         ^^^^^^^^
+   |
+
+warning: Constant value is too large for literal type 'long double'; valid range is +/-
+         1.7976931348623157e308 [-Wliteral-range]
+   |
+   |     ld = 0x1p2000L;
+   |          ^^^^^^^^^
+   |
+
+6 warnings generated

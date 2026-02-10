@@ -5,13 +5,11 @@
 use std::collections::HashMap;
 
 use crate::ICE;
-use crate::compiler_driver::{Driver, Warning};
 use crate::core::SourceLocation;
-use crate::parser::{AstDeclaredType, AstExpression, AstMetadata, AstNodeId, AstType, AstUnaryOp};
+use crate::parser::{AstDeclaredType, AstExpression, AstMetadata, AstNodeId, AstType};
 
 use super::super::constant_table::ConstantTable;
 use super::super::symbol_table::SymbolTable;
-use super::super::type_conversion;
 
 /// The error result for `TypeCheckResult`.
 pub struct TypeCheckError;
@@ -33,13 +31,6 @@ pub struct TypeChecker {
     pub constants: ConstantTable,
     current_func_return_type: Option<AstType>,
     scopes: Vec<DeclarationScope>,
-}
-
-/// Whether to warn about implicit conversions when adding a cast.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum CastWarningPolicy {
-    WarnOnImplicitConversion,
-    NoWarning,
 }
 
 impl Default for TypeChecker {
@@ -106,144 +97,39 @@ impl TypeChecker {
     }
 
     /// Wraps the given `AstExpression` in a cast to the given `target_type`.
-    pub fn add_cast(
-        &mut self,
-        target_type: &AstType,
-        expr: Box<AstExpression>,
-        warning_policy: CastWarningPolicy,
-        driver: &mut Driver,
-    ) -> AstExpression {
+    pub fn add_cast(&mut self, target_type: &AstType, expr: Box<AstExpression>, is_implicit: bool) -> AstExpression {
         let node_id = AstNodeId::new();
 
         self.set_data_type(&node_id, target_type);
+        self.metadata.copy_source_location_from_child(expr.node_id(), node_id);
         self.metadata.propagate_const_flag_from_child(expr.node_id(), node_id);
-
-        if warning_policy == CastWarningPolicy::WarnOnImplicitConversion {
-            let mut emitted_warning = false;
-
-            // Warn if implicitly casting a UnaryNegate with an integer literal to an unsigned integer, which will
-            // change signedness.
-            if target_type.is_unsigned_integer()
-                && let AstExpression::UnaryOperation { node_id, op, expr: inner_expr } = expr.as_ref()
-                && *op == AstUnaryOp::Negate
-                && inner_expr.is_integer_literal()
-            {
-                let old_type = self.metadata.get_node_type(node_id);
-                let loc = self.metadata.get_source_location(node_id);
-                let sign_change = true;
-
-                let AstExpression::IntegerLiteral { value, .. } = inner_expr.as_ref() else {
-                    ICE!("Expected an integer literal");
-                };
-
-                // Don't warn on implicit unsigned cast applied to '-0'.
-                if *value != 0 {
-                    emit_implicit_literal_conversion_warning(
-                        old_type,
-                        target_type,
-                        *value,
-                        true,
-                        loc,
-                        sign_change,
-                        driver,
-                    );
-
-                    emitted_warning = true;
-                }
-            }
-
-            // Warn if there's an implicit narrowing conversion for an integer literal (with or without change in signedness).
-            if let AstExpression::IntegerLiteral { node_id, value, kind, .. } = expr.as_ref()
-                && target_type.is_integer()
-                && !target_type.can_hold_value(*value)
-            {
-                let old_type = kind.data_type();
-                let loc = self.metadata.get_source_location(node_id);
-                let sign_change =
-                    old_type.is_integer() && target_type.is_integer() && !old_type.same_signedness(target_type);
-
-                emit_implicit_literal_conversion_warning(
-                    &old_type,
-                    target_type,
-                    *value,
-                    false,
-                    loc,
-                    sign_change,
-                    driver,
-                );
-
-                emitted_warning = true;
-            }
-
-            // Warn if there's an implicit arithmetic conversion for non-literals
-            if !emitted_warning && !expr.is_arithmetic_literal() {
-                let expr_type = self.get_data_type(&expr.node_id());
-                let both_integers = target_type.is_integer() && expr_type.is_integer();
-                let both_floating_point = target_type.is_floating_point() && expr_type.is_floating_point();
-
-                if (both_integers || both_floating_point) && !expr_type.fits_inside(target_type) {
-                    let loc = self.metadata.get_source_location(&expr.node_id());
-                    Warning::implicit_arithmetic_conversion(&expr_type, target_type, loc, driver);
-                }
-            }
-        }
 
         let target_type = AstDeclaredType::resolved(target_type);
 
-        AstExpression::Cast { node_id, target_type, expr }
+        AstExpression::Cast { node_id, target_type, expr, is_implicit }
     }
 
     /// If the given boxed `AstExpression`'s type already matches the `target_type` then the existing expression
-    /// is returned as-is. Otherwise, wraps the expression in a cast to the target type.
-    pub fn add_cast_if_needed(
+    /// is returned as-is. Otherwise, wraps the expression in an implicit cast to the target type.
+    pub fn add_implicit_cast_if_needed(
         &mut self,
         target_type: &AstType,
         expr: Box<AstExpression>,
-        warning_policy: CastWarningPolicy,
-        driver: &mut Driver,
     ) -> Box<AstExpression> {
         let expr_type = self.get_data_type(&expr.node_id());
 
-        if expr_type == *target_type {
-            expr
-        } else {
-            Box::new(self.add_cast(target_type, expr, warning_policy, driver))
-        }
+        if expr_type == *target_type { expr } else { Box::new(self.add_cast(target_type, expr, true)) }
     }
-}
 
-fn emit_implicit_literal_conversion_warning(
-    old_type: &AstType,
-    new_type: &AstType,
-    old_value: u64,
-    negate_old_value: bool,
-    loc: SourceLocation,
-    sign_change: bool,
-    driver: &mut Driver,
-) {
-    let old_value = if negate_old_value { -(old_value as i128) } else { old_value as i128 };
+    /// If the given boxed `AstExpression`'s type already matches the `target_type` then the existing expression
+    /// is returned as-is. Otherwise, wraps the expression in an explicit cast to the target type.
+    pub fn add_explicit_cast_if_needed(
+        &mut self,
+        target_type: &AstType,
+        expr: Box<AstExpression>,
+    ) -> Box<AstExpression> {
+        let expr_type = self.get_data_type(&expr.node_id());
 
-    let old_value_str = old_value.to_string();
-
-    let new_value_str = if new_type.is_integer() {
-        let new_value = type_conversion::cast_i128_to_integer_type(old_value, new_type);
-
-        match new_value {
-            (Some(u), None) => u.to_string(),
-            (None, Some(i)) => i.to_string(),
-            _ => ICE!("'cast_i128_to_integer_type' did not return a value"),
-        }
-    } else if new_type.is_floating_point() {
-        let new_value = old_value as f64;
-
-        // We're casting from an integer to floating point, so there will be no fractional digits.
-        // Rust's `f64::to_string` will prefer to create a round-trippable decimal string value
-        // which may not perfectly match the actual value. So we specify that we want zero fractional
-        // digits for our string.
-        format!("{:.0}", new_value)
-    } else {
-        ICE!("Unhandled type");
-    };
-
-    Warning::constant_conversion(old_type, new_type, &old_value_str, &new_value_str, sign_change, loc, driver);
+        if expr_type == *target_type { expr } else { Box::new(self.add_cast(target_type, expr, false)) }
+    }
 }

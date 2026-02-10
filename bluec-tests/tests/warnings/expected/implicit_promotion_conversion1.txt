@@ -1,0 +1,37 @@
+warning: Implicit conversion from promoted type 'int' to 'char' may change its value
+         [-Wimplicit-promotion-conversion]
+   |
+   |     char a = x + y;
+   |              ^^^^^
+   |
+note: Expression was promoted to 'int' as part of C language integer promotion rules.
+      Wrap the expression in a cast to 'char' to silence this warning.
+   |
+   | (char)(...)
+   |
+
+warning: Implicit conversion from promoted type 'int' to 'char' may change its value
+         [-Wimplicit-promotion-conversion]
+   |
+   |     char b = a + 1;
+   |              ^^^^^
+   |
+note: Expression was promoted to 'int' as part of C language integer promotion rules.
+      Wrap the expression in a cast to 'char' to silence this warning.
+   |
+   | (char)(...)
+   |
+
+warning: Implicit conversion from promoted type 'int' to 'char' may change its value
+         [-Wimplicit-promotion-conversion]
+   |
+   |     char c = ~b;
+   |              ^^
+   |
+note: Expression was promoted to 'int' as part of C language integer promotion rules.
+      Wrap the expression in a cast to 'char' to silence this warning.
+   |
+   | (char)(...)
+   |
+
+3 warnings generated

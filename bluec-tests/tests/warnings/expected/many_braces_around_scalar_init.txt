@@ -7,13 +7,13 @@ warning: Too many braces around scalar initializer [-Wmany-braces-around-scalar-
 warning: Too many braces around scalar initializer [-Wmany-braces-around-scalar-init]
    |
    |     int b = {{{1}}};
-   |              ^~~~~
+   |             ^~~~~~~
    |
 
 warning: Too many braces around scalar initializer [-Wmany-braces-around-scalar-init]
    |
    |     int b = {{{1}}};
-   |             ^~~~~~~
+   |              ^~~~~
    |
 
 3 warnings generated

@@ -175,6 +175,19 @@ impl From<AstAssignmentOp> for lexer::TokenType {
     }
 }
 
+impl AstUnaryOp {
+    /// Does the operator have side effects?
+    pub fn has_side_effects(&self) -> bool {
+        matches!(
+            self,
+            AstUnaryOp::PrefixDecrement
+                | AstUnaryOp::PrefixIncrement
+                | AstUnaryOp::PostfixDecrement
+                | AstUnaryOp::PostfixIncrement
+        )
+    }
+}
+
 impl AstBinaryOp {
     /// Is the operator a relational operator?
     pub fn is_relational(&self) -> bool {
@@ -208,11 +221,51 @@ impl AstBinaryOp {
     pub fn is_commutative_and_associative(&self) -> bool {
         matches!(self, AstBinaryOp::Add | AstBinaryOp::Multiply)
     }
+
+    /// Is the operator either Division or Remainder?
+    pub fn is_div_or_rem(&self) -> bool {
+        matches!(self, AstBinaryOp::Divide | AstBinaryOp::Remainder)
+    }
+
+    /// Is the operator a Left/Right shift operator?
+    pub fn is_shift(&self) -> bool {
+        matches!(self, AstBinaryOp::LeftShift | AstBinaryOp::RightShift)
+    }
+}
+
+#[rustfmt::skip]
+impl TryFrom<AstAssignmentOp> for AstBinaryOp {
+    type Error = ();
+    fn try_from(value: AstAssignmentOp) -> Result<Self, Self::Error> {
+        match value {
+            AstAssignmentOp::Addition    => Ok(AstBinaryOp::Add),
+            AstAssignmentOp::Subtraction => Ok(AstBinaryOp::Subtract),
+            AstAssignmentOp::Multiply    => Ok(AstBinaryOp::Multiply),
+            AstAssignmentOp::Divide      => Ok(AstBinaryOp::Divide),
+            AstAssignmentOp::Remainder   => Ok(AstBinaryOp::Remainder),
+            AstAssignmentOp::BitwiseAnd  => Ok(AstBinaryOp::BitwiseAnd),
+            AstAssignmentOp::BitwiseOr   => Ok(AstBinaryOp::BitwiseOr),
+            AstAssignmentOp::BitwiseXor  => Ok(AstBinaryOp::BitwiseXor),
+            AstAssignmentOp::LeftShift   => Ok(AstBinaryOp::LeftShift),
+            AstAssignmentOp::RightShift  => Ok(AstBinaryOp::RightShift),
+            _ => Err(()),
+        }
+    }
 }
 
 impl AstAssignmentOp {
     /// Is the operator a compound assignment operator?
     pub fn is_compound_assignment(&self) -> bool {
         !matches!(self, AstAssignmentOp::Assignment)
+    }
+
+    /// Is the operator either the compound division or compound remainder operator?
+    pub fn is_div_or_rem(&self) -> bool {
+        matches!(self, AstAssignmentOp::Divide | AstAssignmentOp::Remainder)
+    }
+
+    /// Is the operator either the compound left/right shift operator?
+    pub fn is_shift(&self) -> bool {
+        matches!(self, AstAssignmentOp::LeftShift | AstAssignmentOp::RightShift)
     }
 }

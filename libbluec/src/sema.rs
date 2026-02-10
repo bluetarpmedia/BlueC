@@ -40,17 +40,34 @@ pub fn semantic_analysis(mut ast_root: parser::AstRoot, metadata: parser::AstMet
     let mut chk = TypeChecker::new(metadata);
     type_check::type_check(&mut ast_root, &mut chk, driver);
 
-    // Constant folding
+    // Warn about expressions missing parentheses.
+    //      Do this before constant folding so that the user can receive a warning before a constant expression
+    //      is folded into a literal.
+    //
+    expr::warn_about_expressions_with_mixed_operators(&mut ast_root, &mut chk.metadata, driver);
+    expr::warn_about_assignment_in_condition_missing_parens(&mut ast_root, &mut chk.metadata, driver);
+
+    // Constant folding and switch statement validation.
     //      Only do so if we have no error diagnostics from type checking.
     //
     if !driver.has_error_diagnostics() {
         constant_folding::fold(&mut ast_root, &mut chk, driver);
+
+        switch_stmt::validate_switch_statements(&mut ast_root, &mut chk, driver);
     }
 
-    // Validate labels
-    //      Verify that label names are unique and goto targets are valid in each function.
+    // Warn about implicit conversions.
     //
-    labels::validate_labels(&mut ast_root, &chk.metadata, driver);
+    expr::warn_about_implicit_arithmetic_conversions(&mut ast_root, &mut chk.metadata, driver);
+
+    // Warn about binary and compound assignment expressions with invalid constant operands.
+    //      E.g. divide by zero, shift by negative.
+    //
+    expr::warn_about_expressions_with_invalid_constant_operands(&mut ast_root, &mut chk.metadata, driver);
+
+    // Warn about unused expression results (i.e. an expression statement with no side-effects).
+    //
+    expr::warn_about_unused_expression_results(&mut ast_root, &mut chk.metadata, driver);
 
     // Warn about unused symbols.
     //
@@ -60,10 +77,10 @@ pub fn semantic_analysis(mut ast_root: parser::AstRoot, metadata: parser::AstMet
         Warning::unused_symbol(symbol, kind, driver);
     }
 
-    // Warn about expressions missing parentheses.
+    // Validate labels
+    //      Verify that label names are unique and goto targets are valid in each function.
     //
-    expr::warn_about_expressions_with_mixed_operators(&mut ast_root, driver, &mut chk.metadata);
-    expr::warn_about_assignment_in_condition_missing_parens(&mut ast_root, driver, &mut chk.metadata);
+    labels::validate_labels(&mut ast_root, &chk.metadata, driver);
 
     // Don't proceed to the next stage if we've emitted errors, or if client only wants to run up to this stage.
     if driver.has_error_diagnostics() || driver.options().validate {

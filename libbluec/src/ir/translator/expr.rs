@@ -38,9 +38,7 @@ pub fn translate_expression(
     instructions: &mut Vec<BtInstruction>,
 ) -> EvalExpr {
     match expr {
-        // TODO: CharLiterals can be translated to i8 / u8
         AstExpression::CharLiteral { value, .. } => EvalExpr::Value(BtValue::Constant(BtConstantValue::Int32(*value))),
-
         AstExpression::StringLiteral { .. } => translate_string_literal(translator, expr),
         AstExpression::IntegerLiteral { .. } => translate_integer_literal(translator, expr),
         AstExpression::FloatLiteral { .. } => translate_float_literal(expr),

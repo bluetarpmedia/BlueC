@@ -1,0 +1,8 @@
+warning: Implicit conversion from 'int' to 'short' changes value from 2147483647 to -1
+         [-Wconstant-conversion]
+   |
+   |     short s = (1 > 2) ? 1 : 2147483647;
+   |               ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+
+1 warning generated

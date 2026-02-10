@@ -1,0 +1,37 @@
+warning: Shift count is zero and has no effect [-Wshift-count-zero]
+   |
+   |     int a = 1 >> 0;
+   |                  ^
+   |
+
+warning: Shift count is zero and has no effect [-Wshift-count-zero]
+   |
+   |     a = 1 << (12 - 12);
+   |              ^^^^^^^^^
+   |
+
+warning: '<<' has a lower precedence than '+' which means the '+' expression is
+         evaluated first. [-Wparentheses]
+   |
+   |     a = b << -5 + 5;
+   |           ^^    ~
+   |
+note: Add parentheses around the '+' expression to clarify the precedence of
+      operations to readers of this source code.
+   |
+   |     a = b << -5 + 5;
+   |                 ^
+   |
+note: Or add parentheses around the '<<' expression to evaluate it first.
+   |
+   |     a = b << -5 + 5;
+   |           ^^
+   |
+
+warning: Shift count is zero and has no effect [-Wshift-count-zero]
+   |
+   |     a = b << -5 + 5;
+   |              ^^^^^^
+   |
+
+4 warnings generated

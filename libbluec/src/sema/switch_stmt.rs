@@ -40,7 +40,9 @@ pub fn validate_switch_statements(ast_root: &mut AstRoot, chk: &mut TypeChecker,
 
                         // Evaluate the expression and ensure it's a constant value.
                         //
-                        let constant_value = constant_eval::evaluate_constant_full_expr(constant_expr, chk, driver);
+                        let mut eval = constant_eval::Eval::new(chk, driver);
+                        let constant_value = eval.evaluate_full_expr(constant_expr);
+
                         if constant_value.is_none() {
                             let loc = chk.metadata.get_source_location(&constant_expr.node_id);
                             let err = "Expression cannot be evaluated at compile-time".to_string();

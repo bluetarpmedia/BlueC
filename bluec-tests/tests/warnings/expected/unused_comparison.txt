@@ -1,0 +1,33 @@
+warning: Equality comparison result of expression is unused; the statement has no effect
+         [-Wunused-comparison]
+   |
+   |     a == 1;
+   |     ^^^^^^
+   |
+note: Did you mean to use '=' for an assignment?
+   |
+
+warning: Inequality comparison result of expression is unused; the statement has no
+         effect [-Wunused-comparison]
+   |
+   |     a != 2;
+   |     ^^^^^^
+   |
+note: Did you mean to use '|=' for an Or compound assignment?
+   |
+
+warning: Relational comparison result of expression is unused; the statement has no
+         effect [-Wunused-comparison]
+   |
+   |     3 > a;
+   |     ^^^^^
+   |
+
+warning: Relational comparison result of expression is unused; the statement has no
+         effect [-Wunused-comparison]
+   |
+   |     a <= b;
+   |     ^^^^^^
+   |
+
+4 warnings generated

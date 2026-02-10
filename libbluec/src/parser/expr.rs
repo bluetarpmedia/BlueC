@@ -162,7 +162,7 @@ fn parse_ternary_expression(
     driver: &mut Driver,
 ) -> ParseResult<AstExpression> {
     // Get the location of the '?' token.
-    let loc = parser.token_stream.prev_token_source_location().unwrap();
+    let ternary_op_loc = parser.token_stream.prev_token_source_location().unwrap();
 
     let consequent = parse_expression(parser, driver)?; // Note: precedence == 0
 
@@ -181,8 +181,14 @@ fn parse_ternary_expression(
     }
     let alternative = alternative.unwrap();
 
+    let loc = parser
+        .metadata
+        .get_source_location(&condition.node_id())
+        .merge_with(parser.metadata.get_source_location(&alternative.node_id()));
+
     let node_id = AstNodeId::new();
     parser.metadata.add_source_location(node_id, loc);
+    parser.metadata.add_operator_sloc(node_id, ternary_op_loc);
     parser.metadata.propagate_const_flag_from_children(
         &[condition.node_id(), consequent.node_id(), alternative.node_id()],
         node_id,
@@ -207,8 +213,14 @@ fn parse_binary_expression(
 ) -> ParseResult<AstExpression> {
     let rhs = parse_expression_with_precedence(parser, driver, rhs_precedence)?;
 
+    let expr_loc = parser
+        .metadata
+        .get_source_location(&lhs.node_id())
+        .merge_with(parser.metadata.get_source_location(&rhs.node_id()));
+
     let node_id = AstNodeId::new();
-    parser.metadata.add_source_location(node_id, op_loc);
+    parser.metadata.add_source_location(node_id, expr_loc);
+    parser.metadata.add_operator_sloc(node_id, op_loc);
     parser.metadata.propagate_const_flag_from_children(&[lhs.node_id(), rhs.node_id()], node_id);
 
     Ok(AstExpression::BinaryOperation { node_id, op, left: Box::new(lhs), right: Box::new(rhs) })
@@ -280,10 +292,11 @@ fn parse_cast_expression(parser: &mut Parser, driver: &mut Driver) -> ParseResul
     let target_type = AstDeclaredType::unresolved(basic_type, None, declarator);
 
     let node_id = AstNodeId::new();
-    parser.metadata.add_source_location(node_id, open_paren_loc);
+    let sloc = open_paren_loc.merge_with(parser.metadata.get_source_location(&expr_to_cast.node_id()));
+    parser.metadata.add_source_location(node_id, sloc);
     parser.metadata.propagate_const_flag_from_child(expr_to_cast.node_id(), node_id);
 
-    Ok(AstExpression::Cast { node_id, target_type, expr: Box::new(expr_to_cast) })
+    Ok(AstExpression::Cast { node_id, target_type, expr: Box::new(expr_to_cast), is_implicit: false })
 }
 
 /// Parses a postfix expression.
@@ -458,11 +471,18 @@ fn parse_identifier_expression(parser: &mut Parser, driver: &mut Driver) -> Pars
 
 /// Parses a parenthesised expression.
 fn parse_parenthesised_expression(parser: &mut Parser, driver: &mut Driver) -> ParseResult<AstExpression> {
+    let start_loc = parser.token_stream.peek_next_source_location().ok_or(ParseError)?;
+
     _ = utils::expect_token(lexer::TokenType::OpenParen, parser, driver)?;
 
     let expr = parse_expression(parser, driver)?; // Note: precedence == 0
 
     _ = utils::expect_token(lexer::TokenType::CloseParen, parser, driver)?;
+
+    let end_loc = parser.token_stream.prev_token_source_location().ok_or(ParseError)?;
+
+    let expr_loc = start_loc.merge_with(end_loc);
+    parser.metadata.add_source_location(expr.node_id(), expr_loc);
 
     // Track that the expression was wrapped in parentheses so that later we can warn about mixing different binary
     // operators without parentheses.

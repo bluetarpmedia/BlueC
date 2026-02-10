@@ -1,0 +1,8 @@
+warning: Implicit conversion from 'int' to 'char' changes value from 128 to -128
+         [-Wconstant-conversion]
+   |
+   |     char c = -(-128);
+   |              ^^^^^^^
+   |
+
+1 warning generated

@@ -51,12 +51,29 @@ impl<'a, W: Write> Printer<'a, W> {
     }
 
     /// Prints all the diagnostics, with any errors printed first before any warnings.
-    pub fn print_diagnostics(&mut self, errors: &Vec<Diagnostic>, warnings: &Vec<Diagnostic>) {
-        for error in errors {
+    pub fn print_diagnostics(&mut self, errors: &mut Vec<Diagnostic>, warnings: &mut Vec<Diagnostic>) {
+        let sort_diags = |a: &Diagnostic, b: &Diagnostic| -> std::cmp::Ordering {
+            if let Some(a_loc) = a.locations.first()
+                && let Some(b_loc) = b.locations.first()
+            {
+                a_loc.file_pos.cmp(&b_loc.file_pos).then(a_loc.length.cmp(&b_loc.length))
+            } else {
+                a.message.cmp(&b.message)
+            }
+        };
+
+        // Sort by line & column and then remove duplicates
+        //
+        errors.sort_by(sort_diags);
+        warnings.sort_by(sort_diags);
+        errors.dedup_by(|a, b| a.message == b.message && a.locations == b.locations);
+        warnings.dedup_by(|a, b| a.kind == b.kind && a.locations == b.locations);
+
+        for error in errors.iter() {
             self.print(error);
         }
 
-        for warning in warnings {
+        for warning in warnings.iter() {
             self.print(warning);
         }
 
@@ -184,8 +201,10 @@ impl<'a, W: Write> Printer<'a, W> {
 
         let mut running_offset = 0;
 
+        // Sort by column number, remove exact duplicates, then merge any overlapping source location spans.
         locations.sort_by_key(|loc| loc.column_no);
-        locations.dedup_by_key(|loc| loc.column_no);
+        locations.dedup_by(|a, b| a.column_no == b.column_no && a.length == b.length);
+        merge_overlapping_display_locations(&mut locations);
 
         for location in &locations {
             let highlight_indent = " ".repeat(location.column_no as usize - running_offset);
@@ -326,4 +345,53 @@ fn count_digits(n: u32) -> u32 {
     } else {
         n.checked_ilog10().unwrap_or(0) + 1 // Plus 1 because `checked_ilog10` returns the floor of log10(n)
     }
+}
+
+/// Merges overlapping (but not adjacent) display locations.
+///
+/// A 'span' is a range that represents the column number start position and the length.
+///
+/// (5, 10), (6, 3)  => (5, 10)
+/// (5, 10), (6, 10) => (5, 11)
+fn merge_overlapping_display_locations(locations: &mut Vec<DisplayLocation>) {
+    if locations.is_empty() {
+        return;
+    }
+
+    let old_locations = std::mem::take(locations);
+    let mut merged: Vec<DisplayLocation> = Vec::with_capacity(old_locations.len());
+
+    let mut iter = old_locations.into_iter();
+
+    // The input `locations` Vec is sorted by `column_no` so we can merge overlapping spans in a single pass.
+    //
+    //      We keep track of a `current_span` and only update it when we find a new location that does not overlap with
+    //      it. But before that, for every span that overlaps with our current one, we merge that into the current one.
+    //
+    if let Some(mut current_span) = iter.next() {
+        for next_span in iter {
+            let current_span_end = current_span.column_no + current_span.length;
+
+            // If `next_span` overlaps with `current_span`, update our current span's length in order to merge them.
+            // But don't merge adjacent spans.
+            //
+            if next_span.column_no < current_span_end {
+                let next_span_end = next_span.column_no + next_span.length;
+
+                // If `next_span` is full contained inside `current_span` we want to keep our current span's length.
+                let new_end = std::cmp::max(current_span_end, next_span_end);
+
+                current_span.length = new_end - current_span.column_no;
+            } else {
+                // We've found a new span that does not overlap with our current one. So push the current span
+                // and update `current_span` to the new one.
+                merged.push(current_span);
+                current_span = next_span;
+            }
+        }
+
+        merged.push(current_span);
+    }
+
+    *locations = merged;
 }

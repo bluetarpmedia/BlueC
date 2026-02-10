@@ -9,10 +9,9 @@ The initial goal is to write a fully conforming C17 optimizing compiler, from th
 
 See the [Status and Roadmap](#status-and-roadmap) section for current progress and [Design Goals](#design-goals) for further information about design choices.
 
-By default, the BlueC compiler driver runs the appropriate platform development tool (`gcc` / `msvc`) for final assembly and linking to produce a binary/object file. If desired, the driver can stop after writing an `.s` file with the assembly code.
-
 ### Table of Contents
 
+* [License and Contributing](#license-and-contributing)
 * [Usage](#usage)
   * [Single-file compilation](#traditional-single-file-compilation-to-object-file-for-later-linking)
   * [Multi-file compilation and linking](#multi-file-compilation-and-linking)
@@ -28,6 +27,12 @@ By default, the BlueC compiler driver runs the appropriate platform development 
 * [Status and Roadmap](#status-and-roadmap)
 * [Extensions](#extensions)
 * [References](#references)
+
+## License and Contributing
+
+I haven't decided on a license yet but will probably go with the typical `MIT OR Apache-2.0` like most Rust crates do.
+
+I'm not taking contributions yet because this is a personal project where I want to implement and solve most of the problems myself, at least until most of the optimizer and back-end is complete.
 
 ## Usage
 
@@ -64,7 +69,15 @@ Options:
   -V, --version          Print version
 ```
 
+#### Compile to assembly code
+
+```
+$ bluec -S file.c
+```
+
 #### Traditional single-file compilation to object file, for later linking
+
+The BlueC driver invokes `gcc` to run the assembler.
 
 ```
 $ bluec -c file1.c -o file1.o
@@ -75,6 +88,7 @@ $ ./my_program
 
 #### Multi-file compilation and linking
 
+The BlueC driver invokes `gcc` to run the assembler and linker.
 ```
 $ bluec file1.c file2.c -o my_program
 $ ./my_program
@@ -152,7 +166,7 @@ The vast majority of tests are integration tests. There are 3 categories of test
 | ---------- | ----- |
 | Valid      | Valid C source files.<br>We expect to successfully compile each file without any error diagnostics, and then we run the resulting executable file and check its return code against an expected result. In addition, some tests also link with object files compiled by `gcc` to verify ABI compatibility. |
 | Invalid    | Invalid (ill-formed) C source files.<br>We expect the compiler to emit one or more error diagnostics when compiling these files. |
-| Warnings   | Valid C source files which produce warnings.<br>When compiling we expect the compiler to emit one or more warning diagnostics, but no errors. We verify the emitted warnings match the expected results. |
+| Warnings   | Syntactically valid C source files which should produce warnings.<br>When compiling we expect the compiler to emit one or more warning diagnostics. We verify the emitted warnings match the expected results. |
 
 ## Compiler Pipeline
 
@@ -212,34 +226,21 @@ The BlueC compiler pipeline is as follows.
   * ✅ Constant folding
   * ✅ Symbol Table for identifier & type alias resolution, which allows us to solve the `type-identifier: name` grammar ambiguity problem
 * Warning diagnostics (`-W` or `-Wno-`)
-  * ✅ array-bounds
-  * ✅ bitwise-op-parentheses
-  * ✅ compare-distinct-pointer-types
-  * ✅ conditional-type-mismatch
-  * ✅ constant-conversion
-  * ✅ duplicate-decl-specifier
-  * ✅ excess-initializers
-  * ✅ extern-initializer
-  * ✅ implicit-conversion
-  * ✅ implicit-float-conversion
-  * ✅ implicit-int-conversion
-  * ✅ implicitly-unsigned-literal
-  * ✅ logical-op-parentheses
-  * ✅ many-braces-around-scalar-init
-  * ✅ missing-braces
-  * ✅ missing-declarations
-  * ✅ multichar
-  * ✅ non-literal-null-conversion
-  * ✅ parentheses
-  * ✅ pointer-integer-compare
-  * ✅ pointer-to-int-cast
-  * ✅ pointer-type-mismatch
-  * ✅ sign-conversion
-  * ✅ uninitialized
-  * ✅ unknown-escape-sequence
-  * ✅ unused-function
-  * ✅ unused-local-typedef
-  * ✅ unused-variable
+  * Literals
+    * ✅ `multichar, unknown-escape-sequence, implicitly-unsigned-literal, literal-range`
+  * Declarations and initializers
+    * ✅ `missing-declarations, duplicate-decl-specifier, extern-initializer, uninitialized, unused-variable, unused-function, unused-local-typedef, 
+excess-initializers, missing-braces, many-braces-around-scalar-init`
+  * Expressions
+    * ✅ `logical-op-parentheses, bitwise-op-parentheses, parentheses, array-bounds, unused-value, unused-comparison`
+  * Arithmetic
+      * ✅ `division-by-zero, integer-overflow, floating-point-overflow, shift-count-negative, shift-count-overflow, shift-count-zero`
+  * Conversions and casts
+      * ✅ `constant-conversion, implicit-conversion, implicit-promotion-conversion, implicit-int-conversion, implicit-float-conversion, implicit-int-float-conversion, float-conversion, sign-conversion, pointer-to-int-cast, non-literal-null-conversion`
+  * Comparisons
+      * ✅ `compare-distinct-pointer-types, pointer-integer-compare`
+  * Types
+      * ✅ `conditional-type-mismatch, pointer-type-mismatch`
 * Front-end improvements
   * String interning
   * Custom preprocessor

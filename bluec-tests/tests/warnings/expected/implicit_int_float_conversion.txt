@@ -1,0 +1,22 @@
+warning: Implicit conversion from 'long' to 'float' may change its value
+         [-Wimplicit-int-float-conversion]
+   |
+   |     float f = lng;
+   |               ^^^
+   |
+
+warning: Implicit conversion from 'long' to 'float' may change its value
+         [-Wimplicit-int-float-conversion]
+   |
+   |     f = lng;
+   |         ^^^
+   |
+
+warning: Implicit conversion from 'long' to 'float' may change its value
+         [-Wimplicit-int-float-conversion]
+   |
+   |     f += lng;
+   |          ^^^
+   |
+
+3 warnings generated

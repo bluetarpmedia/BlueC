@@ -1,0 +1,45 @@
+warning: Shift count >= width of the type in bits (32) [-Wshift-count-overflow]
+   |
+   |     c <<= 32;
+   |           ^^
+   |
+note: Expression was promoted to 'int' as part of C language integer promotion rules.
+   |
+
+warning: Shift count >= width of the type in bits (32) [-Wshift-count-overflow]
+   |
+   |     c >>= 33;
+   |           ^^
+   |
+note: Expression was promoted to 'int' as part of C language integer promotion rules.
+   |
+
+warning: Shift count >= width of the type in bits (32) [-Wshift-count-overflow]
+   |
+   |     s <<= 32;
+   |           ^^
+   |
+note: Expression was promoted to 'int' as part of C language integer promotion rules.
+   |
+
+warning: Shift count >= width of the type in bits (32) [-Wshift-count-overflow]
+   |
+   |     s >>= 33;
+   |           ^^
+   |
+note: Expression was promoted to 'int' as part of C language integer promotion rules.
+   |
+
+warning: Shift count >= width of the type in bits (32) [-Wshift-count-overflow]
+   |
+   |     i >>= 32;
+   |           ^^
+   |
+
+warning: Shift count >= width of the type in bits (64) [-Wshift-count-overflow]
+   |
+   |     l >>= 64;
+   |           ^^
+   |
+
+6 warnings generated

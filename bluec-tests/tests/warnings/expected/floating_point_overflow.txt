@@ -1,0 +1,29 @@
+warning: Floating-point overflow in expression of type 'double'; the value after
+         overflow is inf [-Wfloating-point-overflow]
+   |
+   |     double d = 1.7976931348623157E+308 * 1.1;
+   |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+
+warning: Floating-point overflow in expression of type 'double'; the value after
+         overflow is -inf [-Wfloating-point-overflow]
+   |
+   |     d += 1.7976931348623157E+308 * -1.1;
+   |          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+
+warning: Floating-point overflow in expression of type 'float'; the value after overflow
+         is -inf [-Wfloating-point-overflow]
+   |
+   |     float f = 3.40282347E+38f * -1.1f;
+   |               ^^^^^^^^^^^^^^^^^^^^^^^
+   |
+
+warning: Floating-point overflow in expression of type 'float'; the value after overflow
+         is inf [-Wfloating-point-overflow]
+   |
+   |     f -= 3.40282347E+38f * 1.1f;
+   |          ^^^^^^^^^^^^^^^^^^^^^^
+   |
+
+4 warnings generated

@@ -1,0 +1,15 @@
+warning: Implicit conversion from 'long' to 'int' loses precision
+         [-Wimplicit-int-conversion]
+   |
+   |     i += l;
+   |          ^
+   |
+
+warning: Implicit conversion from 'long' to 'int' loses precision
+         [-Wimplicit-int-conversion]
+   |
+   |     i = l;
+   |         ^
+   |
+
+2 warnings generated

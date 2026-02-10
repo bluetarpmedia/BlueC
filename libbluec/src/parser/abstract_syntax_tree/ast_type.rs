@@ -161,14 +161,14 @@ impl AstType {
     }
 
     /// Gets the type's inner-most scalar type.
-    /// 
+    ///
     /// For an aggregate type, recurses into the type until a scalar type is found.
-    /// 
+    ///
     /// AstType::AstType { AstType::AstType { AstType::Char } }   --->  AstType::Char
     pub fn get_innermost_scalar_type(&self) -> &AstType {
         match self {
             AstType::Array { element_type, .. } => element_type.get_innermost_scalar_type(),
-            _ => self
+            _ => self,
         }
     }
 
@@ -226,6 +226,32 @@ impl AstType {
             AstType::Long | AstType::UnsignedLong => AstType::UnsignedLong,
             AstType::LongLong | AstType::UnsignedLongLong => AstType::UnsignedLongLong,
             _ => ICE!("Cannot make unsigned type for '{self}'"),
+        }
+    }
+
+    /// Returns the type's valid range of values as a string slice, if the type has one. Otherwise returns `None`.
+    ///
+    /// # Examples
+    /// ```
+    /// # use libbluec::parser::AstType;
+    /// assert_eq!(Some("[0, 255]"), AstType::UnsignedChar.valid_range_as_str());
+    /// assert_eq!(Some("[-2147483648, 2147483647]"), AstType::Int.valid_range_as_str());
+    /// assert_eq!(Some("+/- 3.4028235e38"), AstType::Float.valid_range_as_str());
+    /// ```
+    #[rustfmt::skip]
+    pub fn valid_range_as_str(&self) -> Option<&'static str> {
+        match self {
+            AstType::Char | AstType::SignedChar               => Some("[-128, 127]"),
+            AstType::Short                                    => Some("[-32768, 32767]"),
+            AstType::Int                                      => Some("[-2147483648, 2147483647]"),
+            AstType::Long | AstType::LongLong                 => Some("[-9223372036854775808, 9223372036854775807]"),
+            AstType::UnsignedChar                             => Some("[0, 255]"),
+            AstType::UnsignedShort                            => Some("[0, 65535]"),
+            AstType::UnsignedInt                              => Some("[0, 4294967295]"),
+            AstType::UnsignedLong | AstType::UnsignedLongLong => Some("[0, 18446744073709551615]"),
+            AstType::Float                                    => Some("+/- 3.4028235e38"),
+            AstType::Double | AstType::LongDouble             => Some("+/- 1.7976931348623157e308"),
+            _ => None,
         }
     }
 
@@ -288,6 +314,10 @@ impl AstType {
     /// assert_eq!(true, AstType::Double.fits_inside(&AstType::LongDouble));
     /// ```
     pub fn fits_inside(&self, other: &AstType) -> bool {
+        if self == other {
+            return true;
+        }
+
         match &self {
             t if t.is_signed_integer() => other.is_signed_integer() && other.bits() >= t.bits(),
             t if t.is_unsigned_integer() && other.is_unsigned_integer() => other.bits() >= t.bits(),
@@ -332,7 +362,7 @@ impl AstType {
     ///
     /// If the type is an integral type with a rank lower than 'int' then the type is consumed and replaced with
     /// `AstType::Int`. Otherwise, the existing type is returned unchanged.
-    /// 
+    ///
     /// Returns a tuple of the type and a boolean value indicating whether or not it was promoted.
     ///
     /// The C standard specifies that smaller integer types should be promoted to 'unsigned int' if their values
@@ -347,7 +377,7 @@ impl AstType {
     }
 
     /// The rank of the integer type. Types that fit larger values have a higher rank.
-    fn integer_rank(&self) -> usize {
+    pub fn integer_rank(&self) -> usize {
         match self {
             AstType::Char | AstType::SignedChar | AstType::UnsignedChar => 2,
             AstType::Short | AstType::UnsignedShort => 3,

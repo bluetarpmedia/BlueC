@@ -158,7 +158,7 @@ impl Driver {
     }
 
     /// Prints all diagnostics to `stderr`, with any errors printed first before any warnings.
-    pub fn print_diagnostics(&self) {
+    pub fn print_diagnostics(&mut self) {
         self.print_diagnostics_to_buffer(std::io::stderr());
     }
 
@@ -166,7 +166,7 @@ impl Driver {
     ///
     /// You probably want `print_diagnostics` instead of this function, unless you deliberately want to print
     /// diagnostics into a buffer.
-    pub fn print_diagnostics_to_buffer(&self, buffer: impl Write) {
+    pub fn print_diagnostics_to_buffer(&mut self, buffer: impl Write) {
         if self.errors.is_empty() && self.warnings.is_empty() {
             return;
         }
@@ -177,7 +177,7 @@ impl Driver {
         let mut printer = Printer::new(buffer, &self.tu_file);
         printer.set_terse(terse);
         printer.show_source_file_and_loc(show_source_loc);
-        printer.print_diagnostics(&self.errors, &self.warnings);
+        printer.print_diagnostics(&mut self.errors, &mut self.warnings);
     }
 
     /// For tests and debugging purposes, prints the diagnostics using the Debug trait.
