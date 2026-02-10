@@ -49,11 +49,16 @@ pub fn reassociate_binary_expr(expr: &mut AstExpression, chk: &mut TypeChecker) 
     // Partion literals and non-literal expressions
     let (literals, other): (Vec<_>, Vec<_>) = terms.into_iter().partition(|t| t.is_literal());
 
+    // Can't both be empty
+    debug_assert!(!(literals.is_empty() && other.is_empty()));
+
     // Rebuild the tree with literals on one side and everything else on the other.
     //      This allows our constant folder to subsequently fold all the literals.
     //
     if literals.is_empty() {
         *expr = rebuild_tree(other, current_op, &mut op_node_ids, chk);
+    } else if other.is_empty() {
+        *expr = rebuild_tree(literals, current_op, &mut op_node_ids, chk);
     } else {
         let lit_tree = rebuild_tree(literals, current_op, &mut op_node_ids, chk);
         let other_tree = rebuild_tree(other, current_op, &mut op_node_ids, chk);

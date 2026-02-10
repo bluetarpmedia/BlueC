@@ -56,7 +56,7 @@ fn function_call_argument() {
 
 #[test]
 fn partial_fold_add() {
-    // The a-h variable initializers should all fold to the same expression: (x + y) + 3
+    // The a-l variable initializers should all fold to the same expression: (x + y) + 3
     let source = "
         int main(void) {
             int x = 1;
@@ -70,6 +70,10 @@ fn partial_fold_add() {
             int f = 1 + x + y + 2;
             int g = 1 + 1 + 1 + x + y;
             int h = 1 + x + 1 + y + 1;
+            int i = x + y + (3);
+            int j = (3) + x + y;
+            int k = (1 + 1 + 1) + x + y;
+            int l = x + y + (1 + 1 + 1);
         }";
 
     let mut driver = Driver::for_testing();
@@ -115,12 +119,12 @@ fn partial_fold_add() {
         }
     });
 
-    assert_eq!(found_expected_count, 8);
+    assert_eq!(found_expected_count, 12);
 }
 
 #[test]
 fn partial_fold_multiply() {
-    // The a-h variable initializers should all fold to the same expression: x * 24
+    // The a-i variable initializers should all fold to the same expression: x * 24
     let source = "
         int main(void) {
             int x = 1;
@@ -133,6 +137,7 @@ fn partial_fold_multiply() {
             int f = 1 * 2 * x * 3 * 4;
             int g = 1 * 2 * 3 * x * 4;
             int h = 1 * 2 * 3 * 4 * x;
+            int i = x * (23 + 1);
         }";
 
     let mut driver = Driver::for_testing();
@@ -165,7 +170,7 @@ fn partial_fold_multiply() {
         }
     });
 
-    assert_eq!(found_expected_count, 8);
+    assert_eq!(found_expected_count, 9);
 }
 
 fn get_return_integer_value(ast_root: &mut AstRoot) -> u64 {
