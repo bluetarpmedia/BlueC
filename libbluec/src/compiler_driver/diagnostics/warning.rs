@@ -27,9 +27,39 @@ impl Warning {
         driver: &mut Driver,
     ) {
         let kind = WarningKind::ConstantConversion;
+        let is_float_to_int = old_type.is_floating_point() && new_type.is_integer();
+
+        let message = if is_float_to_int {
+            // Since the value has changed, we know that truncation has occured, and this is UB (C11 6.3.1.4).
+            format!("Implicit conversion of an out-of-range value from '{old_type}' to '{new_type}' is undefined")
+        } else {
+            format!(
+                "Implicit conversion from '{old_type}' to '{new_type}' changes value from {old_value} to {new_value}"
+            )
+        };
+
+        driver.add_diagnostic(Diagnostic::warning_at_location(kind, message, loc));
+    }
+
+    /// Emits a conversion warning for a floating-point constant that is explicitly cast to an integer type, which
+    /// despite the explicit cast is still UB. This is a variation of the warning above, but points out the explicit
+    /// cast to the user.
+    ///
+    /// -Wconstant-conversion
+    pub fn constant_conversion_float_int_explicit_cast(
+        old_type: &AstType,
+        new_type: &AstType,
+        loc: SourceLocation,
+        driver: &mut Driver,
+    ) {
+        let kind = WarningKind::ConstantConversion;
+        debug_assert!(old_type.is_floating_point() && new_type.is_integer());
+
         let message = format!(
-            "Implicit conversion from '{old_type}' to '{new_type}' changes value from {old_value} to {new_value}"
+            "Conversion of an out-of-range value from '{old_type}' to '{new_type}' \
+            is undefined, even with an explicit cast"
         );
+
         driver.add_diagnostic(Diagnostic::warning_at_location(kind, message, loc));
     }
 

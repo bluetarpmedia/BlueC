@@ -642,8 +642,6 @@ fn typecheck_cast_expression(
         Error::invalid_cast(expr_loc, &expr_type, &cast_to_type, driver);
     }
 
-    // TODO: Warn about UB casting from a negative float literal to an unsigned int, e.g. `(unsigned int)-1`
-
     chk.set_data_type(node_id, &cast_to_type);
     Ok(cast_to_type)
 }

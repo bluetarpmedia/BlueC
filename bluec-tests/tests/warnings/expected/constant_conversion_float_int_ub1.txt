@@ -1,0 +1,36 @@
+warning: Implicit conversion of an out-of-range value from 'float' to 'int' is undefined
+         [-Wconstant-conversion]
+   |
+   |     a = -1.1f;
+   |         ^^^^^
+   |
+
+warning: Implicit conversion of an out-of-range value from 'float' to 'int' is undefined
+         [-Wconstant-conversion]
+   |
+   |     a = -(1.0f + 0.1f);
+   |         ^^^^^^^^^^^^^^
+   |
+
+warning: Implicit conversion of an out-of-range value from 'float' to 'int' is undefined
+         [-Wconstant-conversion]
+   |
+   |     a += 1.1f;
+   |          ^^^^
+   |
+
+warning: Conversion of an out-of-range value from 'float' to 'int' is undefined, even
+         with an explicit cast [-Wconstant-conversion]
+   |
+   |     a = (int)-1.1f;
+   |         ^^^^^^^^^^
+   |
+
+warning: Implicit conversion of an out-of-range value from 'double' to 'int' is
+         undefined [-Wconstant-conversion]
+   |
+   |     int b = 2.1;
+   |             ^^^
+   |
+
+5 warnings generated

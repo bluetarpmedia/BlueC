@@ -381,10 +381,10 @@ fn arithmetic_int(
         }
 
         match int_type {
-            AstType::UnsignedChar => wrapping_op!(op, i8).map(ConstantValue::from),
-            AstType::UnsignedShort => wrapping_op!(op, i16).map(ConstantValue::from),
-            AstType::UnsignedInt => wrapping_op!(op, i32).map(ConstantValue::from),
-            AstType::UnsignedLong | AstType::UnsignedLongLong => wrapping_op!(op, i64).map(ConstantValue::from),
+            AstType::UnsignedChar => wrapping_op!(op, u8).map(ConstantValue::from),
+            AstType::UnsignedShort => wrapping_op!(op, u16).map(ConstantValue::from),
+            AstType::UnsignedInt => wrapping_op!(op, u32).map(ConstantValue::from),
+            AstType::UnsignedLong | AstType::UnsignedLongLong => wrapping_op!(op, u64).map(ConstantValue::from),
             _ => ICE!("Unexpected integer type '{int_type}'"),
         }
     }

@@ -1,22 +1,36 @@
-warning: Implicit conversion from 'float' to 'int' changes value from 1.100000023841858
-         to 1 [-Wconstant-conversion]
-   |
-   |     int i = 1.1f;
-   |             ^^^^
-   |
-
-warning: Implicit conversion from 'float' to 'int' changes value from 2.200000047683716
-         to 2 [-Wconstant-conversion]
-   |
-   |     i = (1.1f * 2) / 1.0f;
-   |         ^^^^^^^^^^^^^^^^^
-   |
-
-warning: Implicit conversion from 'float' to 'int' changes value from 1.5 to 1
+warning: Implicit conversion from 'long' to 'int' changes value from 4294967196 to -100
          [-Wconstant-conversion]
    |
-   |     i += 1.0f + 0.5f;
-   |          ^^^^^^^^^^^
+   |     a += 4294967195 + 1;
+   |          ^^^^^^^^^^^^^^
    |
 
-3 warnings generated
+warning: Implicit conversion from 'unsigned int' to 'int' changes value from 4294967196
+         to -100 [-Wconstant-conversion]
+   |
+   |     b *= 4294967195u + 1u;
+   |          ^^^^^^^^^^^^^^^^
+   |
+
+warning: Implicit conversion from 'int' to 'unsigned int' changes value from -1 to
+         4294967295 [-Wconstant-conversion]
+   |
+   |     c = 9 - 10;
+   |         ^^^^^^
+   |
+
+warning: Implicit conversion from 'long' to 'unsigned short' changes value from
+         -4294967296 to 0 [-Wconstant-conversion]
+   |
+   |     d = -4294967296 / 1;
+   |         ^^^^^^^^^^^^^^^
+   |
+
+warning: Implicit conversion from 'unsigned long' to 'unsigned char' changes value from
+         9223372036854775808 to 0 [-Wconstant-conversion]
+   |
+   |     e += 9223372036854775808ull;
+   |          ^^^^^^^^^^^^^^^^^^^^^^
+   |
+
+5 warnings generated

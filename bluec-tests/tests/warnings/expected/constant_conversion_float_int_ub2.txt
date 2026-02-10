@@ -1,0 +1,43 @@
+warning: Implicit conversion of an out-of-range value from 'float' to 'unsigned long' is
+         undefined [-Wconstant-conversion]
+   |
+   |     a = -1.0f;
+   |         ^^^^^
+   |
+
+warning: Implicit conversion of an out-of-range value from 'float' to 'unsigned long' is
+         undefined [-Wconstant-conversion]
+   |
+   |     a = -1.1f;
+   |         ^^^^^
+   |
+
+warning: Implicit conversion of an out-of-range value from 'float' to 'unsigned long' is
+         undefined [-Wconstant-conversion]
+   |
+   |     a = (1.0f + 0.1f);
+   |         ^^^^^^^^^^^^^
+   |
+
+warning: Implicit conversion of an out-of-range value from 'float' to 'unsigned long' is
+         undefined [-Wconstant-conversion]
+   |
+   |     a += 1.1f;
+   |          ^^^^
+   |
+
+warning: Conversion of an out-of-range value from 'float' to 'unsigned long' is
+         undefined, even with an explicit cast [-Wconstant-conversion]
+   |
+   |     a = (unsigned long)1.1f;
+   |         ^^^^^^^^^^^^^^^^^^^
+   |
+
+warning: Implicit conversion of an out-of-range value from 'double' to 'unsigned char'
+         is undefined [-Wconstant-conversion]
+   |
+   |     unsigned char b = 2.1;
+   |                       ^^^
+   |
+
+6 warnings generated

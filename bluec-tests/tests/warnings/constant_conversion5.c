@@ -1,8 +1,16 @@
 int main(void) {
-    int i = 1.1f;
+    int a = 0;
+    int b = 1;
+    unsigned c = 0;
+    unsigned short d = 0;
+    unsigned char e = 0;
 
-    i = (1.1f * 2) / 1.0f;
-    i += 1.0f + 0.5f;
+    a += 4294967195 + 1;
+    b *= 4294967195u + 1u;
 
-    return i;
+    c = 9 - 10;
+    d = -4294967296 / 1;
+    e += 9223372036854775808ull;
+
+    return a == -100 && b == -100 && c == 0xFFFFFFFF && d == 0 && e == 0;
 }

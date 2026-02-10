@@ -482,7 +482,7 @@ impl ConstantValue {
             return Some(self);
         }
 
-        // Helper macro that performs a cast to an integer type and emits a warning if the implicit conversion changes
+        // Helper macro that performs a cast to an integer type and emits a warning if the conversion changes
         // the value.
         macro_rules! cast_to_integer {
             ($old_value:expr, $old_type:expr, $new_type_rs:ty) => {{
@@ -490,11 +490,20 @@ impl ConstantValue {
 
                 // Roundtrip to check if the cast has changed the constant value.
                 //
-                if eval.emit_diagnostics && is_implicit_cast {
-                    if $old_type.is_integer() && $old_value as i128 != new_value as i128 {
+                if eval.emit_diagnostics {
+                    if is_implicit_cast && $old_type.is_integer() && $old_value as i128 != new_value as i128 {
                         warn_constant_conversion(&$old_type, target_type, $old_value as i128, new_value as i128, eval);
                     } else if $old_type.is_floating_point() && $old_value as f64 != new_value as f64 {
-                        warn_constant_conversion(&$old_type, target_type, $old_value as f64, new_value as f64, eval);
+                        let old_value = $old_value as f64;
+                        let new_value = new_value as f64;
+
+                        if is_implicit_cast {
+                            warn_constant_conversion(&$old_type, target_type, old_value, new_value, eval);
+                        } else {
+                            // Float-to-int conversion even with an explicit cast is UB because it has changed the
+                            // value (i.e. truncated part of the float value).
+                            warn_constant_conversion_float_int_explicit_cast(&$old_type, target_type, eval);
+                        }
                     }
                 }
 
@@ -687,4 +696,9 @@ fn warn_constant_conversion<T: std::fmt::Display>(
     let new_value = new_value.to_string();
     let loc = eval.root_expression_sloc;
     Warning::constant_conversion(old_type, new_type, &old_value, &new_value, loc, eval.driver);
+}
+
+fn warn_constant_conversion_float_int_explicit_cast(old_type: &AstType, new_type: &AstType, eval: &mut Eval) {
+    let loc = eval.root_expression_sloc;
+    Warning::constant_conversion_float_int_explicit_cast(old_type, new_type, loc, eval.driver);
 }
