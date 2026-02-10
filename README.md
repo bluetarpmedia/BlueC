@@ -154,7 +154,7 @@ Currently, the entire compiler is implemented in one `libbluec` crate and each s
 
 ### Unit Tests
 
-Each library module's unit tests are placed in their own `tests.rs` submodule, and never written directly next to code within the module they are testing. (E.g. see [parser/tests.rs](src/parser/tests.rs) or [sema/tests.rs](src/sema/tests.rs)). This is a deliberate strategy to optimize build times (see 'Assorted Tricks' in [One Hundred Thousand Lines of Rust](https://matklad.github.io/2021/02/27/delete-cargo-integration-tests.html)).
+Each library module's unit tests are placed in their own `tests.rs` submodule, and never written directly next to code within the module they are testing. (E.g. see [parser/tests.rs](libbluec/src/parser/tests.rs) or [sema/tests.rs](libbluec/src/sema/tests.rs)). This is a deliberate strategy to optimize build times (see 'Assorted Tricks' in [One Hundred Thousand Lines of Rust](https://matklad.github.io/2021/02/27/delete-cargo-integration-tests.html)).
 
 ### Integration Tests
 
@@ -174,15 +174,15 @@ The BlueC compiler pipeline is as follows.
 
 | Stage    | Notes   | Module  |
 | -------- | ------- | ------- |
-| Preprocessor | Currently uses an external tool (`gcc`); will replace with a custom preprocessor | [compiler_driver.rs](src/compiler_driver.rs) |
-| Lexer | Hand-written | [lexer.rs](src/lexer.rs) |
-| Parser | Hand-written, recursive descent with precedence climbing for binary operations | [parser.rs](src/parser.rs) |
-| Sema | Semantic analysis of the C AST produced by the Parser | [sema.rs](src/sema.rs) |
-| IR lowering | Lowers the C AST into a custom three-address code (TAC) intermediate representation, called BlueTac | [ir.rs](src/ir.rs) |
+| Preprocessor | Currently uses an external tool (`gcc`); will replace with a custom preprocessor | [compiler_driver.rs](libbluec/src/compiler_driver.rs) |
+| Lexer | Hand-written | [lexer.rs](libbluec/src/lexer.rs) |
+| Parser | Hand-written, recursive descent with precedence climbing for binary operations | [parser.rs](libbluec/src/parser.rs) |
+| Sema | Semantic analysis of the C AST produced by the Parser | [sema.rs](libbluec/src/sema.rs) |
+| IR lowering | Lowers the C AST into a custom three-address code (TAC) intermediate representation, called BlueTac | [ir.rs](libbluec/src/ir.rs) |
 | Optimizer | Todo! Lowers the high-level IR to SSA form; applies a series of optimization transformations (see below) | |
-| Codegen | Generates an `x86_64` AST from the IR for the `System V AMD64 ABI` | [codegen.rs](src/codegen.rs) |
-| Code emission | Writes the `x86_64` assembly code to an output file, in AT&T syntax (Intel syntax coming later) | [x86_emit.rs](src/codegen/x86/emit.rs) |
-| Assembler & linker | Uses an external tool (`gcc`) | [compiler_driver.rs](src/compiler_driver.rs) |
+| Codegen | Generates an `x86_64` AST from the IR for the `System V AMD64 ABI` | [codegen.rs](libbluec/src/codegen.rs) |
+| Code emission | Writes the `x86_64` assembly code to an output file, in AT&T syntax (Intel syntax coming later) | [x86_emit.rs](libbluec/src/codegen/x86/emit.rs) |
+| Assembler & linker | Uses an external tool (`gcc`) | [compiler_driver.rs](libbluec/src/compiler_driver.rs) |
 
 ## Status and Roadmap
 
