@@ -174,7 +174,7 @@ pub fn parse_float_literal(parser: &mut Parser, driver: &mut Driver) -> ParseRes
                 parse_decimal_float_literal_as_f32(&literal, token.location, driver).map(|value| value as f64)
             }
             Some(lexer::FloatLiteralSuffix::L) => {
-                parse_decimal_float_literal_as_f64(&literal, true, token.location, driver).map(|value| value as f64)
+                parse_decimal_float_literal_as_f64(&literal, true, token.location, driver)
             }
             _ => parse_decimal_float_literal_as_f64(&literal, false, token.location, driver),
         },
