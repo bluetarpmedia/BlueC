@@ -29,7 +29,7 @@ pub fn translate_unary_operation(
 
     if is_negate {
         if let AstExpression::FloatLiteral { node_id, value, .. } = **ast_unary_expr {
-            let data_type = translator.get_ast_type_from_node(&node_id);
+            let data_type = translator.get_ast_type_from_node(node_id);
             let val = match data_type {
                 AstType::Float => BtValue::Constant(BtConstantValue::Float32(-value as f32)),
 
@@ -40,7 +40,7 @@ pub fn translate_unary_operation(
 
             return EvalExpr::Value(val);
         } else if let AstExpression::CharLiteral { node_id, value, .. } = **ast_unary_expr {
-            let data_type = translator.get_ast_type_from_node(&node_id);
+            let data_type = translator.get_ast_type_from_node(node_id);
             assert!(data_type == &AstType::Int);
 
             let val = BtValue::Constant(BtConstantValue::Int32(-value));
@@ -53,7 +53,7 @@ pub fn translate_unary_operation(
             //      Remember, we can't negate i64::MIN because it would overflow.
             let negated_int64 = if int64 == i64::MIN { 0 } else { -int64 };
 
-            let data_type = translator.get_ast_type_from_node(&node_id);
+            let data_type = translator.get_ast_type_from_node(node_id);
             assert!(data_type.is_integer());
             let literal_too_big_for_32bits = data_type.bits() > 32;
 
@@ -86,7 +86,7 @@ pub fn translate_unary_operation(
             | AstUnaryOp::PostfixDecrement
     );
 
-    let unary_expr_data_type = translator.get_ast_type_from_node(unary_expr_node_id).clone(); // The type of the unary operation (not its inner expr)
+    let unary_expr_data_type = translator.get_ast_type_from_node(*unary_expr_node_id).clone(); // The type of the unary operation (not its inner expr)
 
     if is_assign {
         let is_postfix = matches!(ast_op, AstUnaryOp::PostfixIncrement | AstUnaryOp::PostfixDecrement);

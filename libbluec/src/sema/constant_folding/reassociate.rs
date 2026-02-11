@@ -22,7 +22,7 @@ pub fn reassociate_binary_expr(expr: &mut AstExpression, chk: &mut TypeChecker) 
     };
 
     let is_integral_commutative_associative =
-        current_op.is_commutative_and_associative() && chk.get_data_type(p_node_id).is_integer();
+        current_op.is_commutative_and_associative() && chk.get_data_type(*p_node_id).is_integer();
 
     // Our caller is the visitor which visits every sub-expression in the full expression, so we don't need to
     // recurse into all binary expressions here, since we'll get called again by the visitor.

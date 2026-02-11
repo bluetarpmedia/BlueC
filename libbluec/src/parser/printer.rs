@@ -111,7 +111,7 @@ fn print_variable_initializer(init: &AstVariableInitializer, metadata: &AstMetad
         AstVariableInitializer::Scalar(full_expr) => {
             let indent = make_indent(level);
             print!("{indent}Scalar");
-            print_node_type(&full_expr.node_id, metadata);
+            print_node_type(full_expr.node_id, metadata);
             println!();
 
             print_full_expression(full_expr, metadata, level + 1);
@@ -121,7 +121,7 @@ fn print_variable_initializer(init: &AstVariableInitializer, metadata: &AstMetad
         AstVariableInitializer::Aggregate { node_id, init } => {
             let indent = make_indent(level);
             print!("{indent}Aggregate");
-            print_node_type(node_id, metadata);
+            print_node_type(*node_id, metadata);
             println!();
 
             for i in init {
@@ -228,29 +228,29 @@ fn print_statement(stmt: &AstStatement, metadata: &AstMetadata, level: usize) {
             print_if_statement(controlling_expr, then_stmt, else_stmt, metadata, level)
         }
         AstStatement::Switch { node_id, controlling_expr, body } => {
-            print_switch_statement(node_id, controlling_expr, body, metadata, level)
+            print_switch_statement(*node_id, controlling_expr, body, metadata, level)
         }
 
         // Control statements: Loops
         AstStatement::While { node_id, controlling_expr, body } => {
-            print_while_statement(node_id, controlling_expr, body, metadata, level)
+            print_while_statement(*node_id, controlling_expr, body, metadata, level)
         }
         AstStatement::DoWhile { node_id, body, controlling_expr } => {
-            print_do_while_statement(node_id, body, controlling_expr, metadata, level)
+            print_do_while_statement(*node_id, body, controlling_expr, metadata, level)
         }
         AstStatement::For { node_id, init, controlling_expr, post, body } => {
-            print_for_statement(node_id, init, controlling_expr, post, body, metadata, level)
+            print_for_statement(*node_id, init, controlling_expr, post, body, metadata, level)
         }
 
         // Control statements: Jumps
-        AstStatement::Break { enclosing_stmt_node_id } => print_break_statement(enclosing_stmt_node_id, level),
-        AstStatement::Continue { loop_node_id } => print_continue_statement(loop_node_id, level),
+        AstStatement::Break { enclosing_stmt_node_id } => print_break_statement(*enclosing_stmt_node_id, level),
+        AstStatement::Continue { loop_node_id } => print_continue_statement(*loop_node_id, level),
         AstStatement::Goto { node_id: _, label_name } => print_goto_statement(label_name, level),
         AstStatement::Case { switch_node_id, constant_expr, stmt } => {
-            print_switch_case_statement(switch_node_id, constant_expr, stmt, metadata, level)
+            print_switch_case_statement(*switch_node_id, constant_expr, stmt, metadata, level)
         }
         AstStatement::Default { switch_node_id, stmt } => {
-            print_switch_default_statement(switch_node_id, stmt, metadata, level)
+            print_switch_default_statement(*switch_node_id, stmt, metadata, level)
         }
         AstStatement::Return(expr) => print_return_statement(expr, metadata, level),
     }
@@ -321,7 +321,7 @@ fn print_if_statement(
 }
 
 fn print_switch_statement(
-    node_id: &AstNodeId,
+    node_id: AstNodeId,
     controlling_expr: &AstFullExpression,
     body: &AstStatement,
     metadata: &AstMetadata,
@@ -349,7 +349,7 @@ fn print_switch_statement(
 }
 
 fn print_while_statement(
-    node_id: &AstNodeId,
+    node_id: AstNodeId,
     controlling_expr: &AstFullExpression,
     body: &AstStatement,
     metadata: &AstMetadata,
@@ -377,7 +377,7 @@ fn print_while_statement(
 }
 
 fn print_do_while_statement(
-    node_id: &AstNodeId,
+    node_id: AstNodeId,
     body: &AstStatement,
     controlling_expr: &AstFullExpression,
     metadata: &AstMetadata,
@@ -405,7 +405,7 @@ fn print_do_while_statement(
 }
 
 fn print_for_statement(
-    node_id: &AstNodeId,
+    node_id: AstNodeId,
     init: &AstForInitializer,
     controlling_expr: &Option<AstFullExpression>,
     post_expr: &Option<AstFullExpression>,
@@ -489,13 +489,13 @@ fn print_for_statement(
     println!("{}|", make_close_indent(level + 1));
 }
 
-fn print_break_statement(enclosing_stmt_node_id: &AstNodeId, level: usize) {
+fn print_break_statement(enclosing_stmt_node_id: AstNodeId, level: usize) {
     let indent = make_indent(level);
     println!("{indent}Break(enclosing_stmt_id={})", enclosing_stmt_node_id);
     println!("{}|", make_close_indent(level + 1));
 }
 
-fn print_continue_statement(loop_node_id: &AstNodeId, level: usize) {
+fn print_continue_statement(loop_node_id: AstNodeId, level: usize) {
     let indent = make_indent(level);
     println!("{indent}Continue(loop_id={})", loop_node_id);
     println!("{}|", make_close_indent(level + 1));
@@ -508,7 +508,7 @@ fn print_goto_statement(label: &String, level: usize) {
 }
 
 fn print_switch_case_statement(
-    switch_node_id: &AstNodeId,
+    switch_node_id: AstNodeId,
     constant_expr: &AstFullExpression,
     stmt: &AstStatement,
     metadata: &AstMetadata,
@@ -529,7 +529,7 @@ fn print_switch_case_statement(
 }
 
 fn print_switch_default_statement(
-    switch_node_id: &AstNodeId,
+    switch_node_id: AstNodeId,
     stmt: &AstStatement,
     metadata: &AstMetadata,
     level: usize,
@@ -556,7 +556,7 @@ fn print_expression(expr: &AstExpression, metadata: &AstMetadata, level: usize) 
     match expr {
         AstExpression::BinaryOperation { node_id, op, lhs, rhs } => {
             print!("{indent}BinaryOp({})", op);
-            print_node_type(node_id, metadata);
+            print_node_type(*node_id, metadata);
             println!();
 
             print_expression(lhs, metadata, level + 1);
@@ -567,7 +567,7 @@ fn print_expression(expr: &AstExpression, metadata: &AstMetadata, level: usize) 
 
         AstExpression::UnaryOperation { node_id, op, expr } => {
             print!("{indent}UnaryOp({})", op);
-            print_node_type(node_id, metadata);
+            print_node_type(*node_id, metadata);
             println!();
 
             print_expression(expr, metadata, level + 1);
@@ -587,7 +587,7 @@ fn print_expression(expr: &AstExpression, metadata: &AstMetadata, level: usize) 
                 print!(" [Implicit]");
             }
 
-            print_node_type(node_id, metadata);
+            print_node_type(*node_id, metadata);
             println!();
 
             print_expression(expr, metadata, level + 1);
@@ -595,7 +595,7 @@ fn print_expression(expr: &AstExpression, metadata: &AstMetadata, level: usize) 
 
         AstExpression::Deref { node_id, expr } => {
             print!("{indent}Deref");
-            print_node_type(node_id, metadata);
+            print_node_type(*node_id, metadata);
             println!();
 
             print_expression(expr, metadata, level + 1);
@@ -604,7 +604,7 @@ fn print_expression(expr: &AstExpression, metadata: &AstMetadata, level: usize) 
 
         AstExpression::AddressOf { node_id, expr } => {
             print!("{indent}AddressOf");
-            print_node_type(node_id, metadata);
+            print_node_type(*node_id, metadata);
             println!();
 
             print_expression(expr, metadata, level + 1);
@@ -613,7 +613,7 @@ fn print_expression(expr: &AstExpression, metadata: &AstMetadata, level: usize) 
 
         AstExpression::Subscript { node_id, expr1, expr2 } => {
             print!("{indent}Subscript");
-            print_node_type(node_id, metadata);
+            print_node_type(*node_id, metadata);
             println!();
 
             print_expression(expr1, metadata, level + 1);
@@ -629,14 +629,14 @@ fn print_expression(expr: &AstExpression, metadata: &AstMetadata, level: usize) 
 
                 print!("{indent}CompoundAssignment ('{token_type}'");
 
-                if let Some(comp_node_type) = metadata.try_get_node_type(computation_node_id) {
+                if let Some(comp_node_type) = metadata.try_get_node_type(*computation_node_id) {
                     print!(" [Computation Type = '{comp_node_type}']")
                 }
 
                 print!(")");
             }
 
-            print_node_type(node_id, metadata);
+            print_node_type(*node_id, metadata);
             println!();
 
             print_expression(lhs, metadata, level + 1);
@@ -647,7 +647,7 @@ fn print_expression(expr: &AstExpression, metadata: &AstMetadata, level: usize) 
 
         AstExpression::Conditional { node_id, expr, consequent, alternative } => {
             print!("{indent}Ternary");
-            print_node_type(node_id, metadata);
+            print_node_type(*node_id, metadata);
             println!();
 
             // Condition
@@ -679,7 +679,7 @@ fn print_expression(expr: &AstExpression, metadata: &AstMetadata, level: usize) 
 
         AstExpression::FunctionCall { node_id, designator, args, .. } => {
             print!("{indent}Call");
-            print_node_type(node_id, metadata);
+            print_node_type(*node_id, metadata);
             println!();
 
             // Designator
@@ -712,13 +712,13 @@ fn print_expression(expr: &AstExpression, metadata: &AstMetadata, level: usize) 
 
         AstExpression::Identifier { node_id, name, unique_name, .. } => {
             print!("{indent}Identifier(name=\"{}\", unique=\"{}\")", name, unique_name);
-            print_node_type(node_id, metadata);
+            print_node_type(*node_id, metadata);
             println!();
         }
 
         AstExpression::CharLiteral { node_id, literal, value } => {
             print!("{indent}CharLiteral({literal} [{value}])");
-            print_node_type(node_id, metadata);
+            print_node_type(*node_id, metadata);
             println!();
         }
 
@@ -728,7 +728,7 @@ fn print_expression(expr: &AstExpression, metadata: &AstMetadata, level: usize) 
             if literals.len() == 1 {
                 let literal = &literals[0];
                 print!("{indent}StringLiteral({literal} [\"{ascii_joined}\"])");
-                print_node_type(node_id, metadata);
+                print_node_type(*node_id, metadata);
                 println!();
             } else {
                 println!("{indent}StringLiteral");
@@ -742,7 +742,7 @@ fn print_expression(expr: &AstExpression, metadata: &AstMetadata, level: usize) 
                 }
 
                 print!("{indent1}evaluated: \"{ascii_joined}\"");
-                print_node_type(node_id, metadata);
+                print_node_type(*node_id, metadata);
                 println!();
             }
         }
@@ -752,7 +752,7 @@ fn print_expression(expr: &AstExpression, metadata: &AstMetadata, level: usize) 
 
             // If we've performed typechecking then we don't need to print its kind, since we can print its
             // resolved AstType instead.
-            if metadata.try_get_node_type(node_id).is_some() {
+            if metadata.try_get_node_type(*node_id).is_some() {
                 print!("IntegerLiteral({literal}");
             } else {
                 print!("IntegerLiteral({kind} = {literal}");
@@ -762,7 +762,7 @@ fn print_expression(expr: &AstExpression, metadata: &AstMetadata, level: usize) 
                 print!(" [{value}]");
             }
             print!(")");
-            print_node_type(node_id, metadata);
+            print_node_type(*node_id, metadata);
             println!();
         }
 
@@ -773,7 +773,7 @@ fn print_expression(expr: &AstExpression, metadata: &AstMetadata, level: usize) 
             } else {
                 print!("FloatLiteral({kind} = {literal} [{value}])");
             }
-            print_node_type(node_id, metadata);
+            print_node_type(*node_id, metadata);
             println!();
         }
     }
@@ -785,18 +785,18 @@ fn print_resolved_type(declared_type: &AstDeclaredType) {
     }
 }
 
-fn print_node_type(node_id: &AstNodeId, metadata: &AstMetadata) {
+fn print_node_type(node_id: AstNodeId, metadata: &AstMetadata) {
     print!(" [Id = {node_id}]");
 
     if let Some(node_type) = metadata.try_get_node_type(node_id) {
         print!(" [Type = '{node_type}']");
     }
 
-    if metadata.is_expr_flag_set(*node_id, AstExpressionFlag::IsConstant) {
+    if metadata.is_expr_flag_set(node_id, AstExpressionFlag::IsConstant) {
         print!(" [ConstantExpr]");
     }
 
-    if metadata.is_expr_flag_set(*node_id, AstExpressionFlag::PromotedToInt) {
+    if metadata.is_expr_flag_set(node_id, AstExpressionFlag::PromotedToInt) {
         print!(" [PromotedToInt]");
     }
 }

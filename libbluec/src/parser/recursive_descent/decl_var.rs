@@ -284,7 +284,7 @@ fn parse_aggregate_initializer(parser: &mut Parser, driver: &mut Driver) -> Pars
     let node_id = AstNodeId::new();
     parser.metadata.add_source_location(node_id, start_loc.merge_with(end_loc));
 
-    let child_node_ids = aggregate_items.iter().map(|item| *item.node_id()).collect::<Vec<AstNodeId>>();
+    let child_node_ids = aggregate_items.iter().map(|item| item.node_id()).collect::<Vec<AstNodeId>>();
     parser.metadata.propagate_const_flag_from_children(&child_node_ids, node_id);
 
     Ok(AstVariableInitializer::Aggregate { node_id, init: aggregate_items })

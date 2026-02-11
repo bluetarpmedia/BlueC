@@ -25,7 +25,7 @@ pub fn validate_switch_statements(ast_root: &mut AstRoot, chk: &mut TypeChecker,
                 // Get the type of the switch statement's controlling expression.
                 //      All case values must be of this type or cast to it.
                 //
-                let current_switch_data_type = chk.metadata.get_node_type(&controlling_expr.node_id).clone();
+                let current_switch_data_type = chk.metadata.get_node_type(controlling_expr.node_id).clone();
 
                 // Visit all the 'case' statements inside the switch body.
                 //      Remember this will find 'case' statements in nested switches too.
@@ -44,7 +44,7 @@ pub fn validate_switch_statements(ast_root: &mut AstRoot, chk: &mut TypeChecker,
                         let constant_value = eval.evaluate_full_expr(constant_expr);
 
                         if constant_value.is_none() {
-                            let loc = chk.metadata.get_source_location(&constant_expr.node_id);
+                            let loc = chk.metadata.get_source_location(constant_expr.node_id);
                             let err = "Expression cannot be evaluated at compile-time".to_string();
                             driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
                             return;
@@ -54,7 +54,7 @@ pub fn validate_switch_statements(ast_root: &mut AstRoot, chk: &mut TypeChecker,
                         let mut constant_value = constant_value.unwrap();
 
                         if !matches!(constant_value, AstConstantValue::Integer(_)) {
-                            let loc = chk.metadata.get_source_location(&constant_expr.node_id);
+                            let loc = chk.metadata.get_source_location(constant_expr.node_id);
                             let err = "Case label expression must evaluate as an integer constant".to_string();
                             driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
                             return;
@@ -79,7 +79,7 @@ pub fn validate_switch_statements(ast_root: &mut AstRoot, chk: &mut TypeChecker,
                                     || (!old_constant_value.has_negative_value()
                                         && constant_value.has_negative_value());
 
-                                let loc = chk.metadata.get_source_location(&constant_expr.node_id);
+                                let loc = chk.metadata.get_source_location(constant_expr.node_id);
                                 Warning::implicit_switch_case_conversion(
                                     &case_data_type,
                                     switch_data_type,
@@ -104,12 +104,12 @@ pub fn validate_switch_statements(ast_root: &mut AstRoot, chk: &mut TypeChecker,
                             let err = format!("Duplicate case value '{}'", constant_value);
                             let mut diag = Diagnostic::error_at_location(
                                 err,
-                                chk.metadata.get_source_location(&constant_expr.node_id),
+                                chk.metadata.get_source_location(constant_expr.node_id),
                             );
 
                             diag.add_note(
                                 "Previous case defined here:".to_string(),
-                                Some(chk.metadata.get_source_location(&existing_case_node_id)),
+                                Some(chk.metadata.get_source_location(existing_case_node_id)),
                             );
                             driver.add_diagnostic(diag);
                         }

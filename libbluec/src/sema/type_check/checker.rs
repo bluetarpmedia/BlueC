@@ -65,13 +65,13 @@ impl TypeChecker {
     }
 
     /// Gets a node's data type
-    pub fn get_data_type(&self, node_id: &AstNodeId) -> AstType {
+    pub fn get_data_type(&self, node_id: AstNodeId) -> AstType {
         self.metadata.get_node_type(node_id).clone()
     }
 
     /// Sets a node's data type
-    pub fn set_data_type(&mut self, node_id: &AstNodeId, data_type: &AstType) {
-        self.metadata.set_node_type(*node_id, data_type.clone());
+    pub fn set_data_type(&mut self, node_id: AstNodeId, data_type: &AstType) {
+        self.metadata.set_node_type(node_id, data_type.clone());
     }
 
     /// Sets the current function's return type.
@@ -100,7 +100,7 @@ impl TypeChecker {
     pub fn add_cast(&mut self, target_type: &AstType, expr: Box<AstExpression>, is_implicit: bool) -> AstExpression {
         let node_id = AstNodeId::new();
 
-        self.set_data_type(&node_id, target_type);
+        self.set_data_type(node_id, target_type);
         self.metadata.copy_source_location_from_child(expr.node_id(), node_id);
         self.metadata.propagate_const_flag_from_child(expr.node_id(), node_id);
 
@@ -116,7 +116,7 @@ impl TypeChecker {
         target_type: &AstType,
         expr: Box<AstExpression>,
     ) -> Box<AstExpression> {
-        let expr_type = self.get_data_type(&expr.node_id());
+        let expr_type = self.get_data_type(expr.node_id());
 
         if expr_type == *target_type { expr } else { Box::new(self.add_cast(target_type, expr, true)) }
     }
@@ -128,7 +128,7 @@ impl TypeChecker {
         target_type: &AstType,
         expr: Box<AstExpression>,
     ) -> Box<AstExpression> {
-        let expr_type = self.get_data_type(&expr.node_id());
+        let expr_type = self.get_data_type(expr.node_id());
 
         if expr_type == *target_type { expr } else { Box::new(self.add_cast(target_type, expr, false)) }
     }

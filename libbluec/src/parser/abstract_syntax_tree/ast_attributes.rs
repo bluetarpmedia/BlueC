@@ -3,14 +3,14 @@
 //! The `ast_attributes` module defines various AST attribute types.
 
 use std::fmt;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use crate::ICE;
 use crate::core::SourceLocation;
 
-/// A unique numerical identifier for a node in the AST.
+/// A unique numerical identifier for a node in the AST. Identifiers start from 1.
 #[derive(Debug, Default, Copy, Clone, Hash, Eq, PartialEq)]
-pub struct AstNodeId(usize);
+pub struct AstNodeId(u32);
 
 impl fmt::Display for AstNodeId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -21,11 +21,11 @@ impl fmt::Display for AstNodeId {
 impl AstNodeId {
     /// Creates a new, unique `AstNodeId`.
     pub fn new() -> Self {
-        static NEXT_ID: AtomicUsize = AtomicUsize::new(1);
+        static NEXT_ID: AtomicU32 = AtomicU32::new(1);
 
         let next_id = NEXT_ID.fetch_add(1, Ordering::SeqCst); // Increments and returns previous value, so `1` is first.
 
-        if next_id == usize::MAX {
+        if next_id == u32::MAX {
             ICE!("Exhausted node ids"); // Technically we have 1 more available but we'll limit ourselves to MAX-1.
         }
 
@@ -34,7 +34,7 @@ impl AstNodeId {
 
     /// Creates an `AstNodeId` with the given value. This is used by some unit tests.
     #[cfg(test)]
-    pub fn with_id(value: usize) -> Self {
+    pub fn with_id(value: u32) -> Self {
         Self(value)
     }
 

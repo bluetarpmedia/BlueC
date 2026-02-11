@@ -87,21 +87,21 @@ fn evaluate_integer_binary_op(
         AstBinaryOp::LeftShift => match rhs {
             0 => {
                 if eval.emit_diagnostics {
-                    let loc = eval.chk.metadata.get_source_location(&rhs_node_id);
+                    let loc = eval.chk.metadata.get_source_location(rhs_node_id);
                     Warning::shift_count_zero(loc, eval.driver);
                 }
                 Some(ConstantValue::Int { value: lhs, signed, size })
             }
             n if n < 0 => {
                 if eval.emit_diagnostics {
-                    let loc = eval.chk.metadata.get_source_location(&rhs_node_id);
+                    let loc = eval.chk.metadata.get_source_location(rhs_node_id);
                     Warning::shift_count_negative(loc, eval.driver);
                 }
                 None
             }
             n => {
                 if eval.emit_diagnostics && n >= int_type.bits() as i128 {
-                    let loc = eval.chk.metadata.get_source_location(&rhs_node_id);
+                    let loc = eval.chk.metadata.get_source_location(rhs_node_id);
                     Warning::shift_count_overflow(int_type.bits(), false, loc, eval.driver);
                 }
                 lhs.checked_shl(rhs as u32).map(|value| ConstantValue::Int { value, signed, size })
@@ -110,21 +110,21 @@ fn evaluate_integer_binary_op(
         AstBinaryOp::RightShift => match rhs {
             0 => {
                 if eval.emit_diagnostics {
-                    let loc = eval.chk.metadata.get_source_location(&rhs_node_id);
+                    let loc = eval.chk.metadata.get_source_location(rhs_node_id);
                     Warning::shift_count_zero(loc, eval.driver);
                 }
                 Some(ConstantValue::Int { value: lhs, signed, size })
             }
             n if n < 0 => {
                 if eval.emit_diagnostics {
-                    let loc = eval.chk.metadata.get_source_location(&rhs_node_id);
+                    let loc = eval.chk.metadata.get_source_location(rhs_node_id);
                     Warning::shift_count_negative(loc, eval.driver);
                 }
                 None
             }
             n => {
                 if eval.emit_diagnostics && n >= int_type.bits() as i128 {
-                    let loc = eval.chk.metadata.get_source_location(&rhs_node_id);
+                    let loc = eval.chk.metadata.get_source_location(rhs_node_id);
                     Warning::shift_count_overflow(int_type.bits(), false, loc, eval.driver);
                 }
                 lhs.checked_shr(rhs as u32).map(|value| ConstantValue::Int { value, signed, size })
@@ -268,7 +268,7 @@ where
 
     if eval.emit_diagnostics && overflowed {
         let new_value = new_value.to_string();
-        let loc = eval.chk.metadata.get_source_location(&expr_node_id);
+        let loc = eval.chk.metadata.get_source_location(expr_node_id);
         Warning::floating_point_overflow(&fp_type, &new_value, loc, eval.driver);
     }
 
@@ -287,8 +287,8 @@ fn arithmetic_int(
     // Emit a warning if performing division/remainder by zero.
     //
     if eval.emit_diagnostics && matches!(op, AstBinaryOp::Divide | AstBinaryOp::Remainder) && rhs_value == 0 {
-        let op_loc = eval.chk.metadata.get_operator_sloc(&expr_node_id);
-        let rhs_loc = eval.chk.metadata.get_source_location(&rhs_node_id);
+        let op_loc = eval.chk.metadata.get_operator_sloc(expr_node_id);
+        let rhs_loc = eval.chk.metadata.get_source_location(rhs_node_id);
         Warning::division_by_zero(op, op_loc, rhs_loc, eval.driver);
     }
 
@@ -298,7 +298,7 @@ fn arithmetic_int(
             ($overflowed:expr, $new_value:expr) => {
                 if eval.emit_diagnostics && $overflowed {
                     let new_value = $new_value.to_string();
-                    let loc = eval.chk.metadata.get_source_location(&expr_node_id);
+                    let loc = eval.chk.metadata.get_source_location(expr_node_id);
                     Warning::integer_overflow(&int_type, &new_value, loc, eval.driver);
                 }
             };

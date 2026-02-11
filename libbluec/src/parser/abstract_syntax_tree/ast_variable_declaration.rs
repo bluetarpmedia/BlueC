@@ -48,10 +48,10 @@ pub enum AstVariableInitializer {
 
 impl AstVariableInitializer {
     /// Gets the initializer's node id.
-    pub fn node_id(&self) -> &AstNodeId {
+    pub fn node_id(&self) -> AstNodeId {
         match self {
-            AstVariableInitializer::Scalar(full_expr) => &full_expr.node_id,
-            AstVariableInitializer::Aggregate { node_id, .. } => node_id,
+            AstVariableInitializer::Scalar(full_expr) => full_expr.node_id,
+            AstVariableInitializer::Aggregate { node_id, .. } => *node_id,
         }
     }
 

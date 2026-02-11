@@ -31,10 +31,10 @@ fn switch_labels() {
     maker.reset_for_new_function("main");
 
     let switch_node_id = AstNodeId::with_id(123);
-    let switch = maker.make_switch_label("my_switch", &switch_node_id);
-    let case1 = maker.make_switch_case_label(&switch_node_id, &AstNodeId::with_id(1));
-    let case2 = maker.make_switch_case_label(&switch_node_id, &AstNodeId::with_id(2));
-    let case3 = maker.make_switch_case_label(&switch_node_id, &AstNodeId::with_id(3));
+    let switch = maker.make_switch_label("my_switch", switch_node_id);
+    let case1 = maker.make_switch_case_label(switch_node_id, AstNodeId::with_id(1));
+    let case2 = maker.make_switch_case_label(switch_node_id, AstNodeId::with_id(2));
+    let case3 = maker.make_switch_case_label(switch_node_id, AstNodeId::with_id(3));
 
     assert_ne!(switch, case1);
     assert_ne!(switch, case2);
@@ -48,10 +48,10 @@ fn control_stmt_labels() {
     let mut maker = LabelMaker::new();
     maker.reset_for_new_function("main");
 
-    let if_lbl = maker.make_control_label("if", &AstNodeId::with_id(111));
-    let for_lbl = maker.make_control_label("for", &AstNodeId::with_id(222));
-    let while_lbl = maker.make_control_label("while", &AstNodeId::with_id(333));
-    let do_lbl = maker.make_control_label("do", &AstNodeId::with_id(444));
+    let if_lbl = maker.make_control_label("if", AstNodeId::with_id(111));
+    let for_lbl = maker.make_control_label("for", AstNodeId::with_id(222));
+    let while_lbl = maker.make_control_label("while", AstNodeId::with_id(333));
+    let do_lbl = maker.make_control_label("do", AstNodeId::with_id(444));
 
     assert_ne!(if_lbl, for_lbl);
     assert_ne!(for_lbl, while_lbl);

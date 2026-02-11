@@ -99,7 +99,7 @@ pub fn translate_expression(
 
             match expr_result {
                 EvalExpr::Value(value) => {
-                    let dst_data_type = translator.get_ast_type_from_node(node_id);
+                    let dst_data_type = translator.get_ast_type_from_node(*node_id);
                     debug_assert!(dst_data_type.is_pointer());
 
                     let dst = translator.make_temp_variable(dst_data_type.clone());
@@ -155,7 +155,7 @@ pub fn translate_expression(
         }
 
         AstExpression::FunctionCall { node_id, designator, args, .. } => {
-            let dst_data_type = translator.get_ast_type_from_node(node_id);
+            let dst_data_type = translator.get_ast_type_from_node(*node_id);
             let dst = translator.make_temp_variable(dst_data_type.clone());
 
             // Evaluate designator
@@ -185,7 +185,7 @@ pub fn translate_expression_to_value(
         EvalExpr::Value(value) => value,
 
         EvalExpr::Dereferenced(object) => {
-            let rvalue_type = translator.get_ast_type_from_node(&expr.node_id());
+            let rvalue_type = translator.get_ast_type_from_node(expr.node_id());
 
             // Dereferencing an object of function type is a no-op.
             if rvalue_type.is_function() {
@@ -230,7 +230,7 @@ fn translate_string_literal(translator: &mut BlueTacTranslator, expr: &AstExpres
     let mut constant_string = ascii.join("");
 
     // If the expression type is a character array then append NULL chars, if necessary, to match the array length.
-    let data_type = translator.get_ast_type_from_node(node_id).clone();
+    let data_type = translator.get_ast_type_from_node(*node_id).clone();
     if let AstType::Array { element_type, count } = &data_type
         && element_type.is_character()
         && *count > ascii.len()
@@ -258,7 +258,7 @@ fn translate_integer_literal(translator: &mut BlueTacTranslator, expr: &AstExpre
         ICE!("Expected an AstExpression::IntegerLiteral");
     };
 
-    let literal_type = translator.get_ast_type_from_node(node_id);
+    let literal_type = translator.get_ast_type_from_node(*node_id);
 
     // There are no warnings emitted here; if these are a narrowing conversion then the parser/sema has already
     // warned about them.
@@ -363,7 +363,7 @@ fn translate_assignment(
         };
 
         // Get the computation type for the compound binary operation (e.g. common type of `lhs + rhs` for `+=`).
-        let computation_type = translator.get_ast_type_from_node(computation_node_id).clone();
+        let computation_type = translator.get_ast_type_from_node(*computation_node_id).clone();
 
         let op_result = translator.make_temp_variable(computation_type.clone());
 

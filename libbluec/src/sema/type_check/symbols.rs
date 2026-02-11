@@ -347,7 +347,7 @@ pub fn verify_function_declaration(
 /// Verifies that the arguments are valid for a function's parameters.
 pub fn verify_function_arguments(
     fn_unique_name: Option<AstUniqueName>,
-    args_node_id: &AstNodeId,
+    args_node_id: AstNodeId,
     params: &[AstType],
     args: &[AstExpression],
     metadata: &AstMetadata,

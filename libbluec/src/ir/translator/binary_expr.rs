@@ -45,7 +45,7 @@ pub fn translate_binary_operation(
             let lhs_value = expr::translate_expression_to_value(translator, lhs, instructions);
             let rhs_value = expr::translate_expression_to_value(translator, rhs, instructions);
 
-            let dst_data_type = translator.get_ast_type_from_node(node_id);
+            let dst_data_type = translator.get_ast_type_from_node(*node_id);
             let dst = translator.make_temp_variable(dst_data_type.clone());
 
             instructions.push(BtInstruction::Binary { op, src1: lhs_value.clone(), src2: rhs_value, dst: dst.clone() });
@@ -136,7 +136,7 @@ fn translate_pointer_subtraction(
     let lhs_value = expr::translate_expression_to_value(translator, lhs, instructions);
     let rhs_value = expr::translate_expression_to_value(translator, rhs, instructions);
 
-    let dst_data_type = translator.get_ast_type_from_node(node_id).clone();
+    let dst_data_type = translator.get_ast_type_from_node(*node_id).clone();
     let ptr_diff = translator.make_temp_variable(dst_data_type.clone());
     let dst = translator.make_temp_variable(dst_data_type);
 

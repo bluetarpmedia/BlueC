@@ -403,7 +403,7 @@ pub fn parse_for_statement(parser: &mut Parser, driver: &mut Driver) -> ParseRes
                     add_error(
                         driver,
                         format!("Variable '{}' cannot be declared 'static' in a for-loop initializer", var_decl.ident),
-                        parser.metadata.get_source_location(&var_decl.node_id),
+                        parser.metadata.get_source_location(var_decl.node_id),
                     );
                 }
 

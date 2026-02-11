@@ -357,7 +357,7 @@ fn resolve_array_size(
 
         let Some(constant_value) = constant_value else {
             let err = "Array size must be a constant integer expression".to_string();
-            let loc = chk.metadata.get_source_location(&size_expr.node_id);
+            let loc = chk.metadata.get_source_location(size_expr.node_id);
             driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
             return Err(ResolutionError::SemanticError);
         };
@@ -365,7 +365,7 @@ fn resolve_array_size(
         if constant_value.get_ast_type().is_integer() {
             if constant_value.has_negative_value() {
                 let err = "Array size cannot be negative".to_string();
-                let loc = chk.metadata.get_source_location(&size_expr.node_id);
+                let loc = chk.metadata.get_source_location(size_expr.node_id);
                 driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
                 return Err(ResolutionError::SemanticError);
             }
@@ -381,7 +381,7 @@ fn resolve_array_size(
             Ok(value as usize)
         } else {
             let err = "Array size must be a constant integer expression".to_string();
-            let loc = chk.metadata.get_source_location(&size_expr.node_id);
+            let loc = chk.metadata.get_source_location(size_expr.node_id);
             driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
             Err(ResolutionError::SemanticError)
         }

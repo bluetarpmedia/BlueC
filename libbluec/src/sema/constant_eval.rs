@@ -48,7 +48,7 @@ impl<'a, 'b> Eval<'a, 'b> {
     /// returned.
     pub fn evaluate_full_expr(&mut self, full_expr: &AstFullExpression) -> Option<AstConstantValue> {
         if self.emit_diagnostics {
-            self.root_expression_sloc = self.chk.metadata.get_source_location(&full_expr.node_id);
+            self.root_expression_sloc = self.chk.metadata.get_source_location(full_expr.node_id);
         }
         evaluate_constant_expr(&full_expr.expr, self)
     }
@@ -60,7 +60,7 @@ impl<'a, 'b> Eval<'a, 'b> {
     /// returned.
     pub fn evaluate_expr(&mut self, expr: &AstExpression) -> Option<AstConstantValue> {
         if self.emit_diagnostics {
-            self.root_expression_sloc = self.chk.metadata.get_source_location(&expr.node_id());
+            self.root_expression_sloc = self.chk.metadata.get_source_location(expr.node_id());
         }
         evaluate_constant_expr(expr, self)
     }
@@ -185,12 +185,12 @@ fn evaluate_const_expr_recursively(expr: &AstExpression, eval: &mut Eval) -> Opt
                 && eval.chk.metadata.is_expr_flag_set(rhs.node_id(), AstExpressionFlag::IsConstant) =>
         {
             if let Some(rhs_value) = evaluate_const_expr_recursively(rhs, eval) {
-                let lhs_type = eval.chk.get_data_type(&lhs.node_id());
+                let lhs_type = eval.chk.get_data_type(lhs.node_id());
 
                 // We want any diagnostics to point to the `rhs` expression.
                 let orig_sloc = std::mem::replace(
                     &mut eval.root_expression_sloc,
-                    eval.chk.metadata.get_source_location(&rhs.node_id()),
+                    eval.chk.metadata.get_source_location(rhs.node_id()),
                 );
 
                 _ = rhs_value.cast_to(&lhs_type, true, eval); // Ignore the result, we only want the diagnostics
@@ -240,7 +240,7 @@ fn evaluate_address_of(expr: &AstExpression, eval: &mut Eval) -> Option<Constant
         ICE!("Expected AstExpression::AddressOf");
     };
 
-    let ptr_type = eval.chk.get_data_type(node_id);
+    let ptr_type = eval.chk.get_data_type(*node_id);
 
     let init = evaluate_address_constant(expr, eval)?;
 
@@ -269,8 +269,8 @@ fn evaluate_address_constant(expr: &AstExpression, eval: &mut Eval) -> Option<As
         // A static storage pointer can be initialized with the address of an array element.
         //
         AstExpression::Subscript { node_id, expr1, expr2, .. } => {
-            let expr1_t = eval.chk.get_data_type(&expr1.node_id());
-            let expr2_t = eval.chk.get_data_type(&expr2.node_id());
+            let expr1_t = eval.chk.get_data_type(expr1.node_id());
+            let expr2_t = eval.chk.get_data_type(expr2.node_id());
             debug_assert!(expr1_t.is_pointer() || expr2_t.is_pointer());
 
             let (ptr_expr, int_expr) = if expr1_t.is_pointer() { (expr1, expr2) } else { (expr2, expr1) };
@@ -306,11 +306,11 @@ fn evaluate_address_constant(expr: &AstExpression, eval: &mut Eval) -> Option<As
                 if let AstType::Array { count, .. } = symbol.data_type
                     && (subscript_index < 0 || (subscript_index > 0 && subscript_index as usize > count))
                 {
-                    let loc = eval.chk.metadata.get_source_location(&int_expr.node_id());
+                    let loc = eval.chk.metadata.get_source_location(int_expr.node_id());
                     Warning::array_index_out_of_bounds(subscript_index, &symbol.data_type, loc, eval.driver);
                 }
 
-                let subscript_expr_type = eval.chk.get_data_type(node_id);
+                let subscript_expr_type = eval.chk.get_data_type(*node_id);
                 let element_bytes = (subscript_expr_type.bits() / 8) as i32;
                 let byte_offset = subscript_index * element_bytes;
 
@@ -329,10 +329,10 @@ fn evaluate_address_constant(expr: &AstExpression, eval: &mut Eval) -> Option<As
             let constant_idx = eval.chk.constants.add_string(&constant_string);
 
             // Add the constant string to the symbol table (may already exist).
-            let loc = eval.chk.metadata.get_source_location(literal_node_id);
+            let loc = eval.chk.metadata.get_source_location(*literal_node_id);
             let attrs = SymbolAttributes::constant(loc);
             let const_name = eval.chk.constants.make_const_symbol_name(constant_idx);
-            let lit_data_type = eval.chk.get_data_type(literal_node_id);
+            let lit_data_type = eval.chk.get_data_type(*literal_node_id);
             let unique_name = AstUniqueName::new(const_name.clone());
             _ = eval.chk.symbols.add(unique_name, lit_data_type, attrs);
 

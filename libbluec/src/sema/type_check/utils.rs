@@ -109,8 +109,8 @@ pub fn get_common_type(
     chk: &mut TypeChecker,
     driver: &mut Driver,
 ) -> Result<(AstType, bool), CommonTypeError> {
-    let a_type = chk.get_data_type(&a.node_id());
-    let b_type = chk.get_data_type(&b.node_id());
+    let a_type = chk.get_data_type(a.node_id());
+    let b_type = chk.get_data_type(b.node_id());
 
     // A function type should decay/implicitly convert to a function pointer.
     //
@@ -172,7 +172,7 @@ pub fn is_null_pointer_constant(
             let mut eval = constant_eval::Eval::new(chk, driver);
             match eval.evaluate_expr(expr) {
                 Some(const_value) if const_value.is_zero() && const_value.get_ast_type().is_integer() => {
-                    let loc = chk.metadata.get_source_location(&expr.node_id());
+                    let loc = chk.metadata.get_source_location(expr.node_id());
                     Warning::expression_interpreted_as_null_ptr_constant(loc, ptr_type, driver);
                     true
                 }
@@ -184,7 +184,7 @@ pub fn is_null_pointer_constant(
 
 /// Emits an error that a binary operation has operands with invalid types.
 pub fn error_invalid_binary_expression_operands(
-    node_id: &AstNodeId,
+    node_id: AstNodeId,
     lhs_expr: &AstExpression,
     rhs_expr: &AstExpression,
     lhs_type: &AstType,
@@ -193,8 +193,8 @@ pub fn error_invalid_binary_expression_operands(
     driver: &mut Driver,
 ) {
     let op_loc = chk.metadata.get_source_location(node_id);
-    let lhs_loc = chk.metadata.get_source_location(&lhs_expr.node_id());
-    let rhs_loc = chk.metadata.get_source_location(&rhs_expr.node_id());
+    let lhs_loc = chk.metadata.get_source_location(lhs_expr.node_id());
+    let rhs_loc = chk.metadata.get_source_location(rhs_expr.node_id());
 
     Error::invalid_binary_expression_operands(op_loc, lhs_type, rhs_type, lhs_loc, rhs_loc, driver);
 }
@@ -209,15 +209,15 @@ pub fn error_incompatible_types(
     chk: &mut TypeChecker,
     driver: &mut Driver,
 ) {
-    let loc = chk.metadata.get_source_location(&expr_node_id);
-    let a_loc = chk.metadata.get_source_location(&a_node_id);
-    let b_loc = chk.metadata.get_source_location(&b_node_id);
+    let loc = chk.metadata.get_source_location(expr_node_id);
+    let a_loc = chk.metadata.get_source_location(a_node_id);
+    let b_loc = chk.metadata.get_source_location(b_node_id);
     Error::incompatible_types(a_type, b_type, loc, a_loc, b_loc, driver);
 }
 
 /// Emits a warning that two different pointer types are being compared.
 pub fn warn_compare_different_pointer_types(
-    expr_node_id: &AstNodeId,
+    expr_node_id: AstNodeId,
     left: &AstExpression,
     right: &AstExpression,
     left_type: &AstType,
@@ -226,14 +226,14 @@ pub fn warn_compare_different_pointer_types(
     driver: &mut Driver,
 ) {
     let loc = chk.metadata.get_operator_sloc(expr_node_id);
-    let a_loc = chk.metadata.get_source_location(&left.node_id());
-    let b_loc = chk.metadata.get_source_location(&right.node_id());
+    let a_loc = chk.metadata.get_source_location(left.node_id());
+    let b_loc = chk.metadata.get_source_location(right.node_id());
     Warning::compare_distinct_pointer_types(left_type, right_type, loc, a_loc, b_loc, driver);
 }
 
 /// Emits a warning that a pointer and an integer are being compared.
 pub fn warn_compare_pointer_and_integer(
-    expr_node_id: &AstNodeId,
+    expr_node_id: AstNodeId,
     left: &AstExpression,
     right: &AstExpression,
     left_type: &AstType,
@@ -242,8 +242,8 @@ pub fn warn_compare_pointer_and_integer(
     driver: &mut Driver,
 ) {
     let op_loc = chk.metadata.get_operator_sloc(expr_node_id);
-    let left_loc = chk.metadata.get_source_location(&left.node_id());
-    let right_loc = chk.metadata.get_source_location(&right.node_id());
+    let left_loc = chk.metadata.get_source_location(left.node_id());
+    let right_loc = chk.metadata.get_source_location(right.node_id());
 
     let (ptr_type, int_type, ptr_loc, int_loc) = if left_type.is_pointer() {
         (left_type, right_type, left_loc, right_loc)
@@ -256,7 +256,7 @@ pub fn warn_compare_pointer_and_integer(
 
 /// Emits a warning that a ternary condition's consequent and alternative types do not match.
 pub fn warn_conditional_type_mismatch(
-    expr_node_id: &AstNodeId,
+    expr_node_id: AstNodeId,
     left: &AstExpression,
     right: &AstExpression,
     left_type: &AstType,
@@ -265,14 +265,14 @@ pub fn warn_conditional_type_mismatch(
     driver: &mut Driver,
 ) {
     let ternary_op_loc = chk.metadata.get_operator_sloc(expr_node_id);
-    let a_loc = chk.metadata.get_source_location(&left.node_id());
-    let b_loc = chk.metadata.get_source_location(&right.node_id());
+    let a_loc = chk.metadata.get_source_location(left.node_id());
+    let b_loc = chk.metadata.get_source_location(right.node_id());
     Warning::conditional_type_mismatch(left_type, right_type, ternary_op_loc, a_loc, b_loc, driver);
 }
 
 /// Emits a warning that two pointers in an expression have different types.
 pub fn warn_pointer_type_mismatch(
-    expr_node_id: &AstNodeId,
+    expr_node_id: AstNodeId,
     left: &AstExpression,
     right: &AstExpression,
     left_type: &AstType,
@@ -281,8 +281,8 @@ pub fn warn_pointer_type_mismatch(
     driver: &mut Driver,
 ) {
     let op_loc = chk.metadata.get_operator_sloc(expr_node_id);
-    let a_loc = chk.metadata.get_source_location(&left.node_id());
-    let b_loc = chk.metadata.get_source_location(&right.node_id());
+    let a_loc = chk.metadata.get_source_location(left.node_id());
+    let b_loc = chk.metadata.get_source_location(right.node_id());
     Warning::pointer_type_mismatch(left_type, right_type, op_loc, a_loc, b_loc, driver);
 }
 

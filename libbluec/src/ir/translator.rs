@@ -54,11 +54,11 @@ impl BlueTacTranslator {
 
     /// Gets the `AstType` from the symbol table for the given AST expression.
     pub fn get_expression_type(&self, expr: &parser::AstExpression) -> &parser::AstType {
-        self.get_ast_type_from_node(&expr.node_id())
+        self.get_ast_type_from_node(expr.node_id())
     }
 
     /// Gets the `AstType` from the symbol table for the given AST node.
-    pub fn get_ast_type_from_node(&self, node_id: &parser::AstNodeId) -> &parser::AstType {
+    pub fn get_ast_type_from_node(&self, node_id: parser::AstNodeId) -> &parser::AstType {
         self.metadata.get_node_type(node_id)
     }
 
@@ -475,17 +475,14 @@ fn translate_switch_statement(
         .into_iter()
         .map(|(case_value, case_node_id)| BtSwitchCase {
             value: BtValue::from(case_value),
-            label: translator.label_maker.make_switch_case_label(&switch_node_id, &case_node_id),
+            label: translator.label_maker.make_switch_case_label(switch_node_id, case_node_id),
         })
         .collect();
 
-    let default_label = if has_default_case {
-        Some(translator.label_maker.make_switch_label("default", &switch_node_id))
-    } else {
-        None
-    };
+    let default_label =
+        if has_default_case { Some(translator.label_maker.make_switch_label("default", switch_node_id)) } else { None };
 
-    let break_label = translator.label_maker.make_control_label("break", &switch_node_id);
+    let break_label = translator.label_maker.make_control_label("break", switch_node_id);
 
     // We use a special IR instruction for the switch. Depending on the target, the codegen may choose
     // to use a jump table or a binary tree or a simple series of if-else comparisons. But we can't decide
@@ -512,7 +509,7 @@ fn translate_switch_case_statement(
     translator: &mut BlueTacTranslator,
     driver: &mut Driver,
 ) {
-    let case_label = translator.label_maker.make_switch_case_label(&switch_node_id, &case_node_id);
+    let case_label = translator.label_maker.make_switch_case_label(switch_node_id, case_node_id);
     instructions.push(BtInstruction::Label { id: case_label });
     translate_statement(stmt, instructions, translator, driver);
 }
@@ -524,7 +521,7 @@ fn translate_switch_default_statement(
     translator: &mut BlueTacTranslator,
     driver: &mut Driver,
 ) {
-    let default_label = translator.label_maker.make_switch_label("default", &switch_node_id);
+    let default_label = translator.label_maker.make_switch_label("default", switch_node_id);
     instructions.push(BtInstruction::Label { id: default_label });
     translate_statement(stmt, instructions, translator, driver);
 }
@@ -537,8 +534,8 @@ fn translate_while_statement(
     translator: &mut BlueTacTranslator,
     driver: &mut Driver,
 ) {
-    let continue_label = translator.label_maker.make_control_label("continue", &node_id);
-    let break_label = translator.label_maker.make_control_label("break", &node_id);
+    let continue_label = translator.label_maker.make_control_label("continue", node_id);
+    let break_label = translator.label_maker.make_control_label("break", node_id);
 
     // Start of the loop / Continue label
     instructions.push(BtInstruction::Label { id: continue_label.clone() });
@@ -567,9 +564,9 @@ fn translate_do_while_statement(
     translator: &mut BlueTacTranslator,
     driver: &mut Driver,
 ) {
-    let start_label = translator.label_maker.make_control_label("start", &node_id);
-    let continue_label = translator.label_maker.make_control_label("continue", &node_id);
-    let break_label = translator.label_maker.make_control_label("break", &node_id);
+    let start_label = translator.label_maker.make_control_label("start", node_id);
+    let continue_label = translator.label_maker.make_control_label("continue", node_id);
+    let break_label = translator.label_maker.make_control_label("break", node_id);
 
     // Start of the loop
     instructions.push(BtInstruction::Label { id: start_label.clone() });
@@ -600,9 +597,9 @@ fn translate_for_statement(
         ICE!("Expected AstStatement::For");
     };
 
-    let start_label = translator.label_maker.make_control_label("start", &node_id);
-    let continue_label = translator.label_maker.make_control_label("continue", &node_id);
-    let break_label = translator.label_maker.make_control_label("break", &node_id);
+    let start_label = translator.label_maker.make_control_label("start", node_id);
+    let continue_label = translator.label_maker.make_control_label("continue", node_id);
+    let break_label = translator.label_maker.make_control_label("break", node_id);
 
     // Initializer
     match *init {
@@ -662,7 +659,7 @@ fn translate_break_statement(
     _driver: &mut Driver,
 ) {
     // Remember: This can break either a switch or a loop.
-    let break_label = translator.label_maker.make_control_label("break", &enclosing_stmt_node_id);
+    let break_label = translator.label_maker.make_control_label("break", enclosing_stmt_node_id);
     instructions.push(BtInstruction::Jump { target: break_label });
 }
 
@@ -672,7 +669,7 @@ fn translate_continue_statement(
     translator: &mut BlueTacTranslator,
     _driver: &mut Driver,
 ) {
-    let continue_label = translator.label_maker.make_control_label("continue", &loop_node_id);
+    let continue_label = translator.label_maker.make_control_label("continue", loop_node_id);
     instructions.push(BtInstruction::Jump { target: continue_label });
 }
 

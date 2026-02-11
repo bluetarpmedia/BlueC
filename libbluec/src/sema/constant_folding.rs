@@ -69,7 +69,7 @@ pub fn fold(ast_root: &mut AstRoot, chk: &mut TypeChecker, driver: &mut Driver) 
     visitor::visit_variable_declarations(ast_root, &mut |var_decl: &mut AstVariableDeclaration| {
         if let Some(var_init) = var_decl.initializer.as_mut()
             && var_init.is_aggregate()
-            && !chk.metadata.is_expr_flag_set(*var_init.node_id(), AstExpressionFlag::IsStaticStorageInit)
+            && !chk.metadata.is_expr_flag_set(var_init.node_id(), AstExpressionFlag::IsStaticStorageInit)
         {
             visit_aggregate_variable_initializer(var_init, chk)
         }
@@ -84,7 +84,7 @@ fn visit_aggregate_variable_initializer(var_init: &mut AstVariableInitializer, c
     // If this initializer is an aggregate initializer for a character array type then fold it into a string literal.
     //      {'a', 'b', 'c', 'd'}   -->  "abcd"
     //
-    let aggregate_type = chk.metadata.get_node_type(node_id);
+    let aggregate_type = chk.metadata.get_node_type(*node_id);
     if chk.metadata.is_expr_flag_set(*node_id, AstExpressionFlag::IsConstant) && aggregate_type.is_character_array() {
         *var_init = variable_initializer::fold_character_array_variable_initializer(init, aggregate_type.clone(), chk);
         return;
@@ -113,9 +113,9 @@ fn fold_constant_expression(expr: &mut AstExpression, chk: &mut TypeChecker, dri
     };
 
     if !constant_value.is_pointer_address_constant() {
-        let sloc = chk.metadata.get_source_location(&expr.node_id()); // Sloc of expression before folding
+        let sloc = chk.metadata.get_source_location(expr.node_id()); // Sloc of expression before folding
 
-        let data_type = chk.metadata.get_node_type(&expr.node_id()).clone();
+        let data_type = chk.metadata.get_node_type(expr.node_id()).clone();
         *expr = make_literal(&constant_value, data_type, chk);
 
         chk.metadata.add_source_location(expr.node_id(), sloc); // Set sloc on the new literal that replaced the expr

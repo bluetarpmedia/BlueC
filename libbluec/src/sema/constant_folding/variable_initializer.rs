@@ -34,7 +34,7 @@ pub fn fold_character_array_variable_initializer(
     let string_literal = make_string_literal(ascii, data_type.clone(), chk);
 
     let full_expr = AstFullExpression::new(string_literal);
-    chk.set_data_type(&full_expr.node_id, &data_type);
+    chk.set_data_type(full_expr.node_id, &data_type);
     chk.metadata.propagate_const_flag_from_child(full_expr.expr.node_id(), full_expr.node_id);
 
     AstVariableInitializer::Scalar(full_expr)

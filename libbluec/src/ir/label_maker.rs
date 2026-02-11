@@ -34,7 +34,7 @@ impl LabelMaker {
     }
 
     /// Creates a label identifier for a control statement.
-    pub fn make_control_label(&mut self, name: &str, stmt_node_id: &parser::AstNodeId) -> BtLabelIdentifier {
+    pub fn make_control_label(&mut self, name: &str, stmt_node_id: parser::AstNodeId) -> BtLabelIdentifier {
         BtLabelIdentifier(format!(
             "{}{}_ctrl_{}_{}",
             &self.current_function_name, self.current_function_index, stmt_node_id, name
@@ -42,7 +42,7 @@ impl LabelMaker {
     }
 
     /// Creates a label identifier for a switch statement.
-    pub fn make_switch_label(&mut self, name: &str, switch_node_id: &parser::AstNodeId) -> BtLabelIdentifier {
+    pub fn make_switch_label(&mut self, name: &str, switch_node_id: parser::AstNodeId) -> BtLabelIdentifier {
         BtLabelIdentifier(format!(
             "{}{}_switch_{}_{}",
             &self.current_function_name, self.current_function_index, switch_node_id, name
@@ -52,8 +52,8 @@ impl LabelMaker {
     /// Creates a label identifier for a case statement inside a switch statement.
     pub fn make_switch_case_label(
         &mut self,
-        switch_node_id: &parser::AstNodeId,
-        case_node_id: &parser::AstNodeId,
+        switch_node_id: parser::AstNodeId,
+        case_node_id: parser::AstNodeId,
     ) -> BtLabelIdentifier {
         BtLabelIdentifier(format!(
             "{}{}_switch_{}_case_{}",

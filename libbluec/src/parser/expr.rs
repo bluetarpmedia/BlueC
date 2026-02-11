@@ -183,8 +183,8 @@ fn parse_ternary_expression(
 
     let loc = parser
         .metadata
-        .get_source_location(&condition.node_id())
-        .merge_with(parser.metadata.get_source_location(&alternative.node_id()));
+        .get_source_location(condition.node_id())
+        .merge_with(parser.metadata.get_source_location(alternative.node_id()));
 
     let node_id = AstNodeId::new();
     parser.metadata.add_source_location(node_id, loc);
@@ -215,8 +215,8 @@ fn parse_binary_expression(
 
     let expr_loc = parser
         .metadata
-        .get_source_location(&lhs.node_id())
-        .merge_with(parser.metadata.get_source_location(&rhs.node_id()));
+        .get_source_location(lhs.node_id())
+        .merge_with(parser.metadata.get_source_location(rhs.node_id()));
 
     let node_id = AstNodeId::new();
     parser.metadata.add_source_location(node_id, expr_loc);
@@ -292,7 +292,7 @@ fn parse_cast_expression(parser: &mut Parser, driver: &mut Driver) -> ParseResul
     let target_type = AstDeclaredType::unresolved(basic_type, None, declarator);
 
     let node_id = AstNodeId::new();
-    let sloc = open_paren_loc.merge_with(parser.metadata.get_source_location(&expr_to_cast.node_id()));
+    let sloc = open_paren_loc.merge_with(parser.metadata.get_source_location(expr_to_cast.node_id()));
     parser.metadata.add_source_location(node_id, sloc);
     parser.metadata.propagate_const_flag_from_child(expr_to_cast.node_id(), node_id);
 
@@ -385,7 +385,7 @@ fn parse_function_call_expression(
     let (args, args_node_id) = parse_function_call_arguments(parser, driver)?;
 
     let designator = Box::new(expr);
-    let designator_loc = parser.metadata.get_source_location(&designator.node_id());
+    let designator_loc = parser.metadata.get_source_location(designator.node_id());
 
     let node_id = AstNodeId::new();
     parser.metadata.add_source_location(node_id, designator_loc);

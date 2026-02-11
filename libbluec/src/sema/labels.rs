@@ -33,7 +33,7 @@ pub fn validate_labels(ast_root: &mut AstRoot, metadata: &AstMetadata, driver: &
         // Validate that all `goto <label>` targets have been declared.
         goto_labels.into_iter().for_each(|(label_name, goto_stmt_node_id)| {
             if !declared_labels.contains_key(&label_name) {
-                emit_goto_undeclared_label_error_diagnostic(&label_name, &goto_stmt_node_id, driver, metadata);
+                emit_goto_undeclared_label_error_diagnostic(&label_name, goto_stmt_node_id, driver, metadata);
             }
         });
     });
@@ -50,7 +50,7 @@ fn record_statement_labels(
         AstStatement::Labeled { node_id, label_name, .. } => {
             if declared_labels.contains_key(label_name) {
                 let previous_decl_node_id = declared_labels.get(label_name).unwrap();
-                emit_redeclared_label_error_diagnostic(label_name, node_id, previous_decl_node_id, driver, metadata);
+                emit_redeclared_label_error_diagnostic(label_name, *node_id, *previous_decl_node_id, driver, metadata);
             } else {
                 // We use `constains_key` above instead of testing the Option result of `insert`.
                 // HashMap::insert updates the value if the key already exists, and then returns `Some` if
@@ -71,8 +71,8 @@ fn record_statement_labels(
 
 fn emit_redeclared_label_error_diagnostic(
     label_name: &str,
-    node_id: &AstNodeId,
-    previous_decl_node_id: &AstNodeId,
+    node_id: AstNodeId,
+    previous_decl_node_id: AstNodeId,
     driver: &mut Driver,
     metadata: &AstMetadata,
 ) {
@@ -88,7 +88,7 @@ fn emit_redeclared_label_error_diagnostic(
 
 fn emit_goto_undeclared_label_error_diagnostic(
     label_name: &str,
-    node_id: &AstNodeId,
+    node_id: AstNodeId,
     driver: &mut Driver,
     metadata: &AstMetadata,
 ) {

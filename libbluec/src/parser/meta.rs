@@ -48,15 +48,15 @@ impl AstMetadata {
     }
 
     /// If a data type has been set for this node, returns `Some(&AstType)`, or otherwise returns `None`.
-    pub fn try_get_node_type(&self, node_id: &AstNodeId) -> Option<&AstType> {
-        self.node_types.get(node_id)
+    pub fn try_get_node_type(&self, node_id: AstNodeId) -> Option<&AstType> {
+        self.node_types.get(&node_id)
     }
 
     /// Gets a node's data type.
     ///
     /// Pre: Expects the data type to previously have been set; emits an ICE otherwise.
-    pub fn get_node_type(&self, node_id: &AstNodeId) -> &AstType {
-        if let Some(data_type) = self.node_types.get(node_id) {
+    pub fn get_node_type(&self, node_id: AstNodeId) -> &AstType {
+        if let Some(data_type) = self.node_types.get(&node_id) {
             data_type
         } else {
             ICE!("Cannot find data type for AST node '{node_id}'")
@@ -71,8 +71,8 @@ impl AstMetadata {
     /// Gets the source location metadata for the given node.
     ///
     /// Pre: Expects the source location to previously have been set; emits an ICE otherwise.
-    pub fn get_source_location(&self, node_id: &AstNodeId) -> SourceLocation {
-        if let Some(loc) = self.sloc_nodes.get(node_id) {
+    pub fn get_source_location(&self, node_id: AstNodeId) -> SourceLocation {
+        if let Some(loc) = self.sloc_nodes.get(&node_id) {
             *loc
         } else {
             ICE!("Cannot find source location for AST node '{node_id}'")
@@ -94,8 +94,8 @@ impl AstMetadata {
     /// Gets the source location metadata of the operator for the given binary/ternary expression node.
     ///
     /// Pre: Expects the source location to previously have been set; emits an ICE otherwise.
-    pub fn get_operator_sloc(&self, node_id: &AstNodeId) -> SourceLocation {
-        if let Some(loc) = self.operator_sloc_nodes.get(node_id) {
+    pub fn get_operator_sloc(&self, node_id: AstNodeId) -> SourceLocation {
+        if let Some(loc) = self.operator_sloc_nodes.get(&node_id) {
             *loc
         } else {
             ICE!("Cannot find binary operator source location for AST node '{node_id}'")

@@ -32,7 +32,7 @@ pub fn warn_about_implicit_arithmetic_conversions(
         let is_arithmetic_cast = from_type.is_arithmetic() && to_type.is_arithmetic() && !is_int_to_float;
 
         if is_bigger_int_to_smaller_fp || (is_arithmetic_cast && !from_type.fits_inside(to_type)) {
-            let loc = metadata.get_source_location(&from_node_id);
+            let loc = metadata.get_source_location(from_node_id);
             if metadata.is_expr_flag_set(from_node_id, AstExpressionFlag::PromotedToInt) {
                 Warning::implicit_int_promotion_conversion(from_type, to_type, loc, driver);
             } else {
@@ -51,8 +51,8 @@ pub fn warn_about_implicit_arithmetic_conversions(
             AstExpression::Assignment { op, lhs, rhs, .. }
                 if op.is_compound_assignment() && !is_constant_expr(rhs.node_id()) =>
             {
-                let lhs_type = metadata.get_node_type(&lhs.node_id());
-                let rhs_type = metadata.get_node_type(&rhs.node_id());
+                let lhs_type = metadata.get_node_type(lhs.node_id());
+                let rhs_type = metadata.get_node_type(rhs.node_id());
 
                 emit_warning(rhs.node_id(), rhs_type, lhs_type, metadata, driver);
             }
@@ -62,7 +62,7 @@ pub fn warn_about_implicit_arithmetic_conversions(
             AstExpression::Cast { target_type, expr, is_implicit, .. }
                 if *is_implicit && !is_constant_expr(expr.node_id()) =>
             {
-                let expr_type = metadata.get_node_type(&expr.node_id());
+                let expr_type = metadata.get_node_type(expr.node_id());
 
                 debug_assert!(target_type.is_resolved());
                 let target_type = target_type.resolved_type.as_ref().unwrap();
@@ -89,7 +89,7 @@ pub fn warn_about_expressions_with_invalid_constant_operands(
             AstExpression::BinaryOperation { node_id, op, rhs, .. }
                 if op.is_div_or_rem() && rhs.is_integer_literal_with_value(0) =>
             {
-                let op_loc = metadata.get_operator_sloc(node_id);
+                let op_loc = metadata.get_operator_sloc(*node_id);
                 warn_div_by_zero(op, op_loc, rhs.node_id(), metadata, driver);
             }
 
@@ -97,7 +97,7 @@ pub fn warn_about_expressions_with_invalid_constant_operands(
             AstExpression::Assignment { node_id, op, rhs, .. }
                 if op.is_div_or_rem() && rhs.is_integer_literal_with_value(0) =>
             {
-                let op_loc = metadata.get_source_location(node_id);
+                let op_loc = metadata.get_source_location(*node_id);
                 warn_div_by_zero(&AstBinaryOp::try_from(*op).unwrap(), op_loc, rhs.node_id(), metadata, driver);
             }
 
@@ -135,49 +135,44 @@ pub fn warn_about_unused_expression_results(ast_root: &mut AstRoot, metadata: &m
                 return;
             };
 
+            let loc = metadata.get_source_location(full_expr.node_id);
+
             match &full_expr.expr {
                 // A literal as the root of the expression statement is unused.
-                AstExpression::IntegerLiteral { node_id, .. } => {
-                    let loc = metadata.get_source_location(node_id);
+                AstExpression::IntegerLiteral { .. } => {
                     Warning::unused_value(loc, driver);
                 }
 
-                AstExpression::FloatLiteral { node_id, .. } => {
-                    let loc = metadata.get_source_location(node_id);
+                AstExpression::FloatLiteral { .. } => {
                     Warning::unused_value(loc, driver);
                 }
 
                 // An identifier as the root of the expression statement is unused, unless the variable was declared
                 // volatile (though we don't support that yet).
                 //
-                AstExpression::Identifier { node_id, .. } if !has_side_effects(&full_expr.expr) => {
-                    let loc = metadata.get_source_location(node_id);
+                AstExpression::Identifier { .. } if !has_side_effects(&full_expr.expr) => {
                     Warning::unused_value(loc, driver);
                 }
 
                 // Depending on the unary operator, a unary expression as the root in an expression statement may
                 // mean its result is unused.
-                AstExpression::UnaryOperation { node_id, op, .. } if !op.has_side_effects() => {
-                    let loc = metadata.get_source_location(node_id);
+                AstExpression::UnaryOperation { op, .. } if !op.has_side_effects() => {
                     Warning::unused_value(loc, driver);
                 }
 
                 // We treat AddressOf and Dereference as separate expressions but they're like UnaryOperation and
                 // their operators have no side-effects.
-                AstExpression::AddressOf { node_id, .. } => {
-                    let loc = metadata.get_source_location(node_id);
+                AstExpression::AddressOf { .. } => {
                     Warning::unused_value(loc, driver);
                 }
 
-                AstExpression::Deref { node_id, .. } => {
-                    let loc = metadata.get_source_location(node_id);
+                AstExpression::Deref { .. } => {
                     Warning::unused_value(loc, driver);
                 }
 
                 // Regardless of the binary operator, a binary expression as the root in an expression statement
                 // means its result is unused. (We have AstExpression::Assignment for compound assignments.)
-                AstExpression::BinaryOperation { node_id, op, .. } => {
-                    let loc = metadata.get_source_location(node_id);
+                AstExpression::BinaryOperation { op, .. } => {
                     if op.family() == AstBinaryOpFamily::Relational {
                         Warning::unused_comparison(*op, loc, driver);
                     } else {
@@ -206,22 +201,22 @@ pub fn warn_about_expressions_with_mixed_operators(
                     AstBinaryOp::LogicalOr => {
                         let child_op = AstBinaryOp::LogicalAnd;
                         if is_binary_expr_with_op_missing_parens(child_op, lhs, metadata) {
-                            emit_missing_parens_warning(*op, child_op, node_id, &lhs.node_id(), metadata, driver);
+                            emit_missing_parens_warning(*op, child_op, *node_id, lhs.node_id(), metadata, driver);
                         }
 
                         if is_binary_expr_with_op_missing_parens(child_op, rhs, metadata) {
-                            emit_missing_parens_warning(*op, child_op, node_id, &rhs.node_id(), metadata, driver);
+                            emit_missing_parens_warning(*op, child_op, *node_id, rhs.node_id(), metadata, driver);
                         }
                     }
                     // Mixed bitwise operators (with any other kind of operator)
                     //
                     op if op.family() == AstBinaryOpFamily::Bitwise => {
                         if let Some(child_op) = is_binary_expr_missing_parens(lhs, metadata) {
-                            emit_missing_parens_warning(*op, child_op, node_id, &lhs.node_id(), metadata, driver);
+                            emit_missing_parens_warning(*op, child_op, *node_id, lhs.node_id(), metadata, driver);
                         }
 
                         if let Some(child_op) = is_binary_expr_missing_parens(rhs, metadata) {
-                            emit_missing_parens_warning(*op, child_op, node_id, &rhs.node_id(), metadata, driver);
+                            emit_missing_parens_warning(*op, child_op, *node_id, rhs.node_id(), metadata, driver);
                         }
                     }
                     _ => (),
@@ -242,8 +237,8 @@ pub fn warn_about_assignment_in_condition_missing_parens(
         visitor::visit_statements_in_block(block, &mut |stmt: &mut AstStatement| match stmt {
             AstStatement::If { controlling_expr, .. } if is_assignment_without_parens(controlling_expr, metadata) => {
                 emit_assignment_used_in_condition_without_parens_warning(
-                    &controlling_expr.node_id,
-                    &controlling_expr.expr.node_id(),
+                    controlling_expr.node_id,
+                    controlling_expr.expr.node_id(),
                     metadata,
                     driver,
                 );
@@ -252,8 +247,8 @@ pub fn warn_about_assignment_in_condition_missing_parens(
                 if is_assignment_without_parens(controlling_expr, metadata) =>
             {
                 emit_assignment_used_in_condition_without_parens_warning(
-                    &controlling_expr.node_id,
-                    &controlling_expr.expr.node_id(),
+                    controlling_expr.node_id,
+                    controlling_expr.expr.node_id(),
                     metadata,
                     driver,
                 );
@@ -262,8 +257,8 @@ pub fn warn_about_assignment_in_condition_missing_parens(
                 if is_assignment_without_parens(controlling_expr, metadata) =>
             {
                 emit_assignment_used_in_condition_without_parens_warning(
-                    &controlling_expr.node_id,
-                    &controlling_expr.expr.node_id(),
+                    controlling_expr.node_id,
+                    controlling_expr.expr.node_id(),
                     metadata,
                     driver,
                 );
@@ -273,8 +268,8 @@ pub fn warn_about_assignment_in_condition_missing_parens(
             {
                 let controlling_expr = controlling_expr.as_ref().unwrap();
                 emit_assignment_used_in_condition_without_parens_warning(
-                    &controlling_expr.node_id,
-                    &controlling_expr.expr.node_id(),
+                    controlling_expr.node_id,
+                    controlling_expr.expr.node_id(),
                     metadata,
                     driver,
                 );
@@ -291,13 +286,13 @@ fn validate_shift(
     metadata: &mut AstMetadata,
     driver: &mut Driver,
 ) {
-    let loc = metadata.get_source_location(&rhs.node_id());
+    let loc = metadata.get_source_location(rhs.node_id());
 
     if is_negative_integer_literal(rhs) {
         Warning::shift_count_negative(loc, driver);
     } else if rhs.is_integer_literal_with_value(0) {
         Warning::shift_count_zero(loc, driver);
-    } else if let Some(lhs_type) = metadata.try_get_node_type(&lhs_node_id) {
+    } else if let Some(lhs_type) = metadata.try_get_node_type(lhs_node_id) {
         let lhs_type_bit_count = lhs_type.bits();
 
         if let AstExpression::IntegerLiteral { value, .. } = rhs
@@ -317,8 +312,8 @@ fn is_assignment_without_parens(full_expr: &AstFullExpression, metadata: &mut As
 }
 
 fn emit_assignment_used_in_condition_without_parens_warning(
-    full_expr_node_id: &AstNodeId,
-    assignment_node_id: &AstNodeId,
+    full_expr_node_id: AstNodeId,
+    assignment_node_id: AstNodeId,
     metadata: &mut AstMetadata,
     driver: &mut Driver,
 ) {
@@ -330,8 +325,8 @@ fn emit_assignment_used_in_condition_without_parens_warning(
 fn emit_missing_parens_warning(
     parent_expr_op: AstBinaryOp,
     child_expr_op: AstBinaryOp,
-    parent_expr_node_id: &AstNodeId,
-    child_expr_node_id: &AstNodeId,
+    parent_expr_node_id: AstNodeId,
+    child_expr_node_id: AstNodeId,
     metadata: &mut AstMetadata,
     driver: &mut Driver,
 ) {
@@ -347,7 +342,7 @@ fn warn_div_by_zero(
     metadata: &mut AstMetadata,
     driver: &mut Driver,
 ) {
-    let zero_expr_loc = metadata.get_source_location(&rhs_node_id);
+    let zero_expr_loc = metadata.get_source_location(rhs_node_id);
     Warning::division_by_zero(op, op_loc, zero_expr_loc, driver);
 }
 
