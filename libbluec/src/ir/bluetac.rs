@@ -1,6 +1,6 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 //
-//! The `bluetac` module defines the types in the "BlueTac" high-level intermediate representation (HIR).
+//! The `bluetac` module defines the types in the "BlueTac" three-address code intermediate representation.
 
 mod bt_constant_value;
 mod bt_static_storage_initializer;

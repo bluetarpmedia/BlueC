@@ -63,7 +63,7 @@ Options:
   --validate             Only run the lexer, parser, and sema stages
   --print-ast            Print the parsed AST to stdout (implies --parse)
   --print-tast           Print the type-checked AST to stdout (implies --validate)
-  --print-ir             Print the high-level BlueTac intermediate representation
+  --print-ir             Print the BlueTac intermediate representation
 
   -h, --help             Print help
   -V, --version          Print version
@@ -179,7 +179,7 @@ The BlueC compiler pipeline is as follows.
 | Parser | Hand-written, recursive descent with precedence climbing for binary operations | [parser.rs](libbluec/src/parser.rs) |
 | Sema | Semantic analysis of the C AST produced by the Parser | [sema.rs](libbluec/src/sema.rs) |
 | IR lowering | Lowers the C AST into a custom three-address code (TAC) intermediate representation, called BlueTac | [ir.rs](libbluec/src/ir.rs) |
-| Optimizer | Todo! Lowers the high-level IR to SSA form; applies a series of optimization transformations (see below) | |
+| Optimizer | Todo! Lowers the IR to SSA form; applies a series of optimization transformations (see below) | |
 | Codegen | Generates an `x86_64` AST from the IR for the `System V AMD64 ABI` | [codegen.rs](libbluec/src/codegen.rs) |
 | Code emission | Writes the `x86_64` assembly code to an output file, in AT&T syntax (Intel syntax coming later) | [x86_emit.rs](libbluec/src/codegen/x86/emit.rs) |
 | Assembler & linker | Uses an external tool (`gcc`) | [compiler_driver.rs](libbluec/src/compiler_driver.rs) |

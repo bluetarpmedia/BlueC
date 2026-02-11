@@ -2,7 +2,7 @@
 //
 //! The `ir` module is responsible for lowering the C AST into the "BlueTac" intermediate representation (IR).
 //!
-//! BlueTac is a custom high-level three-address code (TAC) IR for the BlueC compiler.
+//! BlueTac is a custom three-address code (TAC) IR for the BlueC compiler.
 //! In the future, we'll add a lower-level IR in SSA form.
 
 mod bluetac;
@@ -21,7 +21,7 @@ use crate::sema::symbol_table::SymbolTable;
 
 pub use bluetac::{
     BtBinaryOp, BtConstantValue, BtDefinition, BtFunctionDefn, BtInstruction, BtLabelIdentifier, BtRoot,
-    BtStaticConstant, BtStaticStorageVariable, BtSwitchCase, BtType, BtUnaryOp, BtValue, BtStaticStorageInitializer,
+    BtStaticConstant, BtStaticStorageInitializer, BtStaticStorageVariable, BtSwitchCase, BtType, BtUnaryOp, BtValue,
 };
 
 /// Lowers the C AST produced by the parser into BlueTac intermediate representation (IR), and then passes
