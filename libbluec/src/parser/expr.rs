@@ -223,7 +223,7 @@ fn parse_binary_expression(
     parser.metadata.add_operator_sloc(node_id, op_loc);
     parser.metadata.propagate_const_flag_from_children(&[lhs.node_id(), rhs.node_id()], node_id);
 
-    Ok(AstExpression::BinaryOperation { node_id, op, left: Box::new(lhs), right: Box::new(rhs) })
+    Ok(AstExpression::BinaryOperation { node_id, op, lhs: Box::new(lhs), rhs: Box::new(rhs) })
 }
 
 /// Parses a unary expression.

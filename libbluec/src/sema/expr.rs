@@ -86,11 +86,11 @@ pub fn warn_about_expressions_with_invalid_constant_operands(
     visitor::visit_full_expressions(ast_root, &mut |full_expr: &mut AstFullExpression| {
         visitor::visit_expressions_in_full_expression(full_expr, &mut |expr: &mut AstExpression| match expr {
             // Cannot divide by zero in '/' or '%' binary expression.
-            AstExpression::BinaryOperation { node_id, op, right, .. }
-                if op.is_div_or_rem() && right.is_integer_literal_with_value(0) =>
+            AstExpression::BinaryOperation { node_id, op, rhs, .. }
+                if op.is_div_or_rem() && rhs.is_integer_literal_with_value(0) =>
             {
                 let op_loc = metadata.get_operator_sloc(node_id);
-                warn_div_by_zero(op, op_loc, right.node_id(), metadata, driver);
+                warn_div_by_zero(op, op_loc, rhs.node_id(), metadata, driver);
             }
 
             // Cannot divide by zero in '/=' or '%=' compound assignment expression.
@@ -105,9 +105,9 @@ pub fn warn_about_expressions_with_invalid_constant_operands(
             // Cannot shift by a value >= bit width of the type.
             // Shift count of zero is a no-op.
             //
-            AstExpression::BinaryOperation { node_id, op, left, right, .. } if op.is_shift() => {
+            AstExpression::BinaryOperation { node_id, op, lhs, rhs, .. } if op.is_shift() => {
                 let promoted_to_int = metadata.is_expr_flag_set(*node_id, AstExpressionFlag::PromotedToInt);
-                validate_shift(left.node_id(), right, promoted_to_int, metadata, driver);
+                validate_shift(lhs.node_id(), rhs, promoted_to_int, metadata, driver);
             }
 
             // '<<=' or '>>='
@@ -199,29 +199,29 @@ pub fn warn_about_expressions_with_mixed_operators(
 ) {
     visitor::visit_full_expressions(ast_root, &mut |full_expr: &mut AstFullExpression| {
         visitor::visit_expressions_in_full_expression(full_expr, &mut |expr: &mut AstExpression| {
-            if let AstExpression::BinaryOperation { node_id, op, left, right } = expr {
+            if let AstExpression::BinaryOperation { node_id, op, lhs, rhs } = expr {
                 match op {
                     // Mixed logical || and &&
                     //
                     AstBinaryOp::LogicalOr => {
                         let child_op = AstBinaryOp::LogicalAnd;
-                        if is_binary_expr_with_op_missing_parens(child_op, left, metadata) {
-                            emit_missing_parens_warning(*op, child_op, node_id, &left.node_id(), metadata, driver);
+                        if is_binary_expr_with_op_missing_parens(child_op, lhs, metadata) {
+                            emit_missing_parens_warning(*op, child_op, node_id, &lhs.node_id(), metadata, driver);
                         }
 
-                        if is_binary_expr_with_op_missing_parens(child_op, right, metadata) {
-                            emit_missing_parens_warning(*op, child_op, node_id, &right.node_id(), metadata, driver);
+                        if is_binary_expr_with_op_missing_parens(child_op, rhs, metadata) {
+                            emit_missing_parens_warning(*op, child_op, node_id, &rhs.node_id(), metadata, driver);
                         }
                     }
                     // Mixed bitwise operators (with any other kind of operator)
                     //
                     op if op.family() == AstBinaryOpFamily::Bitwise => {
-                        if let Some(child_op) = is_binary_expr_missing_parens(left, metadata) {
-                            emit_missing_parens_warning(*op, child_op, node_id, &left.node_id(), metadata, driver);
+                        if let Some(child_op) = is_binary_expr_missing_parens(lhs, metadata) {
+                            emit_missing_parens_warning(*op, child_op, node_id, &lhs.node_id(), metadata, driver);
                         }
 
-                        if let Some(child_op) = is_binary_expr_missing_parens(right, metadata) {
-                            emit_missing_parens_warning(*op, child_op, node_id, &right.node_id(), metadata, driver);
+                        if let Some(child_op) = is_binary_expr_missing_parens(rhs, metadata) {
+                            emit_missing_parens_warning(*op, child_op, node_id, &rhs.node_id(), metadata, driver);
                         }
                     }
                     _ => (),

@@ -15,35 +15,35 @@ pub fn translate_binary_operation(
     expr: &AstExpression,
     instructions: &mut Vec<BtInstruction>,
 ) -> EvalExpr {
-    let AstExpression::BinaryOperation { node_id, op: ast_op, left: left_expr, right: right_expr } = expr else {
+    let AstExpression::BinaryOperation { node_id, op: ast_op, lhs, rhs } = expr else {
         ICE!("Expected an AstExpression::BinaryOperation");
     };
 
     // Translate pointer arithmetic separately from other binary operations
     {
         let expr_type = translator.get_expression_type(expr);
-        let left_type = translator.get_expression_type(left_expr);
-        let right_type = translator.get_expression_type(right_expr);
+        let lhs_type = translator.get_expression_type(lhs);
+        let rhs_type = translator.get_expression_type(rhs);
 
-        let is_ptr_subtract = left_type.is_pointer() && left_type == right_type && *ast_op == AstBinaryOp::Subtract;
+        let is_ptr_subtract = lhs_type.is_pointer() && lhs_type == rhs_type && *ast_op == AstBinaryOp::Subtract;
         let is_ptr_int_arith = expr_type.is_pointer() && matches!(ast_op, AstBinaryOp::Add | AstBinaryOp::Subtract);
 
         if is_ptr_subtract {
-            return translate_pointer_subtraction(translator, left_type.clone(), expr, instructions);
+            return translate_pointer_subtraction(translator, lhs_type.clone(), expr, instructions);
         } else if is_ptr_int_arith {
             return translate_pointer_integer_arithmetic(translator, expr, instructions);
         }
     }
 
     match ast_op {
-        AstBinaryOp::LogicalAnd => translate_logical_and(translator, left_expr, right_expr, instructions),
-        AstBinaryOp::LogicalOr => translate_logical_or(translator, left_expr, right_expr, instructions),
+        AstBinaryOp::LogicalAnd => translate_logical_and(translator, lhs, rhs, instructions),
+        AstBinaryOp::LogicalOr => translate_logical_or(translator, lhs, rhs, instructions),
         _ => {
             // Translate the binary operator to IR.
             let op = translate_ast_binary_operator_to_ir(ast_op);
 
-            let lhs_value = expr::translate_expression_to_value(translator, left_expr, instructions);
-            let rhs_value = expr::translate_expression_to_value(translator, right_expr, instructions);
+            let lhs_value = expr::translate_expression_to_value(translator, lhs, instructions);
+            let rhs_value = expr::translate_expression_to_value(translator, rhs, instructions);
 
             let dst_data_type = translator.get_ast_type_from_node(node_id);
             let dst = translator.make_temp_variable(dst_data_type.clone());
@@ -57,8 +57,8 @@ pub fn translate_binary_operation(
 
 fn translate_logical_and(
     translator: &mut BlueTacTranslator,
-    ast_left_expr: &AstExpression,
-    ast_right_expr: &AstExpression,
+    ast_lhs_expr: &AstExpression,
+    ast_rhs_expr: &AstExpression,
     instructions: &mut Vec<BtInstruction>,
 ) -> EvalExpr {
     let false_label = translator.label_maker.make_unique_label("and_false");
@@ -70,11 +70,11 @@ fn translate_logical_and(
 
     let dst = translator.make_temp_variable(AstType::Int);
 
-    let left_value = expr::translate_expression_to_value(translator, ast_left_expr, instructions);
-    instructions.push(BtInstruction::JumpIfZero { condition: left_value, target: false_label.clone() });
+    let lhs_value = expr::translate_expression_to_value(translator, ast_lhs_expr, instructions);
+    instructions.push(BtInstruction::JumpIfZero { condition: lhs_value, target: false_label.clone() });
 
-    let right_value = expr::translate_expression_to_value(translator, ast_right_expr, instructions);
-    instructions.push(BtInstruction::JumpIfZero { condition: right_value, target: false_label.clone() });
+    let rhs_value = expr::translate_expression_to_value(translator, ast_rhs_expr, instructions);
+    instructions.push(BtInstruction::JumpIfZero { condition: rhs_value, target: false_label.clone() });
 
     instructions.push(BtInstruction::Copy { src: true_value, dst: dst.clone() });
     instructions.push(BtInstruction::Jump { target: end_label.clone() });
@@ -89,8 +89,8 @@ fn translate_logical_and(
 
 fn translate_logical_or(
     translator: &mut BlueTacTranslator,
-    ast_left_expr: &AstExpression,
-    ast_right_expr: &AstExpression,
+    ast_lhs_expr: &AstExpression,
+    ast_rhs_expr: &AstExpression,
     instructions: &mut Vec<BtInstruction>,
 ) -> EvalExpr {
     let true_label = translator.label_maker.make_unique_label("or_true");
@@ -102,11 +102,11 @@ fn translate_logical_or(
 
     let dst = translator.make_temp_variable(AstType::Int);
 
-    let left_value = expr::translate_expression_to_value(translator, ast_left_expr, instructions);
-    instructions.push(BtInstruction::JumpIfNotZero { condition: left_value, target: true_label.clone() });
+    let lhs_value = expr::translate_expression_to_value(translator, ast_lhs_expr, instructions);
+    instructions.push(BtInstruction::JumpIfNotZero { condition: lhs_value, target: true_label.clone() });
 
-    let right_value = expr::translate_expression_to_value(translator, ast_right_expr, instructions);
-    instructions.push(BtInstruction::JumpIfNotZero { condition: right_value, target: true_label.clone() });
+    let rhs_value = expr::translate_expression_to_value(translator, ast_rhs_expr, instructions);
+    instructions.push(BtInstruction::JumpIfNotZero { condition: rhs_value, target: true_label.clone() });
 
     instructions.push(BtInstruction::Copy { src: false_value, dst: dst.clone() });
     instructions.push(BtInstruction::Jump { target: end_label.clone() });
@@ -125,16 +125,16 @@ fn translate_pointer_subtraction(
     expr: &AstExpression,
     instructions: &mut Vec<BtInstruction>,
 ) -> EvalExpr {
-    let AstExpression::BinaryOperation { node_id, op, left, right } = expr else {
+    let AstExpression::BinaryOperation { node_id, op, lhs, rhs } = expr else {
         ICE!("Expected an AstExpression::BinaryOperation");
     };
 
     debug_assert!(*op == AstBinaryOp::Subtract);
-    debug_assert!(translator.get_expression_type(left).is_pointer());
-    debug_assert!(translator.get_expression_type(right).is_pointer());
+    debug_assert!(translator.get_expression_type(lhs).is_pointer());
+    debug_assert!(translator.get_expression_type(rhs).is_pointer());
 
-    let lhs_value = expr::translate_expression_to_value(translator, left, instructions);
-    let rhs_value = expr::translate_expression_to_value(translator, right, instructions);
+    let lhs_value = expr::translate_expression_to_value(translator, lhs, instructions);
+    let rhs_value = expr::translate_expression_to_value(translator, rhs, instructions);
 
     let dst_data_type = translator.get_ast_type_from_node(node_id).clone();
     let ptr_diff = translator.make_temp_variable(dst_data_type.clone());
@@ -159,7 +159,7 @@ fn translate_pointer_integer_arithmetic(
     expr: &AstExpression,
     instructions: &mut Vec<BtInstruction>,
 ) -> EvalExpr {
-    let AstExpression::BinaryOperation { op, left, right, .. } = expr else {
+    let AstExpression::BinaryOperation { op, lhs, rhs, .. } = expr else {
         ICE!("Expected an AstExpression::BinaryOperation");
     };
 
@@ -175,15 +175,13 @@ fn translate_pointer_integer_arithmetic(
         referent.bits() / 8
     };
 
-    let left_type = translator.get_expression_type(left);
-    let right_type = translator.get_expression_type(right);
+    let lhs_type = translator.get_expression_type(lhs);
+    let rhs_type = translator.get_expression_type(rhs);
 
-    debug_assert!(
-        left_type.is_pointer() && right_type.is_integer() || right_type.is_pointer() && left_type.is_integer()
-    );
+    debug_assert!(lhs_type.is_pointer() && rhs_type.is_integer() || rhs_type.is_pointer() && lhs_type.is_integer());
 
-    let (ptr_expr, int_expr) = if left_type.is_pointer() { (left, right) } else { (right, left) };
-    let int_type = if left_type.is_integer() { left_type.clone() } else { right_type.clone() };
+    let (ptr_expr, int_expr) = if lhs_type.is_pointer() { (lhs, rhs) } else { (rhs, lhs) };
+    let int_type = if lhs_type.is_integer() { lhs_type.clone() } else { rhs_type.clone() };
 
     let dst_ptr = translator.make_temp_variable(expr_type);
 

@@ -80,7 +80,7 @@ fn partial_fold_add() {
     let mut ast_root = parse_and_fold(source, &mut driver);
 
     let is_expected = |expr: &AstExpression| -> bool {
-        let AstExpression::BinaryOperation { op, left, right, .. } = expr else {
+        let AstExpression::BinaryOperation { op, lhs, rhs, .. } = expr else {
             return false;
         };
 
@@ -88,7 +88,7 @@ fn partial_fold_add() {
             return false;
         }
 
-        let AstExpression::BinaryOperation { op: l_op, left: l_left, right: l_right, .. } = left.as_ref() else {
+        let AstExpression::BinaryOperation { op: l_op, lhs: l_left, rhs: l_right, .. } = lhs.as_ref() else {
             return false;
         };
 
@@ -96,12 +96,12 @@ fn partial_fold_add() {
             return false;
         }
 
-        let valid_left = l_left.is_identifier_with_name("x") && l_right.is_identifier_with_name("y");
-        if !valid_left {
+        let valid_lhs = l_left.is_identifier_with_name("x") && l_right.is_identifier_with_name("y");
+        if !valid_lhs {
             return false;
         }
 
-        right.is_integer_literal_with_value(3)
+        rhs.is_integer_literal_with_value(3)
     };
 
     let mut found_expected_count = 0;
@@ -144,7 +144,7 @@ fn partial_fold_multiply() {
     let mut ast_root = parse_and_fold(source, &mut driver);
 
     let is_expected = |expr: &AstExpression| -> bool {
-        let AstExpression::BinaryOperation { op, left, right, .. } = expr else {
+        let AstExpression::BinaryOperation { op, lhs, rhs, .. } = expr else {
             return false;
         };
 
@@ -152,7 +152,7 @@ fn partial_fold_multiply() {
             return false;
         }
 
-        left.is_identifier_with_name("x") && right.is_integer_literal_with_value(24)
+        lhs.is_identifier_with_name("x") && rhs.is_integer_literal_with_value(24)
     };
 
     let mut found_expected_count = 0;

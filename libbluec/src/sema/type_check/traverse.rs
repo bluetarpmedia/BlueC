@@ -775,19 +775,19 @@ fn typecheck_unary_operation(
     Ok(operand_type)
 }
 
-/// Type checks the left and right expressions in the binary operation, wraps the binary operation with a cast
+/// Type checks the lhs and rhs expressions in the binary operation, wraps the binary operation with a cast
 /// to their common type, and returns the common type.
 fn typecheck_binary_operation(
     expr: &mut AstExpression,
     chk: &mut TypeChecker,
     driver: &mut Driver,
 ) -> TypeCheckResult<AstType> {
-    let AstExpression::BinaryOperation { node_id, op, left, right } = expr else {
+    let AstExpression::BinaryOperation { node_id, op, lhs, rhs } = expr else {
         ICE!("Expected binary operation");
     };
 
-    let left_type = typecheck_expression_with_decay(left, chk, driver)?;
-    let right_type = typecheck_expression_with_decay(right, chk, driver)?;
+    let lhs_type = typecheck_expression_with_decay(lhs, chk, driver)?;
+    let rhs_type = typecheck_expression_with_decay(rhs, chk, driver)?;
 
     // LogicalAnd `&&` and LogicalOr `||` evaluate to a value of type 'int' so we don't need to cast the operands.
     if *op == AstBinaryOp::LogicalAnd || *op == AstBinaryOp::LogicalOr {
@@ -798,41 +798,41 @@ fn typecheck_binary_operation(
     // Various binary operators cannot have an operand of pointer type, which includes operand of function type
     // because the function type decays into a function pointer type.
     //
-    if (left_type.is_pointer() || right_type.is_pointer() || left_type.is_function() || right_type.is_function())
+    if (lhs_type.is_pointer() || rhs_type.is_pointer() || lhs_type.is_function() || rhs_type.is_function())
         && utils::binary_operator_incompatible_with_ptr_operand(*op)
     {
-        utils::error_invalid_binary_expression_operands(node_id, left, right, &left_type, &right_type, chk, driver);
+        utils::error_invalid_binary_expression_operands(node_id, lhs, rhs, &lhs_type, &rhs_type, chk, driver);
         return Err(TypeCheckError);
     }
 
     // Various binary operators cannot have floating-point operands
-    let has_fp_operand = left_type.is_floating_point() || right_type.is_floating_point();
+    let has_fp_operand = lhs_type.is_floating_point() || rhs_type.is_floating_point();
     if has_fp_operand && utils::binary_operator_incompatible_with_fp_operand(*op) {
-        utils::error_invalid_binary_expression_operands(node_id, left, right, &left_type, &right_type, chk, driver);
+        utils::error_invalid_binary_expression_operands(node_id, lhs, rhs, &lhs_type, &rhs_type, chk, driver);
         return Err(TypeCheckError);
     }
 
     // Binary operations where one operand is a pointer and the other is an integer, e.g. `1 + ptr` or `ptr == 0`.
     //
-    if (left_type.is_pointer() && right_type.is_integer()) || (right_type.is_pointer() && left_type.is_integer()) {
+    if (lhs_type.is_pointer() && rhs_type.is_integer()) || (rhs_type.is_pointer() && lhs_type.is_integer()) {
         return typecheck_ptr_and_int_binary_operation(expr, chk, driver);
     }
 
     // Binary operation where both operands are pointers of the same type
     //
-    if left_type.is_pointer() && left_type == right_type {
+    if lhs_type.is_pointer() && lhs_type == rhs_type {
         return typecheck_ptr_binary_operation(expr, chk, driver);
     }
 
     // Take ownership of the expressions (by replacing them with a 'null' value, which will never be used again).
-    let left = utils::take_boxed_expression(left);
-    let right = utils::take_boxed_expression(right);
+    let lhs = utils::take_boxed_expression(lhs);
+    let rhs = utils::take_boxed_expression(rhs);
 
     // For arithmetic operators, relational operators, and bitwise and/or/xor we have to cast both operands to their
     // common type.
     //
     // LogicalAnd `&&` and LogicalOr `||` are handled above. That leaves LeftShift and RightShift which evaluate
-    // to their left expression's type, except we also promote the type to 'int' if it's a smaller integer type.
+    // to their lhs expression's type, except we also promote the type to 'int' if it's a smaller integer type.
     //
     let cast_both_to_common_type = matches!(
         op,
@@ -854,7 +854,7 @@ fn typecheck_binary_operation(
 
     // Determine the data type to cast the operands
     let operand_data_type = if cast_both_to_common_type {
-        match utils::get_common_type(&left, &right, chk, driver) {
+        match utils::get_common_type(&lhs, &rhs, chk, driver) {
             Ok((common_type, promoted_to_int)) => {
                 // Take note that this expression's type was promoted to 'int' so that we have that context in case
                 // later we need to emit a warning about this expression.
@@ -866,18 +866,18 @@ fn typecheck_binary_operation(
             }
             Err(e) => match e {
                 utils::CommonTypeError::WarnDifferentPointerTypes { a_type, b_type } => {
-                    utils::warn_compare_different_pointer_types(node_id, &left, &right, &a_type, &b_type, chk, driver);
+                    utils::warn_compare_different_pointer_types(node_id, &lhs, &rhs, &a_type, &b_type, chk, driver);
                     AstType::Pointer(Box::new(AstType::Void))
                 }
 
                 utils::CommonTypeError::WarnPointerAndInteger { a_type, b_type } => {
-                    utils::warn_compare_pointer_and_integer(node_id, &left, &right, &a_type, &b_type, chk, driver);
+                    utils::warn_compare_pointer_and_integer(node_id, &lhs, &rhs, &a_type, &b_type, chk, driver);
                     if a_type.is_pointer() { a_type } else { b_type }
                 }
 
                 utils::CommonTypeError::NoCommonType { a_type, b_type } => {
-                    let a_node_id = left.node_id();
-                    let b_node_id = right.node_id();
+                    let a_node_id = lhs.node_id();
+                    let b_node_id = rhs.node_id();
                     utils::error_incompatible_types(&a_type, &b_type, *node_id, a_node_id, b_node_id, chk, driver);
 
                     a_type
@@ -885,7 +885,7 @@ fn typecheck_binary_operation(
             },
         }
     } else {
-        let (ty, promoted_to_int) = left_type.promote_if_rank_lower_than_int();
+        let (ty, promoted_to_int) = lhs_type.promote_if_rank_lower_than_int();
 
         // As above
         if promoted_to_int {
@@ -900,8 +900,8 @@ fn typecheck_binary_operation(
     //      But we still cast the lhs to the data type because the lhs may have been promoted to 'int'
     //      if it was a smaller integer type (_Bool, char, short).
     //
-    let left = chk.add_implicit_cast_if_needed(&operand_data_type, left);
-    let right = chk.add_implicit_cast_if_needed(&operand_data_type, right);
+    let lhs = chk.add_implicit_cast_if_needed(&operand_data_type, lhs);
+    let rhs = chk.add_implicit_cast_if_needed(&operand_data_type, rhs);
 
     // Determine the data type of the binary operation itself
     let binary_op_data_type = if op.is_relational() { AstType::Int } else { operand_data_type };
@@ -909,8 +909,8 @@ fn typecheck_binary_operation(
     // Set the data type of the binary operation
     chk.set_data_type(node_id, &binary_op_data_type);
 
-    // Update the binary operation to use the new left and right expresssions
-    *expr = AstExpression::BinaryOperation { node_id: *node_id, op: *op, left, right };
+    // Update the binary operation to use the new lhs and rhs expresssions
+    *expr = AstExpression::BinaryOperation { node_id: *node_id, op: *op, lhs, rhs };
 
     Ok(binary_op_data_type)
 }
@@ -921,36 +921,36 @@ fn typecheck_ptr_and_int_binary_operation(
     chk: &mut TypeChecker,
     driver: &mut Driver,
 ) -> TypeCheckResult<AstType> {
-    let AstExpression::BinaryOperation { node_id, op, left, right } = expr else {
+    let AstExpression::BinaryOperation { node_id, op, lhs, rhs } = expr else {
         ICE!("Expected binary operation");
     };
 
-    let left = utils::take_boxed_expression(left);
-    let right = utils::take_boxed_expression(right);
+    let lhs = utils::take_boxed_expression(lhs);
+    let rhs = utils::take_boxed_expression(rhs);
 
-    let left_type = chk.get_data_type(&left.node_id());
-    let right_type = chk.get_data_type(&right.node_id());
+    let lhs_type = chk.get_data_type(&lhs.node_id());
+    let rhs_type = chk.get_data_type(&rhs.node_id());
 
-    assert!(left_type.is_pointer() && right_type.is_integer() || right_type.is_pointer() && left_type.is_integer());
+    assert!(lhs_type.is_pointer() && rhs_type.is_integer() || rhs_type.is_pointer() && lhs_type.is_integer());
 
     // Valid operations are addition, subtraction and relational operators.
     let valid_op = matches!(op, AstBinaryOp::Add | AstBinaryOp::Subtract) || op.is_relational();
     if !valid_op {
-        utils::error_invalid_binary_expression_operands(node_id, &left, &right, &left_type, &right_type, chk, driver);
+        utils::error_invalid_binary_expression_operands(node_id, &lhs, &rhs, &lhs_type, &rhs_type, chk, driver);
         return Err(TypeCheckError);
     }
 
     // Can subtract an integer from a pointer, but not vice versa.
-    if *op == AstBinaryOp::Subtract && left_type.is_integer() {
-        utils::error_invalid_binary_expression_operands(node_id, &left, &right, &left_type, &right_type, chk, driver);
+    if *op == AstBinaryOp::Subtract && lhs_type.is_integer() {
+        utils::error_invalid_binary_expression_operands(node_id, &lhs, &rhs, &lhs_type, &rhs_type, chk, driver);
         return Err(TypeCheckError);
     }
 
     // Determine which operand is the pointer and which is the integer.
-    let (left_is_ptr, ptr_type, ptr_expr, int_type, mut int_expr) = if left_type.is_pointer() {
-        (true, left_type, left, right_type, right)
+    let (lhs_is_ptr, ptr_type, ptr_expr, int_type, mut int_expr) = if lhs_type.is_pointer() {
+        (true, lhs_type, lhs, rhs_type, rhs)
     } else {
-        (false, right_type, right, left_type, left)
+        (false, rhs_type, rhs, lhs_type, lhs)
     };
 
     // Emit a warning about if we're comparing a pointer and an integer, except for a null pointer constant.
@@ -968,8 +968,8 @@ fn typecheck_ptr_and_int_binary_operation(
     chk.set_data_type(node_id, &expression_type);
 
     // Update the binary operation to use the new cast expression.
-    let (left, right) = if left_is_ptr { (ptr_expr, int_expr) } else { (int_expr, ptr_expr) };
-    *expr = AstExpression::BinaryOperation { node_id: *node_id, op: *op, left, right };
+    let (lhs, rhs) = if lhs_is_ptr { (ptr_expr, int_expr) } else { (int_expr, ptr_expr) };
+    *expr = AstExpression::BinaryOperation { node_id: *node_id, op: *op, lhs, rhs };
 
     Ok(expression_type)
 }
@@ -980,19 +980,19 @@ fn typecheck_ptr_binary_operation(
     chk: &mut TypeChecker,
     driver: &mut Driver,
 ) -> TypeCheckResult<AstType> {
-    let AstExpression::BinaryOperation { node_id, op, left, right } = expr else {
+    let AstExpression::BinaryOperation { node_id, op, lhs, rhs } = expr else {
         ICE!("Expected binary operation");
     };
 
-    let left_type = chk.get_data_type(&left.node_id());
-    let right_type = chk.get_data_type(&right.node_id());
+    let lhs_type = chk.get_data_type(&lhs.node_id());
+    let rhs_type = chk.get_data_type(&rhs.node_id());
 
-    assert!(left_type.is_pointer() && left_type == right_type);
+    assert!(lhs_type.is_pointer() && lhs_type == rhs_type);
 
     let valid_op = op.is_relational() || *op == AstBinaryOp::Subtract;
 
     if !valid_op {
-        utils::error_invalid_binary_expression_operands(node_id, left, right, &left_type, &right_type, chk, driver);
+        utils::error_invalid_binary_expression_operands(node_id, lhs, rhs, &lhs_type, &rhs_type, chk, driver);
         return Err(TypeCheckError);
     }
 
@@ -1005,7 +1005,7 @@ fn typecheck_ptr_binary_operation(
     Ok(expression_type)
 }
 
-/// Type checks the left and right expressions in the assignment (including compound assignment) operation, wraps the
+/// Type checks the lhs and rhs expressions in the assignment (including compound assignment) operation, wraps the
 /// rhs expression with a cast to the lhs type, and returns the lhs type.
 fn typecheck_assignment(
     expr: &mut AstExpression,

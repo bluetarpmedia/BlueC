@@ -554,13 +554,13 @@ fn print_full_expression(full_expr: &AstFullExpression, metadata: &AstMetadata, 
 fn print_expression(expr: &AstExpression, metadata: &AstMetadata, level: usize) {
     let indent = make_indent(level);
     match expr {
-        AstExpression::BinaryOperation { node_id, op, left, right } => {
+        AstExpression::BinaryOperation { node_id, op, lhs, rhs } => {
             print!("{indent}BinaryOp({})", op);
             print_node_type(node_id, metadata);
             println!();
 
-            print_expression(left, metadata, level + 1);
-            print_expression(right, metadata, level + 1);
+            print_expression(lhs, metadata, level + 1);
+            print_expression(rhs, metadata, level + 1);
 
             println!("{}|", make_close_indent(level + 1));
         }

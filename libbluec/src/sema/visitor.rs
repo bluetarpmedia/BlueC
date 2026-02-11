@@ -92,9 +92,9 @@ where
         AstExpression::UnaryOperation { expr, .. } => {
             visit_expression(expr, visitor_func);
         }
-        AstExpression::BinaryOperation { left, right, .. } => {
-            visit_expression(left, visitor_func);
-            visit_expression(right, visitor_func);
+        AstExpression::BinaryOperation { lhs, rhs, .. } => {
+            visit_expression(lhs, visitor_func);
+            visit_expression(rhs, visitor_func);
         }
         AstExpression::Assignment { lhs, rhs, .. } => {
             visit_expression(lhs, visitor_func);

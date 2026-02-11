@@ -192,8 +192,8 @@ pub enum AstExpression {
     BinaryOperation {
         node_id: AstNodeId,
         op: AstBinaryOp,
-        left: Box<AstExpression>,
-        right: Box<AstExpression>,
+        lhs: Box<AstExpression>,
+        rhs: Box<AstExpression>,
     },
     Assignment {
         node_id: AstNodeId,

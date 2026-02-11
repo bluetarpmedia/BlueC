@@ -371,20 +371,20 @@ fn evaluate_unary_operation(op: &AstUnaryOp, expr: &AstExpression, eval: &mut Ev
 }
 
 fn evaluate_binary_operation(expr: &AstExpression, eval: &mut Eval) -> Option<ConstantValue> {
-    let AstExpression::BinaryOperation { node_id, op, left, right } = expr else {
+    let AstExpression::BinaryOperation { node_id, op, lhs, rhs } = expr else {
         ICE!("Expected AstExpression::BinaryOperation");
     };
 
-    let mut lhs = evaluate_const_expr_recursively(left, eval)?;
-    let mut rhs = evaluate_const_expr_recursively(right, eval)?;
+    let mut lhs_value = evaluate_const_expr_recursively(lhs, eval)?;
+    let mut rhs_value = evaluate_const_expr_recursively(rhs, eval)?;
 
-    let common_type = lhs.get_common_type(&rhs)?;
+    let common_type = lhs_value.get_common_type(&rhs_value)?;
     if !common_type.is_pointer() {
-        lhs = lhs.cast_to(&common_type, true, eval)?;
-        rhs = rhs.cast_to(&common_type, true, eval)?;
+        lhs_value = lhs_value.cast_to(&common_type, true, eval)?;
+        rhs_value = rhs_value.cast_to(&common_type, true, eval)?;
     }
 
-    binary_expr::evaluate_binary_op(*node_id, right.node_id(), op, lhs, rhs, eval)
+    binary_expr::evaluate_binary_op(*node_id, rhs.node_id(), op, lhs_value, rhs_value, eval)
 }
 
 fn evaluate_conditional(

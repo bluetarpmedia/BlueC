@@ -74,18 +74,18 @@ fn flatten(expr: AstExpression, target_op: AstBinaryOp, terms: &mut Vec<AstExpre
     let mut stack = vec![expr];
 
     while let Some(current_expr) = stack.pop() {
-        if let AstExpression::BinaryOperation { node_id, op, left, right } = current_expr {
+        if let AstExpression::BinaryOperation { node_id, op, lhs, rhs } = current_expr {
             if op == target_op {
                 ops.push(node_id);
 
                 // Push children onto the stack to be later popped by the outer loop.
                 //      Push rhs first so that lhs is popped first; this preserves the original order in `terms`.
-                stack.push(*right);
-                stack.push(*left);
+                stack.push(*rhs);
+                stack.push(*lhs);
             } else {
                 // This binary expression has a different operator, so treat it as a single term, rather than
                 // trying to flatten it.
-                terms.push(AstExpression::BinaryOperation { node_id, op, left, right });
+                terms.push(AstExpression::BinaryOperation { node_id, op, lhs, rhs });
             }
         } else {
             terms.push(current_expr);
@@ -111,12 +111,12 @@ fn rebuild_tree(
     for next_term in term_iter {
         let node_id = op_ids.pop().expect("Should have enough IDs");
 
-        let left = current_expr;
-        let right = next_term;
+        let lhs = current_expr;
+        let rhs = next_term;
 
-        chk.metadata.propagate_const_flag_from_children(&[left.node_id(), right.node_id()], node_id);
+        chk.metadata.propagate_const_flag_from_children(&[lhs.node_id(), rhs.node_id()], node_id);
 
-        current_expr = AstExpression::BinaryOperation { node_id, op, left: Box::new(left), right: Box::new(right) };
+        current_expr = AstExpression::BinaryOperation { node_id, op, lhs: Box::new(lhs), rhs: Box::new(rhs) };
     }
 
     current_expr

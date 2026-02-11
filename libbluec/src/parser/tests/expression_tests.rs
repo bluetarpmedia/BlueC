@@ -295,7 +295,7 @@ fn valid_cast_syntax() {
 fn invalid_cast_syntax() {
     let cases = vec![
         "(extern int)-1",
-        "(static int)-1",        
+        "(static int)-1",
         "(int *ptr)0",
         "(void (*ptr))0",
         "(void ((*)ptr))0",
@@ -331,12 +331,12 @@ fn test_expression(tokens: Vec<Token>, expected_str: &str) {
 fn to_string(expr: &AstExpression) -> String {
     let mut str = String::new();
     match expr {
-        AstExpression::BinaryOperation { op, left, right, .. } => {
+        AstExpression::BinaryOperation { op, lhs, rhs, .. } => {
             str.push_str(&format!("{}(", op));
 
-            str.push_str(to_string(left).as_ref());
+            str.push_str(to_string(lhs).as_ref());
             str.push(',');
-            str.push_str(to_string(right).as_ref());
+            str.push_str(to_string(rhs).as_ref());
 
             str.push(')');
         }
