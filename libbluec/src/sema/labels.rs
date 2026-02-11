@@ -1,4 +1,4 @@
-// Copyright 2025 Neil Henderson, Blue Tarp Media.
+// Copyright 2025-2026 Neil Henderson
 //
 //! The `labels` module provides functionality to validate that label names are unique and `goto` targets are valid
 //! within their function.

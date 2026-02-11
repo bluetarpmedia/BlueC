@@ -1,4 +1,4 @@
-// Copyright 2025 Neil Henderson, Blue Tarp Media.
+// Copyright 2025-2026 Neil Henderson
 //
 //! The `multi_file_driver` module provides functionality for multi-file compilation and linking.
 

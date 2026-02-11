@@ -1,4 +1,4 @@
-// Copyright 2025 Neil Henderson, Blue Tarp Media.
+// Copyright 2025-2026 Neil Henderson
 
 //! Build script to generate integration test cases based on files in the `tests/valid` and `tests/invalid` directories.
 

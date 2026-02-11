@@ -1,4 +1,4 @@
-// Copyright 2025 Neil Henderson, Blue Tarp Media.
+// Copyright 2025-2026 Neil Henderson
 //
 //! The `reassociate` module provides functionality to reassociate literal terms in a binary expression in order
 //! to rearrange the tree for constant folding.

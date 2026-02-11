@@ -1,4 +1,4 @@
-// Copyright 2025 Neil Henderson, Blue Tarp Media.
+// Copyright 2025-2026 Neil Henderson
 //
 //! The `type_resolution` module provides functionality to resolve a declared type into a canonical `AstType`.
 

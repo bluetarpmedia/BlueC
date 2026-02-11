@@ -1,4 +1,4 @@
-// Copyright 2025 Neil Henderson, Blue Tarp Media.
+// Copyright 2025-2026 Neil Henderson
 //
 //! The `decl` module provides functionality for parsing variable and function declarations.
 

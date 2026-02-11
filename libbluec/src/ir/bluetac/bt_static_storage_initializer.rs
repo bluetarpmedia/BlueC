@@ -1,4 +1,4 @@
-// Copyright 2025 Neil Henderson, Blue Tarp Media.
+// Copyright 2025-2026 Neil Henderson
 //
 //! The `bt_static_storage_initializer` module defines the [BtStaticStorageInitializer] type.
 

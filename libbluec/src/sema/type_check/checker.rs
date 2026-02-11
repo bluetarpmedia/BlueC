@@ -1,4 +1,4 @@
-// Copyright 2025 Neil Henderson, Blue Tarp Media.
+// Copyright 2025-2026 Neil Henderson
 //
 //! The `checker` module defines `TypeChecker`, which holds mutable state necessary for type checking.
 

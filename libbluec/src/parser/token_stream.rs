@@ -1,4 +1,4 @@
-// Copyright 2025 Neil Henderson, Blue Tarp Media.
+// Copyright 2025-2026 Neil Henderson
 //
 //! The `token_stream` module provides a stateful [TokenStream] which allows the parent parser module to consume and
 //! peek at tokens in the stream.

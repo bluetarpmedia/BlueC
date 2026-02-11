@@ -1,4 +1,4 @@
-// Copyright 2025 Neil Henderson, Blue Tarp Media.
+// Copyright 2025-2026 Neil Henderson
 //
 //! The `symbols` module defines the `AsmSymbolTable` type, which is a symbol table for the back-end
 //! assembly code generation.

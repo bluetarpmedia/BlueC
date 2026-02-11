@@ -1,4 +1,4 @@
-// Copyright 2025 Neil Henderson, Blue Tarp Media.
+// Copyright 2025-2026 Neil Henderson
 //
 //! The `source_location` module defines the [SourceLocation] type, which represents the location and span of a token
 //! in the source code.

@@ -1,4 +1,4 @@
-// Copyright 2025 Neil Henderson, Blue Tarp Media.
+// Copyright 2025-2026 Neil Henderson
 //
 //! The `label_maker` module defines the `AsmLabelMaker` type which generates unique labels in the global scope
 //! and in each function.

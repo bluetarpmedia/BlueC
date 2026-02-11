@@ -1,4 +1,4 @@
-// Copyright 2025 Neil Henderson, Blue Tarp Media.
+// Copyright 2025-2026 Neil Henderson
 //
 //! The codegen module converts the BlueTac IR to an x86_64 Assembly AST and then writes/emits
 //! the assembly code to an '.s' file.

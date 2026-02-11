@@ -1,4 +1,4 @@
-// Copyright 2025 Neil Henderson, Blue Tarp Media.
+// Copyright 2025-2026 Neil Henderson
 //
 //! The `instruction_fixups` module contains the functionality to rewrite instructions based on their semantic
 //! requirements.

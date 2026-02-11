@@ -1,4 +1,4 @@
-// Copyright 2025 Neil Henderson, Blue Tarp Media.
+// Copyright 2025-2026 Neil Henderson
 //
 //! The `unary_epxr` module defines functions to translate AST unary expressions into the BlueTac IR.
 

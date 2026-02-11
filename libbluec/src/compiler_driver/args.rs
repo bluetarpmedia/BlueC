@@ -1,4 +1,4 @@
-// Copyright 2025 Neil Henderson, Blue Tarp Media.
+// Copyright 2025-2026 Neil Henderson
 //
 //! The `args` module defines the command-line argument parser.
 //! Although crates like `clap` are excellent, we have a design goal to minimize dependencies on third-party crates

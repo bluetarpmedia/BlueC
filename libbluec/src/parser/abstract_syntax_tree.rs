@@ -1,4 +1,4 @@
-// Copyright 2025 Neil Henderson, Blue Tarp Media.
+// Copyright 2025-2026 Neil Henderson
 //
 //! The `abstract_syntax_tree` module defines the C AST that the parser produces from the lexer's token stream.
 

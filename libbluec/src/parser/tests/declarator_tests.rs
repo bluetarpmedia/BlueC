@@ -1,4 +1,4 @@
-// Copyright 2025 Neil Henderson, Blue Tarp Media.
+// Copyright 2025-2026 Neil Henderson
 
 use crate::compiler_driver::Driver;
 use crate::core::{FilePosition, SourceLocation};

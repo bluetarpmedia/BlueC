@@ -1,4 +1,4 @@
-// Copyright 2025 Neil Henderson, Blue Tarp Media.
+// Copyright 2025-2026 Neil Henderson
 //
 //! The `symbols` module provides functionality to type check a symbol and then, if valid, add the symbol to the
 //! Symbol Table.

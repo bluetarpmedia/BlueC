@@ -1,4 +1,4 @@
-// Copyright 2025 Neil Henderson, Blue Tarp Media.
+// Copyright 2025-2026 Neil Henderson
 //
 //! The `type_check` module defines the main part of the semantic analysis stage, which is type checking.
 //! This involves the following tasks:

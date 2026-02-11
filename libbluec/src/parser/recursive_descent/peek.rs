@@ -1,4 +1,4 @@
-// Copyright 2025 Neil Henderson, Blue Tarp Media.
+// Copyright 2025-2026 Neil Henderson
 //
 //! The `peek` module provides "peek ahead" parsing utility functions to the parent `recursive_descent` module.
 //! These functions look ahead at the token stream and try to parse the tokens in a certain way without consuming the

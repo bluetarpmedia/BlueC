@@ -1,4 +1,4 @@
-// Copyright 2025 Neil Henderson, Blue Tarp Media.
+// Copyright 2025-2026 Neil Henderson
 //
 //! The `hex_float` module provides parser functionality to parse and convert hex floating-point literals into `f32`
 //! and `f64` values. It calls two C stdlib functions `strtod` and `strtof` which require `unsafe` blocks.

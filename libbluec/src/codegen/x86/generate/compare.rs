@@ -1,4 +1,4 @@
-// Copyright 2025 Neil Henderson, Blue Tarp Media.
+// Copyright 2025-2026 Neil Henderson
 //
 //! The `compare` module provides functionality to handle Cmp instructions, including quiet NaNs with floating-
 //! point types.

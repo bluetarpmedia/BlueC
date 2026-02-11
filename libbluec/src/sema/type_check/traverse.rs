@@ -1,4 +1,4 @@
-// Copyright 2025 Neil Henderson, Blue Tarp Media.
+// Copyright 2025-2026 Neil Henderson
 //
 //! The `traverse` module defines recursive type checking functions which traverse the AST and annotate each
 //! expression and variable initializer with its `AstType`.

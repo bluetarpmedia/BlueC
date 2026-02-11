@@ -1,4 +1,4 @@
-// Copyright 2025 Neil Henderson, Blue Tarp Media.
+// Copyright 2025-2026 Neil Henderson
 
 //! Integration tests that compile source files, run the resulting binaries, and verify their exit codes.
 

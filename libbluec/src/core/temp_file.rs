@@ -1,4 +1,4 @@
-// Copyright 2025 Neil Henderson, Blue Tarp Media.
+// Copyright 2025-2026 Neil Henderson
 //
 //! The `temp_file` module defines the [TempFile] type. This implementation does not provide the same guarantees as the
 //! `tempfile` crate but we have a design goal of no external dependencies for the BlueC library and executable.

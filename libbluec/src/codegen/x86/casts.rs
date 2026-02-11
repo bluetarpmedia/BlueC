@@ -1,4 +1,4 @@
-// Copyright 2025 Neil Henderson, Blue Tarp Media.
+// Copyright 2025-2026 Neil Henderson
 //
 //! The `casts` module provides functionality to generate the instructions for casts between various data types.
 //! R8, R9 and XMM1 are used for casts between floating-point and integer types.

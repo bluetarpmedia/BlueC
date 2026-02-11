@@ -1,4 +1,4 @@
-// Copyright 2025 Neil Henderson, Blue Tarp Media.
+// Copyright 2025-2026 Neil Henderson
 
 //! Integration tests that expect the compiler to generate error diagnostics when compiling ill-formed source files.
 

@@ -1,4 +1,4 @@
-// Copyright 2025 Neil Henderson, Blue Tarp Media.
+// Copyright 2025-2026 Neil Henderson
 //
 //! The `recursive_descent` module defines the hand-written, top-down recursive descent parser.
 //! We use a recursive descent parser except when parsing binary operations, where we use precedence climbing instead.

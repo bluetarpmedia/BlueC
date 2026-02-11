@@ -1,4 +1,4 @@
-// Copyright 2025 Neil Henderson, Blue Tarp Media.
+// Copyright 2025-2026 Neil Henderson
 //
 //! The `parser` module parses the stream of tokens produced by the lexer and produces an AST of the C code.
 //!

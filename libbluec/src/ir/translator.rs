@@ -1,4 +1,4 @@
-// Copyright 2025 Neil Henderson, Blue Tarp Media.
+// Copyright 2025-2026 Neil Henderson
 //
 //! The `bluetac_translation` module defines the various functions to translate from the parser's AST into
 //! BlueTac intermediate representation.

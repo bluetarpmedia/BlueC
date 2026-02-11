@@ -1,4 +1,4 @@
-// Copyright 2025 Neil Henderson, Blue Tarp Media.
+// Copyright 2025-2026 Neil Henderson
 //
 //! The `bluetac` module defines the types in the "BlueTac" three-address code intermediate representation.
 
