@@ -67,7 +67,7 @@ fn get_char_value(expr: &AstExpression) -> u8 {
                 let boolean = value != 0;
                 !boolean as u8
             }
-            _ => todo!("Emit diagnostic"),
+            _ => ICE!("Invalid unary operator '{op}'"),
         },
 
         _ => ICE!("Unexpected expression in character array initializer"),
