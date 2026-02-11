@@ -288,10 +288,7 @@ fn verify_integer_literals() {
 
     test_lexer(
         "-567000",
-        &vec![
-            Token::without_location(TokenType::Minus),
-            Token::without_location(TokenType::new_int_literal("567000")),
-        ],
+        &vec![Token::without_location(TokenType::Minus), Token::without_location(TokenType::new_int_literal("567000"))],
     );
 
     test_lexer(

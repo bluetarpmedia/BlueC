@@ -15,5 +15,5 @@ mod symbols;
 #[cfg(test)]
 mod tests;
 
-pub use generate::generate_asm;
 pub use emit::emit_asm_to_file;
+pub use generate::generate_asm;

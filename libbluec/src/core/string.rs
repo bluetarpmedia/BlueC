@@ -3,7 +3,7 @@
 //! The `string` module provides common string utilities.
 
 /// Converts an integer value to an ASCII string.
-/// 
+///
 /// Values that fit in the printable ASCII range are converted to ASCII chars. Otherwise the value is transformed
 /// to an escape sequence.
 pub fn to_ascii(value: u32) -> String {

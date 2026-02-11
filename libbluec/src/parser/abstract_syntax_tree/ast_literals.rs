@@ -4,8 +4,8 @@
 
 use std::fmt;
 
-use crate::ICE;
 use super::AstType;
+use crate::ICE;
 
 /// The kind of integer literal.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]

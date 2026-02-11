@@ -55,7 +55,7 @@ pub(in super::super) fn errno_location() -> *mut c_int {
 }
 
 /// Clears `errno`.
-pub(in super::super)fn clear_errno() {
+pub(in super::super) fn clear_errno() {
     let err_loc = errno_location();
     if !err_loc.is_null() {
         unsafe {
@@ -65,7 +65,7 @@ pub(in super::super)fn clear_errno() {
 }
 
 /// Gets the value of `errno`.
-pub(in super::super)fn get_errno() -> i32 {
+pub(in super::super) fn get_errno() -> i32 {
     let err_loc = errno_location();
     unsafe { if err_loc.is_null() { 0 } else { *err_loc as i32 } }
 }

@@ -1,6 +1,6 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 
-use super::super::generate::{round_up_to_multiple_of_16, align_stack_addr};
+use super::super::generate::{align_stack_addr, round_up_to_multiple_of_16};
 
 #[test]
 fn test_round_up_to_multiple_of_16() {

@@ -13,7 +13,7 @@ fn ast_type_bits() {
     assert_eq!(AstType::UnsignedInt.bits(), 32);
     assert_eq!(AstType::UnsignedLong.bits(), 64);
     assert_eq!(AstType::UnsignedLongLong.bits(), 64);
-    
+
     assert_eq!(AstType::new_pointer_to(AstType::Short).bits(), 64);
     assert_eq!(AstType::new_pointer_to(AstType::Int).bits(), 64);
 

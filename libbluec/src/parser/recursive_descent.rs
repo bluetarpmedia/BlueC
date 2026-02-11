@@ -8,8 +8,8 @@ pub(super) mod hex_float;
 
 pub(super) mod block;
 pub(crate) mod decl;
-pub(super) mod decl_var;
 pub(super) mod decl_fn;
+pub(super) mod decl_var;
 pub(super) mod declarator;
 pub(super) mod literal;
 pub(super) mod peek;

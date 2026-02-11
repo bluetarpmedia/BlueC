@@ -3,9 +3,9 @@
 use crate::compiler_driver;
 use crate::core::SourceLocation;
 
-use super::utils::{expect_var_decl, make_parser};
 use super::super::recursive_descent::decl;
 use super::super::{AstBasicTypeSpecifier, AstLinkage, AstStorageDuration, AstVariableDeclaration};
+use super::utils::{expect_var_decl, make_parser};
 
 #[test]
 fn invalid_decl_syntax() {
