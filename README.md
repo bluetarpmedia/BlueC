@@ -3,11 +3,13 @@
 
 [![Build BlueC](https://github.com/bluetarpmedia/BlueC/actions/workflows/build-bluec.yml/badge.svg)](https://github.com/bluetarpmedia/BlueC/actions/workflows/build-bluec.yml)
 [![Tests](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/bluetarpmedia/4a3049e2f6a53832726ab63f0b395357/raw/bluec-junit-tests.json)](https://github.com/bluetarpmedia/BlueC/actions/workflows/build-bluec.yml)
-[![Build documentation](https://github.com/bluetarpmedia/BlueC/actions/workflows/build-docs.yml/badge.svg)](https://github.com/bluetarpmedia/BlueC/actions/workflows/build-docs.yml)
+[![Build documentation](https://github.com/bluetarpmedia/BlueC/actions/workflows/build-docs.yml/badge.svg)](http://bluetarpmedia.github.io/BlueC/libbluec/index.html)
 
 The initial goal is to write a fully conforming C17 optimizing compiler, from the preprocessor stage through to the assembly code emission stage, supporting multiple targets, with a focus on friendly diagnostics, and using no `unsafe` Rust and no third-party dependencies.
 
 See the [Status and Roadmap](#status-and-roadmap) section for current progress and [Design Goals](#design-goals) for further information about design choices.
+
+See also the BlueC crate [documentation](http://bluetarpmedia.github.io/BlueC/libbluec/index.html).
 
 ### Table of Contents
 
