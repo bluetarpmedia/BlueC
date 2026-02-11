@@ -13,10 +13,10 @@ mod diagnostics;
 mod driver;
 mod tu_file;
 
-pub use diagnostics::Diagnostic;
 pub use diagnostics::error::Error;
 pub use diagnostics::warning::Warning;
 pub use diagnostics::warning_kind::WarningKind;
+pub use diagnostics::{Diagnostic, SuggestedCode};
 pub use driver::Driver;
 
 use crate::compiler_driver::options::DriverOptions;

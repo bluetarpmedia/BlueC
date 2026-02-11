@@ -8,7 +8,7 @@ use std::io::{BufRead, BufReader, Read, Seek, SeekFrom, Write};
 use crate::core::{FilePosition, SourceLocation};
 
 use super::super::tu_file::TuFile;
-use super::{Diagnostic, DiagnosticKind};
+use super::{Diagnostic, DiagnosticKind, SuggestedCode};
 
 /// Prints diagnostics.
 #[derive(Debug)]
@@ -155,7 +155,12 @@ impl<'a, W: Write> Printer<'a, W> {
                 }
 
                 if let Some(suggested_code) = &note.suggested_code {
-                    self.print_suggested_code(suggested_code, margin_width);
+                    match suggested_code {
+                        SuggestedCode::Code(code) => self.print_suggested_code(code, margin_width),
+                        SuggestedCode::FormatString(format_string, locations) => {
+                            self.print_suggested_code_format_string(format_string, locations, margin_width)
+                        }
+                    }
                 }
 
                 _ = writeln!(self.buffer, "{} |", margin_str);
@@ -228,11 +233,57 @@ impl<'a, W: Write> Printer<'a, W> {
         lines.nth(source_line_no).expect("Cannot read line").expect("Cannot read line")
     }
 
-    /// Print some suggested code with '~' highlight characters underneath the relevant location.
-    fn print_suggested_code(&mut self, suggested_code: &String, margin_width: usize) {
+    /// Print the suggested code.
+    fn print_suggested_code(&mut self, suggested_code: &str, margin_width: usize) {
         let margin_str = " ".repeat(margin_width);
-        _ = writeln!(self.buffer, "{} |", margin_str);
-        _ = writeln!(self.buffer, "{} | {}", margin_str, suggested_code);
+        _ = writeln!(self.buffer, "{margin_str} |");
+        _ = writeln!(self.buffer, "{margin_str} | {suggested_code}");
+    }
+
+    /// Print the suggested code based on a format string.
+    fn print_suggested_code_format_string(
+        &mut self,
+        format_string: &str,
+        locations: &[SourceLocation],
+        margin_width: usize,
+    ) {
+        if locations.is_empty() {
+            debug_assert!(false, "SuggestedCode format string '{format_string}' has no source locations");
+            self.print_suggested_code(format_string, margin_width);
+            return;
+        }
+
+        let mut formatted = format_string.to_string();
+        let mut next_loc_idx = 0;
+        let mut next_token = "$$1".to_string();
+
+        while next_loc_idx < locations.len() {
+            if !formatted.contains(&next_token) {
+                debug_assert!(false, "SuggestedCode format string is missing token '{next_token}'");
+                break;
+            }
+
+            let loc = locations[next_loc_idx];
+            let line = self.get_line_of_source_code(loc.file_pos);
+            let start_idx = (self.tu_file.get_column_no(loc) - 1) as usize; // column_no is 1-based
+            let end_idx = start_idx + loc.length as usize;
+            let loc_source_code = &line[start_idx..end_idx];
+
+            formatted = formatted.replace(&next_token, loc_source_code);
+
+            next_loc_idx += 1;
+            next_token = format!("$${}", next_loc_idx + 1); // 1-based
+        }
+
+        // Validate that the formatted string doesn't have the next token
+        if formatted.contains(&next_token) {
+            debug_assert!(
+                false,
+                "SourceLocation not provided for token '{next_token}' in SuggestedCode format string '{format_string}'"
+            );
+        }
+
+        self.print_suggested_code(&formatted, margin_width);
     }
 
     /// Prints text with line wrapping if needed.

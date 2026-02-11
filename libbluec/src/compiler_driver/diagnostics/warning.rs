@@ -9,7 +9,7 @@ use crate::parser::expr::ops;
 use crate::parser::{AstBinaryOp, AstBinaryOpFamily, AstType};
 
 use super::super::{Driver, WarningKind};
-use super::Diagnostic;
+use super::{Diagnostic, SuggestedCode};
 
 /// A warning diagnostic.
 pub struct Warning;
@@ -167,7 +167,10 @@ impl Warning {
             "Expression was promoted to 'int' as part of C language integer promotion rules. \
                 Wrap the expression in a cast to '{new_type}' to silence this warning."
         );
-        let suggested_code = format!("({new_type})(...)");
+
+        let column_no = driver.tu_file.get_column_no(loc);
+        let indent = " ".repeat(column_no as usize - 1);
+        let suggested_code = SuggestedCode::FormatString(format!("{indent}({new_type})($$1)"), vec![loc]);
         diag.add_note_with_suggested_code(note, suggested_code, None);
 
         driver.add_diagnostic(diag);
@@ -458,9 +461,9 @@ impl Warning {
 
             debug_assert!(assignment_expr_loc.length >= 3); // An assignment expression must be at least 3 chars
             let space = " ".repeat(assignment_expr_loc.length as usize - 2);
-            let suggested = format!("{indent}({space})");
+            let suggested_code = SuggestedCode::Code(format!("{indent}({space})"));
 
-            diag.add_note_with_suggested_code(note.to_string(), suggested, Some(assignment_expr_loc));
+            diag.add_note_with_suggested_code(note.to_string(), suggested_code, Some(assignment_expr_loc));
         }
 
         {
@@ -468,9 +471,9 @@ impl Warning {
 
             let column_no = driver.tu_file.get_column_no(assignment_operator_loc);
             let indent = " ".repeat(column_no as usize - 1);
-            let suggested = format!("{indent}==");
+            let suggested_code = SuggestedCode::Code(format!("{indent}=="));
 
-            diag.add_note_with_suggested_code(note.to_string(), suggested, Some(assignment_operator_loc));
+            diag.add_note_with_suggested_code(note.to_string(), suggested_code, Some(assignment_operator_loc));
         }
 
         driver.add_diagnostic(diag);

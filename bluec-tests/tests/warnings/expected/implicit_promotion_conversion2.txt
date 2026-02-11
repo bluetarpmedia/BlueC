@@ -7,7 +7,7 @@ warning: Implicit conversion from promoted type 'int' to 'char' may change its v
 note: Expression was promoted to 'int' as part of C language integer promotion rules.
       Wrap the expression in a cast to 'char' to silence this warning.
    |
-   | (char)(...)
+   |          (char)(-b)
    |
 
 warning: Implicit conversion from promoted type 'int' to 'char' may change its value
@@ -19,7 +19,7 @@ warning: Implicit conversion from promoted type 'int' to 'char' may change its v
 note: Expression was promoted to 'int' as part of C language integer promotion rules.
       Wrap the expression in a cast to 'char' to silence this warning.
    |
-   | (char)(...)
+   |          (char)(b + b)
    |
 
 warning: Implicit conversion from promoted type 'int' to 'short' may change its value
@@ -31,7 +31,7 @@ warning: Implicit conversion from promoted type 'int' to 'short' may change its 
 note: Expression was promoted to 'int' as part of C language integer promotion rules.
       Wrap the expression in a cast to 'short' to silence this warning.
    |
-   | (short)(...)
+   |          (short)(-y)
    |
 
 warning: Implicit conversion from promoted type 'int' to 'short' may change its value
@@ -43,7 +43,7 @@ warning: Implicit conversion from promoted type 'int' to 'short' may change its 
 note: Expression was promoted to 'int' as part of C language integer promotion rules.
       Wrap the expression in a cast to 'short' to silence this warning.
    |
-   | (short)(...)
+   |          (short)(y * a)
    |
 
 4 warnings generated

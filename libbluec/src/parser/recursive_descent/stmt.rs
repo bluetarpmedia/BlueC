@@ -3,7 +3,7 @@
 //! The `stmt` module defines the various parsing functions for C statements.
 
 use crate::ICE;
-use crate::compiler_driver::{Diagnostic, Driver};
+use crate::compiler_driver::{Diagnostic, Driver, SuggestedCode};
 use crate::lexer;
 
 use super::super::{EnclosingStatement, EnclosingStatementChain};
@@ -117,9 +117,11 @@ pub fn parse_labeled_statement(parser: &mut Parser, driver: &mut Driver) -> Pars
         let note_loc = parser.token_stream.peek_next_token().unwrap().location;
         diag.add_note("This is a declaration, not a statement".to_string(), Some(note_loc));
 
-        let suggested_code = format!("{}: ;", &label_name);
+        let suggested_code = SuggestedCode::Code(format!("{}: ;", &label_name));
         diag.add_note_with_suggested_code(
-            "Add a semicolon after the label to create a null/empty statement. Then the declaration can proceed after the null statement.".into(),
+            "Add a semicolon after the label to create a null/empty statement. \
+            Then the declaration can proceed after the null statement."
+                .into(),
             suggested_code,
             None,
         );
@@ -137,9 +139,11 @@ pub fn parse_labeled_statement(parser: &mut Parser, driver: &mut Driver) -> Pars
         // Check if the next token is the end of the scope block; if so, the user is probably
         // trying to jump to the end of the block without realising a statement is needed.
         if parser.token_stream.next_token_has_type(lexer::TokenType::CloseBrace) {
-            let suggested_code = format!("{}: ;", &label_name);
+            let suggested_code = SuggestedCode::Code(format!("{}: ;", &label_name));
             diag.add_note_with_suggested_code(
-                "If you're trying to jump to the end of the scope/block then add a semicolon after the label to create a null/empty statement.".into(),
+                "If you're trying to jump to the end of the scope/block then add a semicolon \
+                after the label to create a null/empty statement."
+                    .into(),
                 suggested_code,
                 None,
             );
@@ -268,7 +272,11 @@ pub fn parse_switch_case_statement(parser: &mut Parser, driver: &mut Driver) -> 
                 "If you're trying to jump to the end of the scope/block then add a semicolon after the label to \
                 create a null/empty statement.",
             );
-            let suggested_code = "case <expr>: ;".to_string();
+
+            let column_no = driver.tu_file.get_column_no(case_token_loc);
+            let indent = " ".repeat(column_no as usize - 1);
+            let constant_expr_loc = parser.metadata.get_source_location(constant_expr.node_id);
+            let suggested_code = SuggestedCode::FormatString(format!("{indent}case $$1: ;"), vec![constant_expr_loc]);
             diag.add_note_with_suggested_code(note, suggested_code, None);
         }
 

@@ -3,10 +3,12 @@
 //! The `error` module defines functions to emit error diagnostics.
 
 use crate::ICE;
-use crate::compiler_driver::{Driver, diagnostics::Diagnostic};
 use crate::core::{SourceIdentifier, SourceLocation, SymbolKind};
 use crate::lexer::{NumericLiteralBase, TokenType};
 use crate::parser::{AstLinkage, AstType};
+
+use super::super::Driver;
+use super::{Diagnostic, SuggestedCode};
 
 /// An error diagnostic.
 pub struct Error;
@@ -337,10 +339,15 @@ impl Error {
         let mut diag = Diagnostic::error_at_location(err, cast_op_loc);
         diag.add_location(expr_loc);
 
-        let suggested = format!("({})", AstType::new_pointer_to(cast_to_type.clone()));
-        let suggested_type = if cast_to_type.is_function() { "function pointer" } else { "pointer" };
+        let column_no = driver.tu_file.get_column_no(cast_op_loc);
+        let indent = " ".repeat(column_no as usize - 1);
+        let suggested_code = SuggestedCode::FormatString(
+            format!("{indent}({})$$1", AstType::new_pointer_to(cast_to_type.clone())),
+            vec![expr_loc],
+        );
 
-        diag.add_note_with_suggested_code(format!("Try casting to a {suggested_type} instead."), suggested, None);
+        let suggested_type = if cast_to_type.is_function() { "function pointer" } else { "pointer" };
+        diag.add_note_with_suggested_code(format!("Try casting to a {suggested_type} instead."), suggested_code, None);
 
         driver.add_diagnostic(diag);
     }
@@ -392,12 +399,11 @@ impl Error {
             let column_no = driver.tu_file.get_column_no(loc);
 
             let indent = if column_no == 1 { " ".to_string() } else { " ".repeat(column_no as usize - 2) };
-
             let space = if loc.length == 1 { " ".to_string() } else { " ".repeat(loc.length as usize - 2) };
 
-            let suggested = format!("{indent}{{{space}}}");
+            let suggested_code = SuggestedCode::Code(format!("{indent}{{{space}}}"));
 
-            diag.add_note_with_suggested_code(note.to_string(), suggested, Some(loc));
+            diag.add_note_with_suggested_code(note.to_string(), suggested_code, Some(loc));
         }
 
         driver.add_diagnostic(diag);

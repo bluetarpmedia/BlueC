@@ -13,7 +13,7 @@ warning: Implicit conversion from promoted type 'int' to 'short' may change its 
 note: Expression was promoted to 'int' as part of C language integer promotion rules.
       Wrap the expression in a cast to 'short' to silence this warning.
    |
-   | (short)(...)
+   |               (short)((short)a / (short)0)
    |
 
 warning: Division by zero is undefined [-Wdivision-by-zero]

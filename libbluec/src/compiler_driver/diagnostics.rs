@@ -27,12 +27,27 @@ pub enum DiagnosticKind {
     Warning(WarningKind),
 }
 
+/// Suggested code.
+#[derive(Clone, Debug)]
+pub enum SuggestedCode {
+    /// Suggested code as a string.
+    Code(String),
+
+    /// A rudimentary and custom format string into which source code is inserted during diagnostic printing.
+    /// The original source code for each `SourceLocation` in the vector is inserted in the format string by
+    /// replacing `$$<index>` tokens, where index is 1-based.
+    ///
+    /// E.g.
+    /// "(char)($$1) = $$2", vec![loc, another]
+    FormatString(String, Vec<SourceLocation>),
+}
+
 /// A note that can be attached to a diagnostic.
 #[derive(Clone, Debug)]
 pub struct Note {
     pub note: String,
     pub loc: Option<SourceLocation>,
-    pub suggested_code: Option<String>,
+    pub suggested_code: Option<SuggestedCode>,
 }
 
 impl Diagnostic {
@@ -80,12 +95,12 @@ impl Diagnostic {
     }
 
     /// Adds a note to the diagnostic.
-    pub fn add_note_with_suggested_code(&mut self, note: String, suggested_code: String, loc: Option<SourceLocation>) {
+    pub fn add_note_with_suggested_code(&mut self, note: String, code: SuggestedCode, loc: Option<SourceLocation>) {
         if self.notes.is_none() {
             self.notes = Some(Vec::new());
         }
 
         let notes = self.notes.as_mut().expect("Should exist");
-        notes.push(Note { note, loc, suggested_code: Some(suggested_code) });
+        notes.push(Note { note, loc, suggested_code: Some(code) });
     }
 }
