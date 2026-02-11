@@ -1,6 +1,6 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 //
-//! The `ast_identifier` module defines the `AstIdentifier` type.
+//! The `ast_identifier` module defines the [AstIdentifier] type.
 
 use std::fmt;
 

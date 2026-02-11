@@ -1,6 +1,6 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 //
-//! The `bt_constant_value` module defines the `BtConstantValue` type.
+//! The `bt_constant_value` module defines the [BtConstantValue] type.
 
 use std::fmt;
 

@@ -1,6 +1,6 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 //
-//! The `ast_declarator` module defines the `AstDeclarator` type which represents parsed declarators in declarations.
+//! The `ast_declarator` module defines the [AstDeclarator] type which represents parsed declarators in declarations.
 //!
 //! A declarator is the part of a declaration that specifies the name and attributes of a variable or function.
 //! An abstract declarator omits the name.

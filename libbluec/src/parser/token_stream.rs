@@ -1,6 +1,6 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 //
-//! The `token_stream` module provides a stateful TokenStream which allows the parent parser module to consume and
+//! The `token_stream` module provides a stateful [TokenStream] which allows the parent parser module to consume and
 //! peek at tokens in the stream.
 
 use crate::core::SourceLocation;

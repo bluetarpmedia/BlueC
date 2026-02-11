@@ -1,6 +1,6 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 //
-//! The `source_ident` module defines the `SourceIdentifier` type.
+//! The `source_ident` module defines the [SourceIdentifier] type.
 
 use super::SourceLocation;
 

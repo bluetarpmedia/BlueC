@@ -1,14 +1,15 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 //
-//! The `file_position` module defines `FilePosition`, which represents a byte offset in a file.
+//! The `file_position` module defines [FilePosition], which represents a byte offset in a file.
 
 use std::fmt;
 use std::ops::{Add, AddAssign, Sub, SubAssign};
 
 /// A 32-bit numerical value, starting from zero, that indicates the location of a byte in a file.
-/// 
-/// `FilePosition` is primarily used by the `lexer` to record the source location in the preprocessed translation
-/// unit of every token. This information is later used when emitting diagnostics to include the relevant source code.
+///
+/// `FilePosition` is primarily used by the [lexer](crate::lexer) to record the source location in the preprocessed
+/// translation unit of every token. This information is later used when emitting diagnostics to include the relevant
+/// source code.
 ///
 /// A 4 GB C source file should be enough for anybody, right?
 #[derive(Debug, Default, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]

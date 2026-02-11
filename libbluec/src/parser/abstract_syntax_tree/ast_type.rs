@@ -1,12 +1,14 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 //
-//! The `ast_type` module defines the `AstType` enum.
+//! The `ast_type` module defines the [AstType] enum.
 
 use std::fmt;
 
 use crate::ICE;
 
-/// The canonical type of an identifier.
+/// The canonical type of an expression.
+///
+/// The semantic analysis stage annotates every expression in the parsed AST with its `AstType`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AstType {
     Void,

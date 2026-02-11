@@ -1,6 +1,6 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 //
-//! The `constant_table` module defines the `ConstantTable` type, which tracks all floating-point and string literal
+//! The `constant_table` module defines the [ConstantTable] type, which tracks all floating-point and string literal
 //! constants.
 
 use std::collections::HashMap;

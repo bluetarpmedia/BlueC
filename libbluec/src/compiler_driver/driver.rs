@@ -12,6 +12,24 @@ use super::tu_file::TuFile;
 use super::{CompilerGeneratedFile, DriverError};
 
 /// The BlueC compiler driver.
+///
+/// The compiler driver orchestrates the compilation pipeline and, if necessary, invokes `gcc` to run the assembler
+/// and/or linker after BlueC compiles the C source code. Modify the [DriverOptions] to control the driver's behavior.
+///
+/// `Driver` is a compiler driver for a single C source file. To drive the compilation and linking of multiple source
+/// files, use [multi_file_driver::compile_and_link](super::multi_file_driver::compile_and_link).
+///
+/// # Examples
+///
+/// ```no_run
+/// # use libbluec::compiler_driver::{Driver, options::DriverOptions};
+/// let options = DriverOptions::default();
+/// let mut driver = Driver::new("source_file.c", options);
+/// _ = driver.run();
+/// if driver.has_error_diagnostics() {
+///     driver.print_diagnostics();
+/// }
+/// ```
 pub struct Driver {
     // The path to the source `.c` file.
     pub source_file_path: String,

@@ -1,6 +1,6 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 //
-//! The `symbol_table` module defines the `SymbolTable` type and related types.
+//! The `symbol_table` module defines the [SymbolTable] type and its related types.
 
 use std::collections::{HashMap, HashSet};
 

@@ -1,6 +1,6 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 //
-//! The `label_maker` module defines the `LabelMaker` type.
+//! The `label_maker` module defines the [LabelMaker] type.
 
 use crate::ICE;
 use crate::parser;

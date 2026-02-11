@@ -1,6 +1,6 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 //
-//! The `tu_file` module defines `TuFile`, which represents the preprocessed translation unit file.
+//! The `tu_file` module defines [TuFile], which represents the preprocessed translation unit file.
 
 use std::path::Path;
 

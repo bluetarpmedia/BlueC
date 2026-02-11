@@ -2,7 +2,7 @@
 //
 //! The `sema` module is responsible for semantic analysis of the AST produced by the Parser.
 //!
-//! The main part of semantic analysis is type checking (see the `type_check` module). After that there are additional
+//! The main part of semantic analysis is type checking (see the [type_check] module). After that there are additional
 //! analyses for unused symbols, label validation, switch statements, and warning about ambiguous (to the reader)
 //! expressions that are missing parentheses.
 //!

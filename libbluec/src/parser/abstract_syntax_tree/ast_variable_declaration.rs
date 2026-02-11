@@ -1,6 +1,6 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 //
-//! The `ast_variable_declaration` module defines `AstVariableDeclaration` and its related types.
+//! The `ast_variable_declaration` module defines [AstVariableDeclaration] and its related types.
 
 use std::fmt;
 

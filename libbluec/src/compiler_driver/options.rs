@@ -6,7 +6,7 @@ use std::collections::HashSet;
 
 use super::WarningKind;
 
-/// Options that control the compiler driver's behavior.
+/// Options that control the [Driver](super::driver::Driver) compiler driver's behavior.
 #[derive(Debug, Default)]
 pub struct DriverOptions {
     /// Define preprocessor macros.

@@ -1,6 +1,6 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 //
-//! The `bt_static_storage_initializer` module defines the `BtStaticStorageInitializer` type.
+//! The `bt_static_storage_initializer` module defines the [BtStaticStorageInitializer] type.
 
 use std::fmt;
 

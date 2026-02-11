@@ -1,6 +1,6 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 //
-//! The `symbol_kind` module defines the `SymbolKind` enum.
+//! The `symbol_kind` module defines the [SymbolKind] enum.
 
 use std::fmt;
 

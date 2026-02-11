@@ -1,6 +1,6 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 //
-//! The `ast_operators` module defines the `AstUnaryOp` and `AstBinaryOp` types.
+//! The `ast_operators` module defines the [AstUnaryOp], [AstBinaryOp] and [AstAssignmentOp] types.
 
 use std::fmt;
 

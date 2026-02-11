@@ -1,9 +1,9 @@
 // Copyright 2025 Neil Henderson, Blue Tarp Media.
 //
-//! The `warning_kind` module defines the `WarningKind` enum.
+//! The `warning_kind` module defines the [WarningKind] enum.
 //!
 //! An X-macro is used to generate the enum along with `WarningKind::as_str()` and `WarningKind::from_str()` to
-//! convert a `WarningKind` variant to and from its string representation.
+//! convert a [WarningKind] variant to and from its string representation.
 
 use std::collections::HashSet;
 use std::fmt;
