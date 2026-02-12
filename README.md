@@ -1,5 +1,5 @@
 # BlueC
-***A C compiler, written in Rust.*** 🦀
+***A C compiler, built with Rust.*** 🦀 ***Handwritten, not AI-generated.***
 
 [![Build BlueC](https://github.com/bluetarpmedia/BlueC/actions/workflows/build-bluec.yml/badge.svg)](https://github.com/bluetarpmedia/BlueC/actions/workflows/build-bluec.yml)
 [![Tests](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/bluetarpmedia/4a3049e2f6a53832726ab63f0b395357/raw/bluec-junit-tests.json)](https://github.com/bluetarpmedia/BlueC/actions/workflows/build-bluec.yml)
@@ -138,7 +138,7 @@ BlueC has been deliberately designed without depending on any third-party crates
 2. No `unsafe` Rust, with one exception that can be disabled:
     * Parsing of hexadecimal floating-point literals (e.g. `0xFFp-1`) requires `unsafe` calls to C stdlib functions `strtod` and `strtof`.<br>
     This functionality is enabled by default but can be turned off by disabling the `hex-float-literal` feature. See [Cargo.toml](Cargo.toml).<br>If you disable that feature then there is no `unsafe` Rust in the BlueC library or driver executable.
-3. Hand-written, not AI-generated. I'm happy to use LLMs for things like code completion, generating boilerplate, or doing repetitive tasks, but I'm writing the compiler myself.
+3. Handwritten, not AI-generated. I'm happy to use LLMs for things like code completion, generating boilerplate, or doing repetitive tasks, but I'm writing the compiler myself.
 
 ## Architecture
 
@@ -187,6 +187,8 @@ The BlueC compiler pipeline is as follows.
 | Assembler & linker | Uses an external tool (`gcc`) | [compiler_driver.rs](libbluec/src/compiler_driver.rs) |
 
 ## Status and Roadmap
+
+So far I've concentrated mostly on the front-end to implement C language features, perform semantic analysis, and building the infrastructure to emit really nice, friendly diagnostics. The only optimization so far is some constant folding in sema.
 
 * Compiler driver
   * ✅ Single-file compilation to object file
@@ -249,6 +251,7 @@ excess-initializers, missing-braces, many-braces-around-scalar-init`
   * C23 features
   * Bytecode interpreter for constant expression evaluation
   * Extensions! (See below)
+* ✅ BlueTac three-address code IR
 * Optimizer
   * Refactor BlueTac IR, add SSA form, build CFG
   * Inlining, loop optimization, common sub-expression elimination
