@@ -274,7 +274,7 @@ excess-initializers, missing-braces, many-braces-around-scalar-init`
     * WebAssembly
 * CI
   * ✅ Linux
-  * macOS
+  * ✅ macOS
   * Fuzzing
   * Miri
 
