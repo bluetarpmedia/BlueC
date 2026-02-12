@@ -26,7 +26,17 @@ jobs:
   
   test:
     needs: lint
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            results_file: test-results.xml
+          - os: macos-latest
+            # We don't want our test badge to include the results twice; it looks for "*test*.xml" filenames
+            # so we'll just take the ubuntu results for the badge.
+            results_file: macos-results.xml
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -38,17 +48,19 @@ jobs:
         run: |
           cargo install cargo2junit --locked
           RUSTC_BOOTSTRAP=1 cargo test -- -Z unstable-options --format json --report-time | tee results.json
-          cat results.json | cargo2junit > test-results.xml
+          cat results.json | cargo2junit > ${{ matrix.results_file }}
 
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-results
-          path: test-results.xml
+          name: test-results-${{ matrix.os }}
+          path: ${{ matrix.results_file }}
           retention-days: 7
           
       - name: Publish test badge JSON to Gist
+        # We don't want our test badge to have duplicates so just do this once for ubuntu
+        if: matrix.os == 'ubuntu-latest'
         uses: gaelgirodon/ci-badges-action@v1
         with:
           gist-id: ${{ secrets.TEST_BADGE_GIST_ID }}
@@ -59,7 +71,10 @@ jobs:
   release-build:
     if: github.ref == 'refs/heads/main'
     needs: test
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions-rust-lang/setup-rust-toolchain@v1
