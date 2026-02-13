@@ -12,7 +12,6 @@ mod symbol_kind;
 mod temp_file;
 
 pub use file_position::FilePosition;
-pub use internal_error::ICE;
 pub use source_ident::SourceIdentifier;
 pub use source_location::SourceLocation;
 pub use symbol_kind::SymbolKind;
