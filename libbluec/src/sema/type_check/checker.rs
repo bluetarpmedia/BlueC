@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 use crate::ICE;
 use crate::core::SourceLocation;
-use crate::parser::{AstDeclaredType, AstExpression, AstMetadata, AstNodeId, AstType};
+use crate::parser::{AstDeclaredType, AstExpression, AstExpressionKind, AstMetadata, AstNodeId, AstType};
 
 use super::super::constant_table::ConstantTable;
 use super::super::symbol_table::SymbolTable;
@@ -97,16 +97,16 @@ impl TypeChecker {
     }
 
     /// Wraps the given `AstExpression` in a cast to the given `target_type`.
-    pub fn add_cast(&mut self, target_type: &AstType, expr: Box<AstExpression>, is_implicit: bool) -> AstExpression {
+    pub fn add_cast(&mut self, target_type: &AstType, inner: Box<AstExpression>, is_implicit: bool) -> AstExpression {
         let node_id = AstNodeId::new();
 
         self.set_data_type(node_id, target_type);
-        self.metadata.copy_source_location_from_child(expr.node_id(), node_id);
-        self.metadata.propagate_const_flag_from_child(expr.node_id(), node_id);
+        self.metadata.copy_source_location_from_child(inner.id(), node_id);
+        self.metadata.propagate_const_flag_from_child(inner.id(), node_id);
 
         let target_type = AstDeclaredType::resolved(target_type);
 
-        AstExpression::Cast { node_id, target_type, expr, is_implicit }
+        AstExpression::new(node_id, AstExpressionKind::Cast { target_type, inner, is_implicit })
     }
 
     /// If the given boxed `AstExpression`'s type already matches the `target_type` then the existing expression
@@ -116,7 +116,7 @@ impl TypeChecker {
         target_type: &AstType,
         expr: Box<AstExpression>,
     ) -> Box<AstExpression> {
-        let expr_type = self.get_data_type(expr.node_id());
+        let expr_type = self.get_data_type(expr.id());
 
         if expr_type == *target_type { expr } else { Box::new(self.add_cast(target_type, expr, true)) }
     }
@@ -128,7 +128,7 @@ impl TypeChecker {
         target_type: &AstType,
         expr: Box<AstExpression>,
     ) -> Box<AstExpression> {
-        let expr_type = self.get_data_type(expr.node_id());
+        let expr_type = self.get_data_type(expr.id());
 
         if expr_type == *target_type { expr } else { Box::new(self.add_cast(target_type, expr, false)) }
     }

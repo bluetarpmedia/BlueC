@@ -20,7 +20,7 @@ pub fn validate_labels(ast_root: &mut AstRoot, metadata: &AstMetadata, driver: &
     //      after recording all of the label names, since it's possible to goto a label that is not
     //      declared until afterwards.
     //
-    visitor::visit_functions(ast_root, &mut |func: &mut AstFunction| {
+    visitor::visit_function_defns(ast_root, &mut |func: &mut AstFunction| {
         let mut declared_labels: HashMap<String, AstNodeId> = HashMap::new();
         let mut goto_labels: HashMap<String, AstNodeId> = HashMap::new();
 

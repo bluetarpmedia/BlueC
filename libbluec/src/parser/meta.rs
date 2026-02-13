@@ -98,7 +98,7 @@ impl AstMetadata {
         if let Some(loc) = self.operator_sloc_nodes.get(&node_id) {
             *loc
         } else {
-            ICE!("Cannot find binary operator source location for AST node '{node_id}'")
+            ICE!("Cannot find operator source location for AST node '{node_id}'")
         }
     }
 

@@ -217,13 +217,13 @@ fn restore_token_stream_after_parsing() {
     let mut parser = make_parser(&mut driver, source);
 
     let validate_return_stmt = |stmt| -> bool {
-        let Ok(parser::AstStatement::Return(full_expr)) = stmt else {
+        let Ok(parser::AstStatement::Return(expr)) = stmt else {
             return false;
         };
-        let parser::AstExpression::IntegerLiteral { value, .. } = full_expr.expr else {
+        let parser::AstExpressionKind::IntegerLiteral { value, .. } = expr.kind() else {
             return false;
         };
-        value == 10
+        *value == 10
     };
 
     // Parse and then rollback

@@ -5,7 +5,7 @@
 use std::fmt;
 
 use super::{
-    AstAddressConstant, AstConstantFp, AstConstantInteger, AstConstantValue, AstDeclaredType, AstFullExpression,
+    AstAddressConstant, AstConstantFp, AstConstantInteger, AstConstantValue, AstDeclaredType, AstExpression,
     AstIdentifier, AstLinkage, AstNodeId, AstStorageDuration, AstType, AstUniqueName,
 };
 
@@ -42,7 +42,7 @@ pub struct AstVariableDeclaration {
 /// A variable initializer.
 #[derive(Debug)]
 pub enum AstVariableInitializer {
-    Scalar(AstFullExpression),
+    Scalar(AstExpression),
     Aggregate { node_id: AstNodeId, init: Vec<AstVariableInitializer> },
 }
 
@@ -50,7 +50,7 @@ impl AstVariableInitializer {
     /// Gets the initializer's node id.
     pub fn node_id(&self) -> AstNodeId {
         match self {
-            AstVariableInitializer::Scalar(full_expr) => full_expr.node_id,
+            AstVariableInitializer::Scalar(expr) => expr.id(),
             AstVariableInitializer::Aggregate { node_id, .. } => *node_id,
         }
     }

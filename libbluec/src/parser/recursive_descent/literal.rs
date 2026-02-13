@@ -10,7 +10,7 @@ use crate::lexer;
 use super::super::AstExpressionFlag;
 use super::hex_float;
 use super::utils;
-use super::{AstExpression, AstFloatLiteralKind, AstIntegerLiteralKind, AstNodeId, AstType};
+use super::{AstExpression, AstExpressionKind, AstFloatLiteralKind, AstIntegerLiteralKind, AstNodeId, AstType};
 use super::{ParseError, ParseResult, Parser, add_error};
 
 /// Parses a character literal.
@@ -25,7 +25,7 @@ pub fn parse_char_literal(parser: &mut Parser, driver: &mut Driver) -> ParseResu
     parser.metadata.add_source_location(node_id, token.location);
     parser.metadata.set_expr_flag(node_id, AstExpressionFlag::IsConstant);
 
-    Ok(AstExpression::CharLiteral { node_id, literal, value })
+    Ok(AstExpression::new(node_id, AstExpressionKind::CharLiteral { literal, value }))
 }
 
 /// Parses a string literal.
@@ -73,7 +73,7 @@ pub fn parse_string_literal(parser: &mut Parser, driver: &mut Driver) -> ParseRe
     parser.metadata.add_source_location(node_id, start_loc.merge_with(end_loc));
     parser.metadata.set_expr_flag(node_id, AstExpressionFlag::IsConstant);
 
-    Ok(AstExpression::StringLiteral { node_id, literals, ascii })
+    Ok(AstExpression::new(node_id, AstExpressionKind::StringLiteral { literals, ascii }))
 }
 
 /// Parses an integer literal.
@@ -155,7 +155,10 @@ pub fn parse_integer_literal(parser: &mut Parser, driver: &mut Driver) -> ParseR
     parser.metadata.add_source_location(node_id, token.location);
     parser.metadata.set_expr_flag(node_id, AstExpressionFlag::IsConstant);
 
-    Ok(AstExpression::IntegerLiteral { node_id, literal, literal_base: base.as_int(), value, kind })
+    Ok(AstExpression::new(
+        node_id,
+        AstExpressionKind::IntegerLiteral { literal, literal_base: base.as_int(), value, kind },
+    ))
 }
 
 /// Parses a floating-point literal.
@@ -205,7 +208,10 @@ pub fn parse_float_literal(parser: &mut Parser, driver: &mut Driver) -> ParseRes
     parser.metadata.add_source_location(node_id, token.location);
     parser.metadata.set_expr_flag(node_id, AstExpressionFlag::IsConstant);
 
-    Ok(AstExpression::FloatLiteral { node_id, literal, literal_base: base.as_int(), value, kind })
+    Ok(AstExpression::new(
+        node_id,
+        AstExpressionKind::FloatLiteral { literal, literal_base: base.as_int(), value, kind },
+    ))
 }
 
 fn parse_decimal_float_literal_as_f64(

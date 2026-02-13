@@ -3,7 +3,7 @@
 use crate::compiler_driver;
 use crate::parser::expr;
 
-use super::super::AstExpression;
+use super::super::{AstExpression, AstExpressionKind};
 use super::utils::make_parser;
 
 #[test]
@@ -16,7 +16,7 @@ fn string_literals() {
 
 fn test_string_literal(source: &str, expected: &str, expected_len: usize) {
     if let Some(expr) = parse(source) {
-        if let AstExpression::StringLiteral { ascii, .. } = expr {
+        if let AstExpressionKind::StringLiteral { ascii, .. } = expr.kind() {
             let ascii_joined = ascii.join("");
             assert_eq!(ascii_joined, expected, "Source: '{source}'");
             assert_eq!(ascii.len(), expected_len, "Source: '{source}'");

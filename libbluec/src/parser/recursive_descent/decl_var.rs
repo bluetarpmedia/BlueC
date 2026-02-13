@@ -260,8 +260,8 @@ fn parse_initializer(parser: &mut Parser, driver: &mut Driver) -> ParseResult<As
         let aggregate = parse_aggregate_initializer(parser, driver)?;
         Ok(aggregate)
     } else {
-        let full_expr = expr::parse_full_expression(parser, driver)?;
-        Ok(AstVariableInitializer::Scalar(full_expr))
+        let expr = expr::parse_expression(parser, driver)?;
+        Ok(AstVariableInitializer::Scalar(expr))
     }
 }
 

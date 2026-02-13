@@ -54,7 +54,7 @@ impl BlueTacTranslator {
 
     /// Gets the `AstType` from the symbol table for the given AST expression.
     pub fn get_expression_type(&self, expr: &parser::AstExpression) -> &parser::AstType {
-        self.get_ast_type_from_node(expr.node_id())
+        self.get_ast_type_from_node(expr.id())
     }
 
     /// Gets the `AstType` from the symbol table for the given AST node.
@@ -337,7 +337,7 @@ fn translate_statement(
         }
 
         parser::AstStatement::Case { switch_node_id, constant_expr, stmt, .. } => {
-            let case_node_id = constant_expr.node_id;
+            let case_node_id = constant_expr.id();
             translate_switch_case_statement(switch_node_id, case_node_id, *stmt, instructions, translator, driver)
         }
 
@@ -369,7 +369,7 @@ fn translate_statement(
 }
 
 fn translate_return_statement(
-    expr: parser::AstFullExpression,
+    expr: parser::AstExpression,
     instructions: &mut Vec<BtInstruction>,
     translator: &mut BlueTacTranslator,
     _driver: &mut Driver,
@@ -379,7 +379,7 @@ fn translate_return_statement(
 }
 
 fn translate_expression_statement(
-    expr: parser::AstFullExpression,
+    expr: parser::AstExpression,
     instructions: &mut Vec<BtInstruction>,
     translator: &mut BlueTacTranslator,
     _driver: &mut Driver,
@@ -410,7 +410,7 @@ fn translate_labeled_statement(
 }
 
 fn translate_if_statement(
-    controlling_expr: parser::AstFullExpression,
+    controlling_expr: parser::AstExpression,
     then_stmt: parser::AstStatement,
     else_stmt: Option<Box<parser::AstStatement>>,
     instructions: &mut Vec<BtInstruction>,
@@ -450,7 +450,7 @@ fn translate_if_statement(
 
 fn translate_switch_statement(
     switch_node_id: parser::AstNodeId,
-    controlling_expr: parser::AstFullExpression,
+    controlling_expr: parser::AstExpression,
     stmt: parser::AstStatement,
     instructions: &mut Vec<BtInstruction>,
     translator: &mut BlueTacTranslator,
@@ -528,7 +528,7 @@ fn translate_switch_default_statement(
 
 fn translate_while_statement(
     node_id: parser::AstNodeId,
-    controlling_expr: parser::AstFullExpression,
+    controlling_expr: parser::AstExpression,
     body: parser::AstStatement,
     instructions: &mut Vec<BtInstruction>,
     translator: &mut BlueTacTranslator,
@@ -559,7 +559,7 @@ fn translate_while_statement(
 fn translate_do_while_statement(
     node_id: parser::AstNodeId,
     body: parser::AstStatement,
-    controlling_expr: parser::AstFullExpression,
+    controlling_expr: parser::AstExpression,
     instructions: &mut Vec<BtInstruction>,
     translator: &mut BlueTacTranslator,
     driver: &mut Driver,
@@ -593,7 +593,7 @@ fn translate_for_statement(
     translator: &mut BlueTacTranslator,
     driver: &mut Driver,
 ) {
-    let parser::AstStatement::For { node_id, init, controlling_expr, post, body } = stmt else {
+    let parser::AstStatement::For { node_id, init, controlling_expr, post_expr: post, body } = stmt else {
         ICE!("Expected AstStatement::For");
     };
 

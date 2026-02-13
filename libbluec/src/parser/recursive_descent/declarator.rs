@@ -7,7 +7,7 @@ use crate::core::SourceIdentifier;
 use crate::lexer::TokenType;
 
 use super::decl::parse_type_and_storage_specifiers;
-use super::{AstDeclarator, AstDeclaratorKind, AstDeclaredType, AstFullExpression, AstIdentifier};
+use super::{AstDeclarator, AstDeclaratorKind, AstDeclaredType, AstExpression, AstIdentifier};
 use super::{ParseError, ParseResult, Parser, add_error};
 use super::{expr, peek, utils};
 
@@ -222,7 +222,7 @@ fn parse_function_parameters(parser: &mut Parser, driver: &mut Driver) -> ParseR
     Ok(params)
 }
 
-fn parse_array_size_expression(parser: &mut Parser, driver: &mut Driver) -> ParseResult<Option<AstFullExpression>> {
+fn parse_array_size_expression(parser: &mut Parser, driver: &mut Driver) -> ParseResult<Option<AstExpression>> {
     _ = utils::expect_token(TokenType::OpenSqBracket, parser, driver)?;
 
     // We allow zero-length arrays (with the zero constant omitted) so check if the next token is the
@@ -231,8 +231,8 @@ fn parse_array_size_expression(parser: &mut Parser, driver: &mut Driver) -> Pars
     let size_expr = if parser.token_stream.next_token_has_type(TokenType::CloseSqBracket) {
         Ok(None)
     } else {
-        let full_expr = expr::parse_full_expression(parser, driver)?;
-        Ok(Some(full_expr))
+        let expr = expr::parse_expression(parser, driver)?;
+        Ok(Some(expr))
     };
 
     _ = utils::expect_token(TokenType::CloseSqBracket, parser, driver)?;

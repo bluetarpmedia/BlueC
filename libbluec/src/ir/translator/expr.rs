@@ -4,7 +4,7 @@
 
 use crate::ICE;
 use crate::core::SourceLocation;
-use crate::parser::{AstAssignmentOp, AstExpression, AstFloatLiteralKind, AstFullExpression, AstType, AstUniqueName};
+use crate::parser::{AstAssignmentOp, AstExpression, AstExpressionKind, AstFloatLiteralKind, AstType, AstUniqueName};
 use crate::sema::symbol_table::SymbolAttributes;
 use crate::sema::type_conversion;
 
@@ -16,19 +16,19 @@ use super::{binary_expr, unary_expr, utils};
 /// necessary.
 pub fn translate_full_expression(
     translator: &mut BlueTacTranslator,
-    full_expr: &AstFullExpression,
+    expr: &AstExpression,
     instructions: &mut Vec<BtInstruction>,
 ) -> BtValue {
-    translate_expression_to_value(translator, &full_expr.expr, instructions)
+    translate_expression_to_value(translator, expr, instructions)
 }
 
 /// Translates an AST full expression into BlueTac IR and discards the result.
 pub fn translate_full_expression_without_result(
     translator: &mut BlueTacTranslator,
-    full_expr: &AstFullExpression,
+    expr: &AstExpression,
     instructions: &mut Vec<BtInstruction>,
 ) {
-    _ = translate_expression(translator, &full_expr.expr, instructions);
+    _ = translate_expression(translator, expr, instructions);
 }
 
 /// Translates an AST expression into BlueTac IR.
@@ -37,13 +37,17 @@ pub fn translate_expression(
     expr: &AstExpression,
     instructions: &mut Vec<BtInstruction>,
 ) -> EvalExpr {
-    match expr {
-        AstExpression::CharLiteral { value, .. } => EvalExpr::Value(BtValue::Constant(BtConstantValue::Int32(*value))),
-        AstExpression::StringLiteral { .. } => translate_string_literal(translator, expr),
-        AstExpression::IntegerLiteral { .. } => translate_integer_literal(translator, expr),
-        AstExpression::FloatLiteral { .. } => translate_float_literal(expr),
+    let expr_id = expr.id();
 
-        AstExpression::Identifier { unique_name, .. } => {
+    match expr.kind() {
+        AstExpressionKind::CharLiteral { value, .. } => {
+            EvalExpr::Value(BtValue::Constant(BtConstantValue::Int32(*value)))
+        }
+        AstExpressionKind::StringLiteral { .. } => translate_string_literal(translator, expr),
+        AstExpressionKind::IntegerLiteral { .. } => translate_integer_literal(translator, expr),
+        AstExpressionKind::FloatLiteral { .. } => translate_float_literal(expr),
+
+        AstExpressionKind::Ident { unique_name, .. } => {
             let expr_data_type = translator.get_expression_type(expr);
 
             // If a function designator of function type has decayed (been implicitly cast) to a function pointer
@@ -64,9 +68,9 @@ pub fn translate_expression(
             EvalExpr::Value(BtValue::Variable(unique_name.to_string()))
         }
 
-        AstExpression::Cast { target_type, expr, .. } => {
-            let expr_value = translate_expression_to_value(translator, expr, instructions);
-            let expr_data_type = translator.get_expression_type(expr);
+        AstExpressionKind::Cast { target_type, inner, .. } => {
+            let expr_value = translate_expression_to_value(translator, inner, instructions);
+            let expr_data_type = translator.get_expression_type(inner);
 
             let dst_type = target_type.resolved_type.as_ref().unwrap();
 
@@ -89,17 +93,17 @@ pub fn translate_expression(
             }
         }
 
-        AstExpression::Deref { expr, .. } => {
-            let expr_value = translate_expression_to_value(translator, expr, instructions);
+        AstExpressionKind::Deref { pointer, .. } => {
+            let expr_value = translate_expression_to_value(translator, pointer, instructions);
             EvalExpr::Dereferenced(expr_value)
         }
 
-        AstExpression::AddressOf { node_id, expr } => {
-            let expr_result = translate_expression(translator, expr, instructions);
+        AstExpressionKind::AddressOf { target } => {
+            let expr_result = translate_expression(translator, target, instructions);
 
             match expr_result {
                 EvalExpr::Value(value) => {
-                    let dst_data_type = translator.get_ast_type_from_node(*node_id);
+                    let dst_data_type = translator.get_ast_type_from_node(expr_id);
                     debug_assert!(dst_data_type.is_pointer());
 
                     let dst = translator.make_temp_variable(dst_data_type.clone());
@@ -110,17 +114,15 @@ pub fn translate_expression(
             }
         }
 
-        AstExpression::Subscript { .. } => translate_subscript(translator, expr, instructions),
+        AstExpressionKind::Subscript { .. } => translate_subscript(translator, expr, instructions),
 
-        AstExpression::Assignment { .. } => translate_assignment(translator, expr, instructions),
+        AstExpressionKind::Assignment { .. } => translate_assignment(translator, expr, instructions),
 
-        AstExpression::UnaryOperation { .. } => unary_expr::translate_unary_operation(translator, expr, instructions),
+        AstExpressionKind::Unary { .. } => unary_expr::translate_unary_operation(translator, expr, instructions),
 
-        AstExpression::BinaryOperation { .. } => {
-            binary_expr::translate_binary_operation(translator, expr, instructions)
-        }
+        AstExpressionKind::Binary { .. } => binary_expr::translate_binary_operation(translator, expr, instructions),
 
-        AstExpression::Conditional { expr, consequent, alternative, .. } => {
+        AstExpressionKind::Conditional { condition, consequent, alternative, .. } => {
             let dst_data_type = translator.get_expression_type(consequent); // Consequent and alternatives have same type
             let dst = translator.make_temp_variable(dst_data_type.clone());
 
@@ -128,7 +130,7 @@ pub fn translate_expression(
             let end_label = translator.label_maker.make_unique_label("ternary_end");
 
             // Condition
-            let condition_value = translate_expression_to_value(translator, expr, instructions);
+            let condition_value = translate_expression_to_value(translator, condition, instructions);
 
             instructions
                 .push(BtInstruction::JumpIfZero { condition: condition_value, target: alternative_label.clone() });
@@ -154,8 +156,8 @@ pub fn translate_expression(
             EvalExpr::Value(dst)
         }
 
-        AstExpression::FunctionCall { node_id, designator, args, .. } => {
-            let dst_data_type = translator.get_ast_type_from_node(*node_id);
+        AstExpressionKind::FunctionCall { designator, args, .. } => {
+            let dst_data_type = translator.get_ast_type_from_node(expr_id);
             let dst = translator.make_temp_variable(dst_data_type.clone());
 
             // Evaluate designator
@@ -185,7 +187,7 @@ pub fn translate_expression_to_value(
         EvalExpr::Value(value) => value,
 
         EvalExpr::Dereferenced(object) => {
-            let rvalue_type = translator.get_ast_type_from_node(expr.node_id());
+            let rvalue_type = translator.get_ast_type_from_node(expr.id());
 
             // Dereferencing an object of function type is a no-op.
             if rvalue_type.is_function() {
@@ -222,7 +224,9 @@ fn try_transform_constant_value_type(value: &BtValue, dst_type: &BtType) -> Opti
 }
 
 fn translate_string_literal(translator: &mut BlueTacTranslator, expr: &AstExpression) -> EvalExpr {
-    let AstExpression::StringLiteral { node_id, ascii, .. } = expr else {
+    let literal_node_id = expr.id();
+
+    let AstExpressionKind::StringLiteral { ascii, .. } = expr.kind() else {
         ICE!("Expected an AstExpression::StringLiteral");
     };
 
@@ -230,7 +234,7 @@ fn translate_string_literal(translator: &mut BlueTacTranslator, expr: &AstExpres
     let mut constant_string = ascii.join("");
 
     // If the expression type is a character array then append NULL chars, if necessary, to match the array length.
-    let data_type = translator.get_ast_type_from_node(*node_id).clone();
+    let data_type = translator.get_ast_type_from_node(literal_node_id).clone();
     if let AstType::Array { element_type, count } = &data_type
         && element_type.is_character()
         && *count > ascii.len()
@@ -254,11 +258,13 @@ fn translate_string_literal(translator: &mut BlueTacTranslator, expr: &AstExpres
 }
 
 fn translate_integer_literal(translator: &mut BlueTacTranslator, expr: &AstExpression) -> EvalExpr {
-    let AstExpression::IntegerLiteral { node_id, value, .. } = expr else {
+    let literal_node_id = expr.id();
+
+    let AstExpressionKind::IntegerLiteral { value, .. } = expr.kind() else {
         ICE!("Expected an AstExpression::IntegerLiteral");
     };
 
-    let literal_type = translator.get_ast_type_from_node(*node_id);
+    let literal_type = translator.get_ast_type_from_node(literal_node_id);
 
     // There are no warnings emitted here; if these are a narrowing conversion then the parser/sema has already
     // warned about them.
@@ -286,7 +292,7 @@ fn translate_integer_literal(translator: &mut BlueTacTranslator, expr: &AstExpre
 }
 
 fn translate_float_literal(expr: &AstExpression) -> EvalExpr {
-    let AstExpression::FloatLiteral { value, kind, .. } = expr else {
+    let AstExpressionKind::FloatLiteral { value, kind, .. } = expr.kind() else {
         ICE!("Expected an AstExpression::FloatLiteral");
     };
 
@@ -305,7 +311,7 @@ fn translate_subscript(
     expr: &AstExpression,
     instructions: &mut Vec<BtInstruction>,
 ) -> EvalExpr {
-    let AstExpression::Subscript { expr1, expr2, .. } = expr else {
+    let AstExpressionKind::Subscript { expr1, expr2, .. } = expr.kind() else {
         ICE!("Expected an AstExpression::Subscript");
     };
 
@@ -340,7 +346,7 @@ fn translate_assignment(
     expr: &AstExpression,
     instructions: &mut Vec<BtInstruction>,
 ) -> EvalExpr {
-    let AstExpression::Assignment { computation_node_id, op, lhs, rhs, .. } = expr else {
+    let AstExpressionKind::Assignment { computation_node_id, op, lhs, rhs, .. } = expr.kind() else {
         ICE!("Expected an AstExpression::Assignment");
     };
 

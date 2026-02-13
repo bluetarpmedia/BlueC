@@ -6,7 +6,9 @@ use crate::ICE;
 use crate::compiler_driver::Driver;
 use crate::lexer;
 
-use super::super::{AstAssignmentOp, AstBinaryOp, AstExpression, AstNodeId, AstUnaryOp, ParseResult, Parser};
+use super::super::{
+    AstAssignmentOp, AstBinaryOp, AstExpression, AstExpressionKind, AstNodeId, AstUnaryOp, ParseResult, Parser,
+};
 use super::parse_unary_expression;
 
 /// Parses a prefix unary operation and returns an AST expression.
@@ -23,18 +25,18 @@ pub fn parse_prefix_unary_operation(parser: &mut Parser, driver: &mut Driver) ->
 
     let node_id = AstNodeId::new();
     parser.metadata.add_source_location(node_id, unary_op_token.location.merge_with(end_loc));
-    parser.metadata.propagate_const_flag_from_child(unary_expr.node_id(), node_id);
+    parser.metadata.propagate_const_flag_from_child(unary_expr.id(), node_id);
 
     // We parse dereference and address-of as unary operations but output dedicated AstExpressions for them,
     // rather than storing them as `AstExpression::UnaryOperation`s. This makes it easier to handle them later
     // for type checking etc.
-    let expr = match op {
-        AstUnaryOp::Deref => AstExpression::Deref { node_id, expr: Box::new(unary_expr) },
-        AstUnaryOp::AddressOf => AstExpression::AddressOf { node_id, expr: Box::new(unary_expr) },
-        _ => AstExpression::UnaryOperation { node_id, op, expr: Box::new(unary_expr) },
+    let kind = match op {
+        AstUnaryOp::Deref => AstExpressionKind::Deref { pointer: Box::new(unary_expr) },
+        AstUnaryOp::AddressOf => AstExpressionKind::AddressOf { target: Box::new(unary_expr) },
+        _ => AstExpressionKind::Unary { op, operand: Box::new(unary_expr) },
     };
 
-    Ok(expr)
+    Ok(AstExpression::new(node_id, kind))
 }
 
 /// Parses a postfix unary increment/decrement operation for the given expression and returns an AST expression.
@@ -59,7 +61,7 @@ pub fn parse_postfix_incr_or_decr(
     let node_id = AstNodeId::new();
     parser.metadata.add_source_location(node_id, unary_op_loc.merge_with(end_loc));
 
-    Ok(AstExpression::UnaryOperation { node_id, op, expr: Box::new(expr) })
+    Ok(AstExpression::new(node_id, AstExpressionKind::Unary { op, operand: Box::new(expr) }))
 }
 
 /// Returns whether the given token is a prefix unary operator.

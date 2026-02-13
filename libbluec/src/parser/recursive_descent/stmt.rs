@@ -85,10 +85,10 @@ pub fn parse_statement(parser: &mut Parser, driver: &mut Driver) -> ParseResult<
 /// Parses an expression statement.
 ///
 /// ```markdown
-/// <expr_stmt> ::= <full_expr> ";"
+/// <expr_stmt> ::= <expr> ";"
 /// ```
 pub fn parse_expression_statement(parser: &mut Parser, driver: &mut Driver) -> ParseResult<AstStatement> {
-    let expr = expr::parse_full_expression(parser, driver)?;
+    let expr = expr::parse_expression(parser, driver)?;
     utils::expect_end_of_statement(parser, driver, "Expected `;` after expression")?;
     Ok(AstStatement::Expression(expr))
 }
@@ -179,7 +179,7 @@ pub fn parse_null_statement(parser: &mut Parser, driver: &mut Driver) -> ParseRe
 pub fn parse_if_statement(parser: &mut Parser, driver: &mut Driver) -> ParseResult<AstStatement> {
     _ = utils::expect_token(lexer::TokenType::new_identifier("if"), parser, driver)?;
     _ = utils::expect_token(lexer::TokenType::OpenParen, parser, driver)?;
-    let controlling_expr = expr::parse_full_expression(parser, driver)?;
+    let controlling_expr = expr::parse_expression(parser, driver)?;
     let right_paren_loc = utils::expect_token(lexer::TokenType::CloseParen, parser, driver)?;
 
     let then_stmt = parse_statement(parser, driver);
@@ -230,7 +230,7 @@ pub fn parse_if_statement(parser: &mut Parser, driver: &mut Driver) -> ParseResu
 pub fn parse_switch_statement(parser: &mut Parser, driver: &mut Driver) -> ParseResult<AstStatement> {
     _ = utils::expect_token(lexer::TokenType::new_identifier("switch"), parser, driver)?;
     _ = utils::expect_token(lexer::TokenType::OpenParen, parser, driver)?;
-    let controlling_expr = expr::parse_full_expression(parser, driver)?;
+    let controlling_expr = expr::parse_expression(parser, driver)?;
     _ = utils::expect_token(lexer::TokenType::CloseParen, parser, driver)?;
 
     let node_id = AstNodeId::new();
@@ -255,7 +255,7 @@ pub fn parse_switch_case_statement(parser: &mut Parser, driver: &mut Driver) -> 
     }
 
     // Constant expression
-    let constant_expr = expr::parse_full_expression(parser, driver)?;
+    let constant_expr = expr::parse_expression(parser, driver)?;
 
     let colon_token_loc = utils::expect_token(lexer::TokenType::Colon, parser, driver)?;
 
@@ -275,7 +275,7 @@ pub fn parse_switch_case_statement(parser: &mut Parser, driver: &mut Driver) -> 
 
             let column_no = driver.tu_file.get_column_no(case_token_loc);
             let indent = " ".repeat(column_no as usize - 1);
-            let constant_expr_loc = parser.metadata.get_source_location(constant_expr.node_id);
+            let constant_expr_loc = parser.metadata.get_source_location(constant_expr.id());
             let suggested_code = SuggestedCode::FormatString(format!("{indent}case $$1: ;"), vec![constant_expr_loc]);
             diag.add_note_with_suggested_code(note, suggested_code, None);
         }
@@ -336,7 +336,7 @@ pub fn parse_while_statement(parser: &mut Parser, driver: &mut Driver) -> ParseR
         return Err(ParseError);
     }
 
-    let controlling_expr = expr::parse_full_expression(parser, driver)?;
+    let controlling_expr = expr::parse_expression(parser, driver)?;
     _ = utils::expect_token(lexer::TokenType::CloseParen, parser, driver)?;
 
     // Loop body
@@ -367,7 +367,7 @@ pub fn parse_do_while_statement(parser: &mut Parser, driver: &mut Driver) -> Par
         return Err(ParseError);
     }
 
-    let controlling_expr = expr::parse_full_expression(parser, driver)?;
+    let controlling_expr = expr::parse_expression(parser, driver)?;
     let _ = utils::expect_token(lexer::TokenType::CloseParen, parser, driver)?;
     utils::expect_end_of_statement(parser, driver, "Expected `;` after do-while statement")?;
 
@@ -439,7 +439,7 @@ pub fn parse_for_statement(parser: &mut Parser, driver: &mut Driver) -> ParseRes
         let init = Box::new(init);
         let body = Box::new(body);
 
-        Ok(AstStatement::For { node_id, init, controlling_expr, post, body })
+        Ok(AstStatement::For { node_id, init, controlling_expr, post_expr: post, body })
     })
 }
 
@@ -525,7 +525,7 @@ pub fn parse_goto_statement(parser: &mut Parser, driver: &mut Driver) -> ParseRe
 /// ```
 pub fn parse_return_statement(parser: &mut Parser, driver: &mut Driver) -> ParseResult<AstStatement> {
     _ = utils::expect_token(lexer::TokenType::new_identifier("return"), parser, driver)?;
-    let expr = expr::parse_full_expression(parser, driver)?;
+    let expr = expr::parse_expression(parser, driver)?;
     utils::expect_end_of_statement(parser, driver, "Expected `;` after return statement")?;
     Ok(AstStatement::Return(expr))
 }

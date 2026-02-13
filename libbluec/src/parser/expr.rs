@@ -16,42 +16,19 @@ use super::recursive_descent::literal;
 use super::recursive_descent::peek;
 use super::recursive_descent::utils;
 use super::{
-    AstAssignmentOp, AstBinaryOp, AstDeclaredType, AstExpression, AstExpressionFlag, AstFullExpression, AstNodeId,
+    AstAssignmentOp, AstBinaryOp, AstDeclaredType, AstExpression, AstExpressionFlag, AstExpressionKind, AstNodeId,
     AstUniqueName,
 };
 use super::{ParseError, ParseResult, Parser};
 use super::{add_error, add_error_at_eof};
 
-/// Parses a full expression.
-///
-/// A full expression is an expression that is not a subexpression of another expression.
-pub fn parse_full_expression(parser: &mut Parser, driver: &mut Driver) -> ParseResult<AstFullExpression> {
-    // Capture the source location of the first token in the full expression.
-    let start_loc = parser.token_stream.peek_next_source_location().ok_or(ParseError)?;
-
-    let expr = parse_expression_with_precedence(parser, driver, 0)?;
-
-    // Capture the source location of the last token in the full expression.
-    let end_loc = parser.token_stream.prev_token_source_location().ok_or(ParseError)?;
-
-    let node_id = AstNodeId::new();
-    parser.metadata.add_source_location(node_id, start_loc.merge_with(end_loc));
-    parser.metadata.propagate_const_flag_from_child(expr.node_id(), node_id);
-
-    Ok(AstFullExpression { node_id, expr })
-}
-
-/// Attempts to parse a full expression unless the very next token is the given terminator token, e.g. ';' or ')'.
+/// Attempts to parse an expression unless the very next token is the given terminator token, e.g. ';' or ')'.
 pub fn parse_optional_full_expression(
     parser: &mut Parser,
     driver: &mut Driver,
     terminator: lexer::TokenType,
-) -> ParseResult<AstFullExpression> {
-    if parser.token_stream.next_token_has_type(terminator) {
-        Err(ParseError)
-    } else {
-        parse_full_expression(parser, driver)
-    }
+) -> ParseResult<AstExpression> {
+    if parser.token_stream.next_token_has_type(terminator) { Err(ParseError) } else { parse_expression(parser, driver) }
 }
 
 /// Parses a tree of (sub)expression(s).
@@ -148,10 +125,18 @@ fn parse_assignment_expression(
     let rhs = parse_expression_with_precedence(parser, driver, precedence)?;
 
     let node_id = AstNodeId::new();
-    parser.metadata.add_source_location(node_id, op_loc);
+    parser.metadata.add_operator_sloc(node_id, op_loc);
+
+    let source_loc =
+        parser.metadata.get_source_location(lhs.id()).merge_with(parser.metadata.get_source_location(rhs.id()));
+
+    parser.metadata.add_source_location(node_id, source_loc);
 
     let computation_node_id = AstNodeId::new(); // No source location needed; this is for the typechecker
-    Ok(AstExpression::Assignment { node_id, computation_node_id, op, lhs: Box::new(lhs), rhs: Box::new(rhs) })
+    Ok(AstExpression::new(
+        node_id,
+        AstExpressionKind::Assignment { computation_node_id, op, lhs: Box::new(lhs), rhs: Box::new(rhs) },
+    ))
 }
 
 /// Parses a ternary/conditional expression for the given `condition` expression.
@@ -183,23 +168,22 @@ fn parse_ternary_expression(
 
     let loc = parser
         .metadata
-        .get_source_location(condition.node_id())
-        .merge_with(parser.metadata.get_source_location(alternative.node_id()));
+        .get_source_location(condition.id())
+        .merge_with(parser.metadata.get_source_location(alternative.id()));
 
     let node_id = AstNodeId::new();
     parser.metadata.add_source_location(node_id, loc);
     parser.metadata.add_operator_sloc(node_id, ternary_op_loc);
-    parser.metadata.propagate_const_flag_from_children(
-        &[condition.node_id(), consequent.node_id(), alternative.node_id()],
-        node_id,
-    );
+    parser.metadata.propagate_const_flag_from_children(&[condition.id(), consequent.id(), alternative.id()], node_id);
 
-    Ok(AstExpression::Conditional {
+    Ok(AstExpression::new(
         node_id,
-        expr: Box::new(condition),
-        consequent: Box::new(consequent),
-        alternative: Box::new(alternative),
-    })
+        AstExpressionKind::Conditional {
+            condition: Box::new(condition),
+            consequent: Box::new(consequent),
+            alternative: Box::new(alternative),
+        },
+    ))
 }
 
 /// Parses a binary expression for the given binary operator `op` and the `lhs` expression.
@@ -213,17 +197,15 @@ fn parse_binary_expression(
 ) -> ParseResult<AstExpression> {
     let rhs = parse_expression_with_precedence(parser, driver, rhs_precedence)?;
 
-    let expr_loc = parser
-        .metadata
-        .get_source_location(lhs.node_id())
-        .merge_with(parser.metadata.get_source_location(rhs.node_id()));
+    let expr_loc =
+        parser.metadata.get_source_location(lhs.id()).merge_with(parser.metadata.get_source_location(rhs.id()));
 
     let node_id = AstNodeId::new();
     parser.metadata.add_source_location(node_id, expr_loc);
     parser.metadata.add_operator_sloc(node_id, op_loc);
-    parser.metadata.propagate_const_flag_from_children(&[lhs.node_id(), rhs.node_id()], node_id);
+    parser.metadata.propagate_const_flag_from_children(&[lhs.id(), rhs.id()], node_id);
 
-    Ok(AstExpression::BinaryOperation { node_id, op, lhs: Box::new(lhs), rhs: Box::new(rhs) })
+    Ok(AstExpression::new(node_id, AstExpressionKind::Binary { op, lhs: Box::new(lhs), rhs: Box::new(rhs) }))
 }
 
 /// Parses a unary expression.
@@ -292,11 +274,14 @@ fn parse_cast_expression(parser: &mut Parser, driver: &mut Driver) -> ParseResul
     let target_type = AstDeclaredType::unresolved(basic_type, None, declarator);
 
     let node_id = AstNodeId::new();
-    let sloc = open_paren_loc.merge_with(parser.metadata.get_source_location(expr_to_cast.node_id()));
+    let sloc = open_paren_loc.merge_with(parser.metadata.get_source_location(expr_to_cast.id()));
     parser.metadata.add_source_location(node_id, sloc);
-    parser.metadata.propagate_const_flag_from_child(expr_to_cast.node_id(), node_id);
+    parser.metadata.propagate_const_flag_from_child(expr_to_cast.id(), node_id);
 
-    Ok(AstExpression::Cast { node_id, target_type, expr: Box::new(expr_to_cast), is_implicit: false })
+    Ok(AstExpression::new(
+        node_id,
+        AstExpressionKind::Cast { target_type, inner: Box::new(expr_to_cast), is_implicit: false },
+    ))
 }
 
 /// Parses a postfix expression.
@@ -385,12 +370,12 @@ fn parse_function_call_expression(
     let (args, args_node_id) = parse_function_call_arguments(parser, driver)?;
 
     let designator = Box::new(expr);
-    let designator_loc = parser.metadata.get_source_location(designator.node_id());
+    let designator_loc = parser.metadata.get_source_location(designator.id());
 
     let node_id = AstNodeId::new();
     parser.metadata.add_source_location(node_id, designator_loc);
 
-    Ok(AstExpression::FunctionCall { node_id, designator, args, args_node_id })
+    Ok(AstExpression::new(node_id, AstExpressionKind::FunctionCall { designator, args, args_node_id }))
 }
 
 /// Parses the function call arguments.
@@ -443,7 +428,10 @@ fn parse_array_subscript_expression(
     // Set the source location as the '[' token. (Diagnostics can add the other expressions as locations.)
     parser.metadata.add_source_location(node_id, open_sq_bracket_loc);
 
-    Ok(AstExpression::Subscript { node_id, expr1: Box::new(expr), expr2: Box::new(subscript_expr) })
+    Ok(AstExpression::new(
+        node_id,
+        AstExpressionKind::Subscript { expr1: Box::new(expr), expr2: Box::new(subscript_expr) },
+    ))
 }
 
 /// Parses an identifier expression.
@@ -466,7 +454,7 @@ fn parse_identifier_expression(parser: &mut Parser, driver: &mut Driver) -> Pars
     // Identifier resolution
     let unique_name = resolve_identifier(name, identifier_token.location, parser, driver)?;
 
-    Ok(AstExpression::Identifier { node_id, name: name.clone(), unique_name })
+    Ok(AstExpression::new(node_id, AstExpressionKind::Ident { name: name.clone(), unique_name }))
 }
 
 /// Parses a parenthesised expression.
@@ -482,11 +470,11 @@ fn parse_parenthesised_expression(parser: &mut Parser, driver: &mut Driver) -> P
     let end_loc = parser.token_stream.prev_token_source_location().ok_or(ParseError)?;
 
     let expr_loc = start_loc.merge_with(end_loc);
-    parser.metadata.add_source_location(expr.node_id(), expr_loc);
+    parser.metadata.add_source_location(expr.id(), expr_loc);
 
     // Track that the expression was wrapped in parentheses so that later we can warn about mixing different binary
     // operators without parentheses.
-    parser.metadata.set_expr_flag(expr.node_id(), AstExpressionFlag::HasParens);
+    parser.metadata.set_expr_flag(expr.id(), AstExpressionFlag::HasParens);
 
     Ok(expr)
 }

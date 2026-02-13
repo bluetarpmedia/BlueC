@@ -7,7 +7,7 @@ use crate::compiler_driver::{Diagnostic, Driver, Error, Warning};
 use crate::core::{SourceIdentifier, SourceLocation};
 use crate::parser::{
     AstBasicTypeSpecifier, AstConstantInteger, AstConstantValue, AstDeclarator, AstDeclaratorKind, AstDeclaredType,
-    AstFullExpression, AstType,
+    AstExpression, AstType,
 };
 use crate::sema::constant_eval;
 
@@ -347,17 +347,17 @@ fn resolve_function_param_types(
 }
 
 fn resolve_array_size(
-    size_expr: &Option<Box<AstFullExpression>>,
+    size_expr: &Option<Box<AstExpression>>,
     chk: &mut TypeChecker,
     driver: &mut Driver,
 ) -> Result<usize, ResolutionError> {
     if let Some(size_expr) = size_expr {
         let mut eval = constant_eval::Eval::new(chk, driver);
-        let constant_value = eval.evaluate_full_expr(size_expr);
+        let constant_value = eval.evaluate_expr(size_expr);
 
         let Some(constant_value) = constant_value else {
             let err = "Array size must be a constant integer expression".to_string();
-            let loc = chk.metadata.get_source_location(size_expr.node_id);
+            let loc = chk.metadata.get_source_location(size_expr.id());
             driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
             return Err(ResolutionError::SemanticError);
         };
@@ -365,7 +365,7 @@ fn resolve_array_size(
         if constant_value.get_ast_type().is_integer() {
             if constant_value.has_negative_value() {
                 let err = "Array size cannot be negative".to_string();
-                let loc = chk.metadata.get_source_location(size_expr.node_id);
+                let loc = chk.metadata.get_source_location(size_expr.id());
                 driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
                 return Err(ResolutionError::SemanticError);
             }
@@ -381,7 +381,7 @@ fn resolve_array_size(
             Ok(value as usize)
         } else {
             let err = "Array size must be a constant integer expression".to_string();
-            let loc = chk.metadata.get_source_location(size_expr.node_id);
+            let loc = chk.metadata.get_source_location(size_expr.id());
             driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
             Err(ResolutionError::SemanticError)
         }

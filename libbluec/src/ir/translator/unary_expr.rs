@@ -3,7 +3,7 @@
 //! The `unary_epxr` module defines functions to translate AST unary expressions into the BlueTac IR.
 
 use crate::ICE;
-use crate::parser::{AstExpression, AstType, AstUnaryOp};
+use crate::parser::{AstExpression, AstExpressionKind, AstType, AstUnaryOp};
 use crate::sema::type_conversion;
 
 use super::super::{BtBinaryOp, BtConstantValue, BtInstruction, BtUnaryOp, BtValue};
@@ -16,7 +16,9 @@ pub fn translate_unary_operation(
     expr: &AstExpression,
     instructions: &mut Vec<BtInstruction>,
 ) -> EvalExpr {
-    let AstExpression::UnaryOperation { node_id: unary_expr_node_id, op: ast_op, expr: ast_unary_expr } = expr else {
+    let unary_expr_node_id = expr.id();
+
+    let AstExpressionKind::Unary { op: ast_op, operand: ast_unary_expr } = expr.kind() else {
         ICE!("Expected an AstExpression::UnaryOperation");
     };
 
@@ -28,8 +30,8 @@ pub fn translate_unary_operation(
     let is_negate = *ast_op == AstUnaryOp::Negate;
 
     if is_negate {
-        if let AstExpression::FloatLiteral { node_id, value, .. } = **ast_unary_expr {
-            let data_type = translator.get_ast_type_from_node(node_id);
+        if let AstExpressionKind::FloatLiteral { value, .. } = *ast_unary_expr.kind() {
+            let data_type = translator.get_ast_type_from_node(ast_unary_expr.id());
             let val = match data_type {
                 AstType::Float => BtValue::Constant(BtConstantValue::Float32(-value as f32)),
 
@@ -39,13 +41,13 @@ pub fn translate_unary_operation(
             };
 
             return EvalExpr::Value(val);
-        } else if let AstExpression::CharLiteral { node_id, value, .. } = **ast_unary_expr {
-            let data_type = translator.get_ast_type_from_node(node_id);
+        } else if let AstExpressionKind::CharLiteral { value, .. } = *ast_unary_expr.kind() {
+            let data_type = translator.get_ast_type_from_node(ast_unary_expr.id());
             assert!(data_type == &AstType::Int);
 
             let val = BtValue::Constant(BtConstantValue::Int32(-value));
             return EvalExpr::Value(val);
-        } else if let AstExpression::IntegerLiteral { node_id, value, .. } = **ast_unary_expr {
+        } else if let AstExpressionKind::IntegerLiteral { value, .. } = *ast_unary_expr.kind() {
             // We're negating so the literal has to fit inside a 64-bit signed integer range.
             let int64 = type_conversion::convert_u64_to_i64(value);
 
@@ -53,7 +55,7 @@ pub fn translate_unary_operation(
             //      Remember, we can't negate i64::MIN because it would overflow.
             let negated_int64 = if int64 == i64::MIN { 0 } else { -int64 };
 
-            let data_type = translator.get_ast_type_from_node(node_id);
+            let data_type = translator.get_ast_type_from_node(ast_unary_expr.id());
             assert!(data_type.is_integer());
             let literal_too_big_for_32bits = data_type.bits() > 32;
 
@@ -86,7 +88,7 @@ pub fn translate_unary_operation(
             | AstUnaryOp::PostfixDecrement
     );
 
-    let unary_expr_data_type = translator.get_ast_type_from_node(*unary_expr_node_id).clone(); // The type of the unary operation (not its inner expr)
+    let unary_expr_data_type = translator.get_ast_type_from_node(unary_expr_node_id).clone(); // The type of the unary operation (not its inner expr)
 
     if is_assign {
         let is_postfix = matches!(ast_op, AstUnaryOp::PostfixIncrement | AstUnaryOp::PostfixDecrement);

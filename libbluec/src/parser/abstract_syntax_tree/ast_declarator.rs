@@ -24,7 +24,7 @@ use std::fmt;
 
 use crate::core::SourceLocation;
 
-use super::super::{AstDeclaredType, AstFullExpression, AstIdentifier};
+use super::super::{AstDeclaredType, AstExpression, AstIdentifier};
 
 /// A parsed declarator.
 ///
@@ -135,10 +135,10 @@ impl AstDeclarator {
 pub enum AstDeclaratorKind {
     Ident(AstIdentifier),
     Pointer(Box<AstDeclarator>),
-    Array { decl: Box<AstDeclarator>, size_expr: Option<Box<AstFullExpression>> },
+    Array { decl: Box<AstDeclarator>, size_expr: Option<Box<AstExpression>> },
     Function { decl: Box<AstDeclarator>, params: Vec<AstDeclaredType> },
     AbstractPointer,
-    AbstractArray { size_expr: Option<Box<AstFullExpression>> },
+    AbstractArray { size_expr: Option<Box<AstExpression>> },
     AbstractFunction { params: Vec<AstDeclaredType> },
 }
 

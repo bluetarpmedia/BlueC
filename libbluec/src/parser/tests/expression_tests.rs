@@ -5,7 +5,7 @@ use crate::lexer::{Token, TokenType};
 
 use super::super::expr;
 use super::super::recursive_descent::block;
-use super::super::{AstBlockItem, AstExpression, AstStatement, ParseResult, Parser};
+use super::super::{AstBlockItem, AstExpression, AstExpressionKind, AstStatement, ParseResult, Parser};
 use super::utils::make_parser;
 
 #[test]
@@ -184,8 +184,8 @@ fn block_with_chain_compound_assignment() {
 
     // Next block item is an expression statement
     if let AstBlockItem::Statement(stmt) = &block_items[7] {
-        if let AstStatement::Expression(full_expr) = stmt {
-            if let AstExpression::Assignment { rhs, .. } = &full_expr.expr {
+        if let AstStatement::Expression(expr) = stmt {
+            if let AstExpressionKind::Assignment { rhs, .. } = expr.kind() {
                 let rhs_str = to_string(rhs);
                 assert!(rhs_str == expected_compound_assignment_expr_str);
             } else {
@@ -330,8 +330,8 @@ fn test_expression(tokens: Vec<Token>, expected_str: &str) {
 
 fn to_string(expr: &AstExpression) -> String {
     let mut str = String::new();
-    match expr {
-        AstExpression::BinaryOperation { op, lhs, rhs, .. } => {
+    match expr.kind() {
+        AstExpressionKind::Binary { op, lhs, rhs, .. } => {
             str.push_str(&format!("{}(", op));
 
             str.push_str(to_string(lhs).as_ref());
@@ -341,7 +341,7 @@ fn to_string(expr: &AstExpression) -> String {
             str.push(')');
         }
 
-        AstExpression::Assignment { op, lhs, rhs, .. } => {
+        AstExpressionKind::Assignment { op, lhs, rhs, .. } => {
             str.push_str(&format!("{}(", op));
 
             str.push_str(to_string(lhs).as_ref());
@@ -351,19 +351,19 @@ fn to_string(expr: &AstExpression) -> String {
             str.push(')');
         }
 
-        AstExpression::UnaryOperation { op, expr, .. } => {
+        AstExpressionKind::Unary { op, operand, .. } => {
             str.push_str(&format!("{}(", op));
 
-            str.push_str(to_string(expr).as_ref());
+            str.push_str(to_string(operand).as_ref());
 
             str.push(')');
         }
 
-        AstExpression::IntegerLiteral { value, .. } => {
+        AstExpressionKind::IntegerLiteral { value, .. } => {
             str.push_str(&format!("{}", value));
         }
 
-        AstExpression::Identifier { name, .. } => {
+        AstExpressionKind::Ident { name, .. } => {
             str.push_str(&format!("{}", name));
         }
 

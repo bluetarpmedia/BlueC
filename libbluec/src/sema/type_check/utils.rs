@@ -5,7 +5,7 @@
 use crate::ICE;
 use crate::compiler_driver::{Driver, Error, Warning};
 use crate::parser::{
-    AstAssignmentOp, AstBinaryOp, AstExpression, AstFullExpression, AstIntegerLiteralKind, AstNodeId,
+    AstAssignmentOp, AstBinaryOp, AstExpression, AstExpressionKind, AstIntegerLiteralKind, AstNodeId,
     AstStaticStorageInitializer, AstType, AstUnaryOp, AstVariableInitializer,
 };
 
@@ -56,13 +56,15 @@ pub fn is_modifiable_lvalue(expr: &AstExpression, expr_type: &AstType) -> bool {
 pub fn take_boxed_expression(expr: &mut Box<AstExpression>) -> Box<AstExpression> {
     std::mem::replace(
         expr,
-        Box::new(AstExpression::IntegerLiteral {
-            node_id: AstNodeId::null(),
-            literal: String::new(),
-            literal_base: 10,
-            value: 0,
-            kind: AstIntegerLiteralKind::Int,
-        }),
+        Box::new(AstExpression::new(
+            AstNodeId::null(),
+            AstExpressionKind::IntegerLiteral {
+                literal: String::new(),
+                literal_base: 10,
+                value: 0,
+                kind: AstIntegerLiteralKind::Int,
+            },
+        )),
     )
 }
 
@@ -70,22 +72,24 @@ pub fn take_boxed_expression(expr: &mut Box<AstExpression>) -> Box<AstExpression
 pub fn take_expression(expr: &mut AstExpression) -> AstExpression {
     std::mem::replace(
         expr,
-        AstExpression::IntegerLiteral {
-            node_id: AstNodeId::null(),
-            literal: String::new(),
-            literal_base: 10,
-            value: 0,
-            kind: AstIntegerLiteralKind::Int,
-        },
+        AstExpression::new(
+            AstNodeId::null(),
+            AstExpressionKind::IntegerLiteral {
+                literal: String::new(),
+                literal_base: 10,
+                value: 0,
+                kind: AstIntegerLiteralKind::Int,
+            },
+        ),
     )
 }
 
 /// Takes the first scalar initializer from the given variable initializer.
 pub fn take_first_scalar_initializer(initializer: &mut AstVariableInitializer) -> AstVariableInitializer {
     match initializer {
-        AstVariableInitializer::Scalar(full_expr) => {
-            let expr = take_expression(&mut full_expr.expr);
-            AstVariableInitializer::Scalar(AstFullExpression { node_id: full_expr.node_id, expr })
+        AstVariableInitializer::Scalar(expr) => {
+            let expr = take_expression(expr);
+            AstVariableInitializer::Scalar(expr)
         }
         AstVariableInitializer::Aggregate { init, .. } => take_first_scalar_initializer(&mut init[0]),
     }
@@ -109,8 +113,8 @@ pub fn get_common_type(
     chk: &mut TypeChecker,
     driver: &mut Driver,
 ) -> Result<(AstType, bool), CommonTypeError> {
-    let a_type = chk.get_data_type(a.node_id());
-    let b_type = chk.get_data_type(b.node_id());
+    let a_type = chk.get_data_type(a.id());
+    let b_type = chk.get_data_type(b.id());
 
     // A function type should decay/implicitly convert to a function pointer.
     //
@@ -165,14 +169,14 @@ pub fn is_null_pointer_constant(
     chk: &mut TypeChecker,
     driver: &mut Driver,
 ) -> bool {
-    match expr {
-        AstExpression::IntegerLiteral { value, .. } => *value == 0,
+    match expr.kind() {
+        AstExpressionKind::IntegerLiteral { value, .. } => *value == 0,
 
         _ => {
             let mut eval = constant_eval::Eval::new(chk, driver);
             match eval.evaluate_expr(expr) {
                 Some(const_value) if const_value.is_zero() && const_value.get_ast_type().is_integer() => {
-                    let loc = chk.metadata.get_source_location(expr.node_id());
+                    let loc = chk.metadata.get_source_location(expr.id());
                     Warning::expression_interpreted_as_null_ptr_constant(loc, ptr_type, driver);
                     true
                 }
@@ -193,8 +197,8 @@ pub fn error_invalid_binary_expression_operands(
     driver: &mut Driver,
 ) {
     let op_loc = chk.metadata.get_source_location(node_id);
-    let lhs_loc = chk.metadata.get_source_location(lhs_expr.node_id());
-    let rhs_loc = chk.metadata.get_source_location(rhs_expr.node_id());
+    let lhs_loc = chk.metadata.get_source_location(lhs_expr.id());
+    let rhs_loc = chk.metadata.get_source_location(rhs_expr.id());
 
     Error::invalid_binary_expression_operands(op_loc, lhs_type, rhs_type, lhs_loc, rhs_loc, driver);
 }
@@ -226,8 +230,8 @@ pub fn warn_compare_different_pointer_types(
     driver: &mut Driver,
 ) {
     let loc = chk.metadata.get_operator_sloc(expr_node_id);
-    let a_loc = chk.metadata.get_source_location(left.node_id());
-    let b_loc = chk.metadata.get_source_location(right.node_id());
+    let a_loc = chk.metadata.get_source_location(left.id());
+    let b_loc = chk.metadata.get_source_location(right.id());
     Warning::compare_distinct_pointer_types(left_type, right_type, loc, a_loc, b_loc, driver);
 }
 
@@ -242,8 +246,8 @@ pub fn warn_compare_pointer_and_integer(
     driver: &mut Driver,
 ) {
     let op_loc = chk.metadata.get_operator_sloc(expr_node_id);
-    let left_loc = chk.metadata.get_source_location(left.node_id());
-    let right_loc = chk.metadata.get_source_location(right.node_id());
+    let left_loc = chk.metadata.get_source_location(left.id());
+    let right_loc = chk.metadata.get_source_location(right.id());
 
     let (ptr_type, int_type, ptr_loc, int_loc) = if left_type.is_pointer() {
         (left_type, right_type, left_loc, right_loc)
@@ -265,8 +269,8 @@ pub fn warn_conditional_type_mismatch(
     driver: &mut Driver,
 ) {
     let ternary_op_loc = chk.metadata.get_operator_sloc(expr_node_id);
-    let a_loc = chk.metadata.get_source_location(left.node_id());
-    let b_loc = chk.metadata.get_source_location(right.node_id());
+    let a_loc = chk.metadata.get_source_location(left.id());
+    let b_loc = chk.metadata.get_source_location(right.id());
     Warning::conditional_type_mismatch(left_type, right_type, ternary_op_loc, a_loc, b_loc, driver);
 }
 
@@ -281,8 +285,8 @@ pub fn warn_pointer_type_mismatch(
     driver: &mut Driver,
 ) {
     let op_loc = chk.metadata.get_operator_sloc(expr_node_id);
-    let a_loc = chk.metadata.get_source_location(left.node_id());
-    let b_loc = chk.metadata.get_source_location(right.node_id());
+    let a_loc = chk.metadata.get_source_location(left.id());
+    let b_loc = chk.metadata.get_source_location(right.id());
     Warning::pointer_type_mismatch(left_type, right_type, op_loc, a_loc, b_loc, driver);
 }
 

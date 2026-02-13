@@ -3,7 +3,8 @@
 //! The `reassociate` module provides functionality to reassociate literal terms in a binary expression in order
 //! to rearrange the tree for constant folding.
 
-use crate::parser::{AstBinaryOp, AstExpression, AstNodeId};
+use crate::ICE;
+use crate::parser::{AstBinaryOp, AstExpression, AstExpressionKind, AstNodeId};
 
 use super::super::type_check::TypeChecker;
 
@@ -17,12 +18,14 @@ use super::super::type_check::TypeChecker;
 /// Note: This function does not recurse into sub-expressions of different operator types, as it assumes it is called
 /// by a visitor which visits every sub-expression in the full expression tree.
 pub fn reassociate_binary_expr(expr: &mut AstExpression, chk: &mut TypeChecker) {
-    let AstExpression::BinaryOperation { node_id: p_node_id, op: current_op, .. } = expr else {
+    let p_node_id = expr.id();
+
+    let AstExpressionKind::Binary { op: current_op, .. } = expr.kind() else {
         return;
     };
 
     let is_integral_commutative_associative =
-        current_op.is_commutative_and_associative() && chk.get_data_type(*p_node_id).is_integer();
+        current_op.is_commutative_and_associative() && chk.get_data_type(p_node_id).is_integer();
 
     // Our caller is the visitor which visits every sub-expression in the full expression, so we don't need to
     // recurse into all binary expressions here, since we'll get called again by the visitor.
@@ -74,7 +77,13 @@ fn flatten(expr: AstExpression, target_op: AstBinaryOp, terms: &mut Vec<AstExpre
     let mut stack = vec![expr];
 
     while let Some(current_expr) = stack.pop() {
-        if let AstExpression::BinaryOperation { node_id, op, lhs, rhs } = current_expr {
+        if current_expr.is_binary_expr() {
+            let (node_id, kind) = current_expr.deconstruct();
+
+            let AstExpressionKind::Binary { op, lhs, rhs } = kind else {
+                ICE!("Expected AstExpressionKind::BinaryOperation");
+            };
+
             if op == target_op {
                 ops.push(node_id);
 
@@ -85,7 +94,7 @@ fn flatten(expr: AstExpression, target_op: AstBinaryOp, terms: &mut Vec<AstExpre
             } else {
                 // This binary expression has a different operator, so treat it as a single term, rather than
                 // trying to flatten it.
-                terms.push(AstExpression::BinaryOperation { node_id, op, lhs, rhs });
+                terms.push(AstExpression::new(node_id, AstExpressionKind::Binary { op, lhs, rhs }));
             }
         } else {
             terms.push(current_expr);
@@ -105,19 +114,19 @@ fn rebuild_tree(
     assert!(!terms.is_empty());
 
     let mut term_iter = terms.into_iter();
-    let mut current_expr = term_iter.next().unwrap(); // Asserted not empty above
+    let mut current = term_iter.next().unwrap(); // Asserted `terms` is not empty above
 
     // Iterate over any remaining terms and attach them to the rhs
     for next_term in term_iter {
         let node_id = op_ids.pop().expect("Should have enough IDs");
 
-        let lhs = current_expr;
+        let lhs = current;
         let rhs = next_term;
 
-        chk.metadata.propagate_const_flag_from_children(&[lhs.node_id(), rhs.node_id()], node_id);
+        chk.metadata.propagate_const_flag_from_children(&[lhs.id(), rhs.id()], node_id);
 
-        current_expr = AstExpression::BinaryOperation { node_id, op, lhs: Box::new(lhs), rhs: Box::new(rhs) };
+        current = AstExpression::new(node_id, AstExpressionKind::Binary { op, lhs: Box::new(lhs), rhs: Box::new(rhs) });
     }
 
-    current_expr
+    current
 }

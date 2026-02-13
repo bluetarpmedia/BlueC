@@ -10,7 +10,7 @@ use crate::compiler_driver::Driver;
 use crate::core::SourceLocation;
 use crate::parser::{
     AstConstantFp, AstConstantInteger, AstConstantValue, AstDeclaredType, AstExpression, AstExpressionFlag,
-    AstFloatLiteralKind, AstFullExpression, AstIntegerLiteralKind, AstNodeId, AstRoot, AstType, AstUnaryOp,
+    AstExpressionKind, AstFloatLiteralKind, AstIntegerLiteralKind, AstNodeId, AstRoot, AstType, AstUnaryOp,
     AstVariableDeclaration, AstVariableInitializer,
 };
 
@@ -22,34 +22,34 @@ use super::visitor;
 pub fn fold(ast_root: &mut AstRoot, chk: &mut TypeChecker, driver: &mut Driver) {
     // Visit constant expressions and fold them.
     //
-    visitor::visit_full_expressions(ast_root, &mut |full_expr: &mut AstFullExpression| {
+    visitor::visit_full_expressions(ast_root, &mut |full_expr: &mut AstExpression| {
         // If the full expression is an initializer for a static storage variable then we've already evaluated it
         // during type checking, and that may have emitted warning diagnostics. We don't want to duplicate warnings
         // by evaluating it again, and there's no need to actually fold the constant expression because we set the
         // evaluated result on the AST node. (See `AstVariableDeclaration::init_constant_eval`.)
-        if chk.metadata.is_expr_flag_set(full_expr.node_id, AstExpressionFlag::IsStaticStorageInit) {
+        if chk.metadata.is_expr_flag_set(full_expr.id(), AstExpressionFlag::IsStaticStorageInit) {
             return;
         }
 
         // If the full expression itself is a constant expression then we can evaluate and fold the whole thing.
-        if chk.metadata.is_expr_flag_set(full_expr.node_id, AstExpressionFlag::IsConstant) {
-            fold_constant_expression(&mut full_expr.expr, chk, driver);
+        if chk.metadata.is_expr_flag_set(full_expr.id(), AstExpressionFlag::IsConstant) {
+            fold_constant_expression(full_expr, chk, driver);
             return;
         }
 
         // If the expression is a compound assignment expression and its `rhs` is a constant expression then emit
         // a warning if an implicit cast from the rhs to the lhs type would change the rhs value.
-        if is_compound_assignment_with_constant_rhs(&full_expr.expr, chk) {
+        if is_compound_assignment_with_constant_rhs(full_expr, chk) {
             // Evaluate the whole compound assignment expression. This expression is not a constant expression (since
             // it assigns to an l-value), but our constant expression evaluator is smart enough to still validate
             // the `rhs` constant expression and, if necessary, warn about the implicit cast to the lhs type.
             let mut eval = constant_eval::Eval::new(chk, driver);
-            _ = eval.evaluate_expr(&full_expr.expr); // Ignore the result, we only want the diagnostics.
+            _ = eval.evaluate_expr(full_expr); // Ignore the result, we only want the diagnostics.
         }
 
         // Check if any of the full expression's sub-expressions are constant expressions and fold them.
-        visitor::visit_expressions_in_full_expression(full_expr, &mut |expr: &mut AstExpression| {
-            if chk.metadata.is_expr_flag_set(expr.node_id(), AstExpressionFlag::IsConstant) {
+        visitor::visit_sub_expressions(full_expr, &mut |expr: &mut AstExpression| {
+            if chk.metadata.is_expr_flag_set(expr.id(), AstExpressionFlag::IsConstant) {
                 fold_constant_expression(expr, chk, driver);
             } else if expr.is_binary_expr() {
                 // If the binary expression is associative & commutative (Add/Multiply) then transform its operands
@@ -113,12 +113,12 @@ fn fold_constant_expression(expr: &mut AstExpression, chk: &mut TypeChecker, dri
     };
 
     if !constant_value.is_pointer_address_constant() {
-        let sloc = chk.metadata.get_source_location(expr.node_id()); // Sloc of expression before folding
+        let sloc = chk.metadata.get_source_location(expr.id()); // Sloc of expression before folding
 
-        let data_type = chk.metadata.get_node_type(expr.node_id()).clone();
+        let data_type = chk.metadata.get_node_type(expr.id()).clone();
         *expr = make_literal(&constant_value, data_type, chk);
 
-        chk.metadata.add_source_location(expr.node_id(), sloc); // Set sloc on the new literal that replaced the expr
+        chk.metadata.add_source_location(expr.id(), sloc); // Set sloc on the new literal that replaced the expr
     }
 }
 
@@ -163,11 +163,14 @@ fn make_char_literal(value: i32, data_type: AstType, chk: &mut TypeChecker) -> A
     let value = value.abs();
     let literal = value.to_string();
 
-    let char_literal = AstExpression::CharLiteral { node_id, literal, value };
+    let char_literal = AstExpression::new(node_id, AstExpressionKind::CharLiteral { literal, value });
 
     let char_literal = if is_negative {
         let node_id = make_constant_expr_node_id(AstType::Int, chk);
-        AstExpression::UnaryOperation { node_id, op: AstUnaryOp::Negate, expr: Box::new(char_literal) }
+        AstExpression::new(
+            node_id,
+            AstExpressionKind::Unary { op: AstUnaryOp::Negate, operand: Box::new(char_literal) },
+        )
     } else {
         char_literal
     };
@@ -178,12 +181,14 @@ fn make_char_literal(value: i32, data_type: AstType, chk: &mut TypeChecker) -> A
     } else {
         let node_id = make_constant_expr_node_id(data_type.clone(), chk);
 
-        AstExpression::Cast {
+        AstExpression::new(
             node_id,
-            target_type: AstDeclaredType::resolved(&data_type),
-            expr: Box::new(char_literal),
-            is_implicit: true,
-        }
+            AstExpressionKind::Cast {
+                target_type: AstDeclaredType::resolved(&data_type),
+                inner: Box::new(char_literal),
+                is_implicit: true,
+            },
+        )
     }
 }
 
@@ -195,11 +200,14 @@ fn make_short_literal(value: i32, data_type: AstType, chk: &mut TypeChecker) -> 
     let literal = value.to_string();
     let kind = AstIntegerLiteralKind::Int;
 
-    let int_literal = AstExpression::IntegerLiteral { node_id, literal, literal_base: 10, value: value as u64, kind };
+    let int_literal = AstExpression::new(
+        node_id,
+        AstExpressionKind::IntegerLiteral { literal, literal_base: 10, value: value as u64, kind },
+    );
 
     let int_literal = if is_negative {
         let node_id = make_constant_expr_node_id(AstType::Int, chk);
-        AstExpression::UnaryOperation { node_id, op: AstUnaryOp::Negate, expr: Box::new(int_literal) }
+        AstExpression::new(node_id, AstExpressionKind::Unary { op: AstUnaryOp::Negate, operand: Box::new(int_literal) })
     } else {
         int_literal
     };
@@ -209,12 +217,14 @@ fn make_short_literal(value: i32, data_type: AstType, chk: &mut TypeChecker) -> 
         int_literal
     } else {
         let node_id = make_constant_expr_node_id(data_type.clone(), chk);
-        AstExpression::Cast {
+        AstExpression::new(
             node_id,
-            target_type: AstDeclaredType::resolved(&data_type),
-            expr: Box::new(int_literal),
-            is_implicit: true,
-        }
+            AstExpressionKind::Cast {
+                target_type: AstDeclaredType::resolved(&data_type),
+                inner: Box::new(int_literal),
+                is_implicit: true,
+            },
+        )
     }
 }
 
@@ -235,11 +245,12 @@ fn make_signed_integer_literal(
         (value, value.to_string())
     };
 
-    let int_literal = AstExpression::IntegerLiteral { node_id, literal, literal_base: 10, value, kind };
+    let int_literal =
+        AstExpression::new(node_id, AstExpressionKind::IntegerLiteral { literal, literal_base: 10, value, kind });
 
     if is_negative {
         let node_id = make_constant_expr_node_id(data_type, chk);
-        AstExpression::UnaryOperation { node_id, op: AstUnaryOp::Negate, expr: Box::new(int_literal) }
+        AstExpression::new(node_id, AstExpressionKind::Unary { op: AstUnaryOp::Negate, operand: Box::new(int_literal) })
     } else {
         int_literal
     }
@@ -253,19 +264,19 @@ fn make_unsigned_integer_literal(
 ) -> AstExpression {
     let node_id = make_constant_expr_node_id(data_type, chk);
     let literal = value.to_string();
-    AstExpression::IntegerLiteral { node_id, literal, literal_base: 10, value, kind }
+    AstExpression::new(node_id, AstExpressionKind::IntegerLiteral { literal, literal_base: 10, value, kind })
 }
 
 fn make_fp_literal(value: f64, kind: AstFloatLiteralKind, data_type: AstType, chk: &mut TypeChecker) -> AstExpression {
     let node_id = make_constant_expr_node_id(data_type, chk);
     let literal = value.to_string();
-    AstExpression::FloatLiteral { node_id, literal, literal_base: 10, value, kind }
+    AstExpression::new(node_id, AstExpressionKind::FloatLiteral { literal, literal_base: 10, value, kind })
 }
 
 fn is_compound_assignment_with_constant_rhs(expr: &AstExpression, chk: &TypeChecker) -> bool {
-    if let AstExpression::Assignment { op, rhs, .. } = expr
+    if let AstExpressionKind::Assignment { op, rhs, .. } = expr.kind()
         && op.is_compound_assignment()
-        && chk.metadata.is_expr_flag_set(rhs.node_id(), AstExpressionFlag::IsConstant)
+        && chk.metadata.is_expr_flag_set(rhs.id(), AstExpressionFlag::IsConstant)
     {
         true
     } else {

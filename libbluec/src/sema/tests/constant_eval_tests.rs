@@ -701,7 +701,7 @@ fn evaluate_expr<'a>(expression_source_code: &str) -> Option<AstConstantValue> {
 
     let mut parser = Parser::new(tokens);
 
-    let expr = expr::parse_full_expression(&mut parser, &mut driver);
+    let expr = expr::parse_expression(&mut parser, &mut driver);
     if driver.has_error_diagnostics() {
         driver.debug_print_diagnostics();
         assert!(false, "Parser emitted errors");
@@ -713,7 +713,7 @@ fn evaluate_expr<'a>(expression_source_code: &str) -> Option<AstConstantValue> {
     let mut chk = type_check::TypeChecker::default();
     let mut eval = constant_eval::Eval::new(&mut chk, &mut driver);
     eval.set_diagnostics_enabled(false);
-    eval.evaluate_full_expr(&expr)
+    eval.evaluate_expr(&expr)
 }
 
 fn parse_and_type_check(driver: &mut compiler_driver::Driver, source: &str) {

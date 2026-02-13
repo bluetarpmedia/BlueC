@@ -7,6 +7,7 @@ mod ast_basic_type;
 mod ast_constant_value;
 mod ast_declarator;
 mod ast_declared_type;
+mod ast_expression;
 mod ast_identifier;
 mod ast_literals;
 mod ast_operators;
@@ -19,6 +20,7 @@ pub use self::ast_basic_type::*;
 pub use self::ast_constant_value::*;
 pub use self::ast_declarator::*;
 pub use self::ast_declared_type::*;
+pub use self::ast_expression::*;
 pub use self::ast_identifier::*;
 pub use self::ast_literals::*;
 pub use self::ast_operators::*;
@@ -103,7 +105,7 @@ pub enum AstBlockItem {
 /// A statement.
 #[derive(Debug)]
 pub enum AstStatement {
-    Expression(AstFullExpression),
+    Expression(AstExpression),
     Labeled {
         node_id: AstNodeId, // For the label declaration, not the inner statement.
         label_name: String,
@@ -112,18 +114,18 @@ pub enum AstStatement {
     Compound(AstBlock),
     Null, // An empty expression-statement, e.g. a single ';'
     If {
-        controlling_expr: AstFullExpression,
+        controlling_expr: AstExpression,
         then_stmt: Box<AstStatement>,
         else_stmt: Option<Box<AstStatement>>,
     },
     Switch {
         node_id: AstNodeId,
-        controlling_expr: AstFullExpression,
+        controlling_expr: AstExpression,
         body: Box<AstStatement>,
     },
     Case {
         switch_node_id: AstNodeId,
-        constant_expr: AstFullExpression,
+        constant_expr: AstExpression,
         stmt: Box<AstStatement>,
     },
     Default {
@@ -132,19 +134,19 @@ pub enum AstStatement {
     },
     While {
         node_id: AstNodeId,
-        controlling_expr: AstFullExpression,
+        controlling_expr: AstExpression,
         body: Box<AstStatement>,
     },
     DoWhile {
         node_id: AstNodeId,
         body: Box<AstStatement>,
-        controlling_expr: AstFullExpression,
+        controlling_expr: AstExpression,
     },
     For {
         node_id: AstNodeId,
         init: Box<AstForInitializer>, // Boxed to reduce variant size
-        controlling_expr: Option<AstFullExpression>,
-        post: Option<AstFullExpression>,
+        controlling_expr: Option<AstExpression>,
+        post_expr: Option<AstExpression>,
         body: Box<AstStatement>,
     },
     Break {
@@ -157,218 +159,12 @@ pub enum AstStatement {
         node_id: AstNodeId,
         label_name: String,
     },
-    Return(AstFullExpression),
+    Return(AstExpression),
 }
 
 /// A for-statement initializer can either be a variable declaration or an expression, or nothing.
 #[derive(Debug)]
 pub enum AstForInitializer {
     Declaration(Vec<AstDeclaration>),
-    Expression(Option<AstFullExpression>),
-}
-
-/// A full expression is an expression that is not a subexpression of another expression.
-#[derive(Debug, Clone, PartialEq)]
-pub struct AstFullExpression {
-    pub node_id: AstNodeId,
-    pub expr: AstExpression,
-}
-
-impl AstFullExpression {
-    /// Creates a new full expression which takes ownership of the `expr` expression tree.
-    pub fn new(expr: AstExpression) -> Self {
-        AstFullExpression { node_id: AstNodeId::new(), expr }
-    }
-}
-
-/// An expression, which may in fact be a subexpression inside a tree of a larger expression.
-#[derive(Debug, Clone, PartialEq)]
-pub enum AstExpression {
-    UnaryOperation {
-        node_id: AstNodeId,
-        op: AstUnaryOp,
-        expr: Box<AstExpression>,
-    },
-    BinaryOperation {
-        node_id: AstNodeId,
-        op: AstBinaryOp,
-        lhs: Box<AstExpression>,
-        rhs: Box<AstExpression>,
-    },
-    Assignment {
-        node_id: AstNodeId,
-        computation_node_id: AstNodeId, // For a compound assignment; used by sema to annotate computation type
-        op: AstAssignmentOp,
-        lhs: Box<AstExpression>,
-        rhs: Box<AstExpression>,
-    },
-    Conditional {
-        node_id: AstNodeId,
-        expr: Box<AstExpression>,
-        consequent: Box<AstExpression>,
-        alternative: Box<AstExpression>,
-    },
-    FunctionCall {
-        node_id: AstNodeId,
-        designator: Box<AstExpression>,
-        args_node_id: AstNodeId,
-        args: Vec<AstExpression>,
-    },
-    Deref {
-        node_id: AstNodeId,
-        expr: Box<AstExpression>,
-    },
-    AddressOf {
-        node_id: AstNodeId,
-        expr: Box<AstExpression>,
-    },
-    Subscript {
-        node_id: AstNodeId,
-        expr1: Box<AstExpression>, // Pointer and Index sub-expressions can be swapped so we name them 1 & 2.
-        expr2: Box<AstExpression>,
-    },
-    Cast {
-        node_id: AstNodeId,
-        target_type: AstDeclaredType,
-        expr: Box<AstExpression>,
-        is_implicit: bool, // Was the cast expression added by sema/type checking
-    },
-    Identifier {
-        node_id: AstNodeId,
-        name: String,
-        unique_name: AstUniqueName,
-    },
-    CharLiteral {
-        node_id: AstNodeId,
-        literal: String,
-        value: i32,
-    },
-    StringLiteral {
-        node_id: AstNodeId,
-        literals: Vec<String>, // Adjacent string literal tokens are concatenated
-        ascii: Vec<String>,
-    },
-    // Numeric literals are parsed as non-negative. A unary negate operator appears in the AST as a UnaryOperation,
-    // and is later translated into a negative integer/float value after parsing.
-    IntegerLiteral {
-        node_id: AstNodeId,
-        literal: String,
-        literal_base: usize,
-        value: u64, // The evaluated literal
-        kind: AstIntegerLiteralKind,
-    },
-    FloatLiteral {
-        node_id: AstNodeId,
-        literal: String,
-        literal_base: usize,
-        value: f64, // The evaluated literal
-        kind: AstFloatLiteralKind,
-    },
-}
-
-impl AstExpression {
-    /// Creates a new `AstExpression:IntegerLiteral` with the given value, in base 10.
-    pub fn new_int_literal(value: u64) -> Self {
-        AstExpression::IntegerLiteral {
-            node_id: AstNodeId::new(),
-            literal: value.to_string(),
-            literal_base: 10,
-            value,
-            kind: AstIntegerLiteralKind::Int,
-        }
-    }
-
-    /// Gets the node ID for the AST expression.
-    pub fn node_id(&self) -> AstNodeId {
-        match self {
-            AstExpression::UnaryOperation { node_id, .. } => *node_id,
-            AstExpression::BinaryOperation { node_id, .. } => *node_id,
-            AstExpression::Assignment { node_id, .. } => *node_id,
-            AstExpression::Conditional { node_id, .. } => *node_id,
-            AstExpression::FunctionCall { node_id, .. } => *node_id,
-            AstExpression::Deref { node_id, .. } => *node_id,
-            AstExpression::AddressOf { node_id, .. } => *node_id,
-            AstExpression::Subscript { node_id, .. } => *node_id,
-            AstExpression::Cast { node_id, .. } => *node_id,
-            AstExpression::Identifier { node_id, .. } => *node_id,
-            AstExpression::CharLiteral { node_id, .. } => *node_id,
-            AstExpression::StringLiteral { node_id, .. } => *node_id,
-            AstExpression::IntegerLiteral { node_id, .. } => *node_id,
-            AstExpression::FloatLiteral { node_id, .. } => *node_id,
-        }
-    }
-
-    /// Is the AST expression an l-value?
-    pub fn is_lvalue(&self) -> bool {
-        matches!(
-            self,
-            AstExpression::Identifier { .. }
-                | AstExpression::Deref { .. }
-                | AstExpression::Subscript { .. }
-                | AstExpression::StringLiteral { .. }
-        )
-    }
-
-    /// Is the AST expression a literal?
-    pub fn is_literal(&self) -> bool {
-        matches!(
-            self,
-            AstExpression::CharLiteral { .. }
-                | AstExpression::StringLiteral { .. }
-                | AstExpression::IntegerLiteral { .. }
-                | AstExpression::FloatLiteral { .. }
-        )
-    }
-
-    /// Is the AST expression an arithmetic (character, integer or floating-point) literal?
-    pub fn is_arithmetic_literal(&self) -> bool {
-        matches!(
-            self,
-            AstExpression::CharLiteral { .. }
-                | AstExpression::IntegerLiteral { .. }
-                | AstExpression::FloatLiteral { .. }
-        )
-    }
-
-    /// Is the AST expression a string literal?
-    pub fn is_string_literal(&self) -> bool {
-        matches!(self, AstExpression::StringLiteral { .. })
-    }
-
-    /// Is the AST expression an integer literal?
-    pub fn is_integer_literal(&self) -> bool {
-        matches!(self, AstExpression::IntegerLiteral { .. })
-    }
-
-    /// Is the AST expression an integer literal with the given value?
-    pub fn is_integer_literal_with_value(&self, value: u64) -> bool {
-        if let AstExpression::IntegerLiteral { value: literal_value, .. } = self
-            && *literal_value == value
-        {
-            true
-        } else {
-            false
-        }
-    }
-
-    /// Is the AST expression an identifier of the given declared name?
-    pub fn is_identifier_with_name(&self, declared_name: &str) -> bool {
-        if let AstExpression::Identifier { name, .. } = self { name == declared_name } else { false }
-    }
-
-    /// Is the AST expression a binary operation?
-    pub fn is_binary_expr(&self) -> bool {
-        matches!(self, AstExpression::BinaryOperation { .. })
-    }
-
-    /// Is the AST expression a binary operation with the given operator?
-    pub fn is_binary_expr_with_op(&self, op: AstBinaryOp) -> bool {
-        if let AstExpression::BinaryOperation { op: binary_op, .. } = self
-            && *binary_op == op
-        {
-            true
-        } else {
-            false
-        }
-    }
+    Expression(Option<AstExpression>),
 }

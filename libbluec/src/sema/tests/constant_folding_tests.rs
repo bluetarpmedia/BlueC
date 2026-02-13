@@ -4,7 +4,7 @@ use crate::compiler_driver::Driver;
 use crate::parser::recursive_descent;
 use crate::parser::tests::utils;
 use crate::parser::{
-    AstBinaryOp, AstExpression, AstFullExpression, AstFunction, AstRoot, AstStatement, AstVariableDeclaration,
+    AstBinaryOp, AstExpression, AstExpressionKind, AstFunction, AstRoot, AstStatement, AstVariableDeclaration,
     AstVariableInitializer, Parser,
 };
 
@@ -80,7 +80,7 @@ fn partial_fold_add() {
     let mut ast_root = parse_and_fold(source, &mut driver);
 
     let is_expected = |expr: &AstExpression| -> bool {
-        let AstExpression::BinaryOperation { op, lhs, rhs, .. } = expr else {
+        let AstExpressionKind::Binary { op, lhs, rhs, .. } = expr.kind() else {
             return false;
         };
 
@@ -88,7 +88,7 @@ fn partial_fold_add() {
             return false;
         }
 
-        let AstExpression::BinaryOperation { op: l_op, lhs: l_left, rhs: l_right, .. } = lhs.as_ref() else {
+        let AstExpressionKind::Binary { op: l_op, lhs: l_left, rhs: l_right, .. } = lhs.as_ref().kind() else {
             return false;
         };
 
@@ -109,8 +109,8 @@ fn partial_fold_add() {
     visitor::visit_variable_declarations(&mut ast_root, &mut |var_decl: &mut AstVariableDeclaration| {
         if let Some(init) = var_decl.initializer.as_ref() {
             match init {
-                AstVariableInitializer::Scalar(full_expr) => {
-                    if is_expected(&full_expr.expr) {
+                AstVariableInitializer::Scalar(expr) => {
+                    if is_expected(expr) {
                         found_expected_count += 1;
                     }
                 }
@@ -144,7 +144,7 @@ fn partial_fold_multiply() {
     let mut ast_root = parse_and_fold(source, &mut driver);
 
     let is_expected = |expr: &AstExpression| -> bool {
-        let AstExpression::BinaryOperation { op, lhs, rhs, .. } = expr else {
+        let AstExpressionKind::Binary { op, lhs, rhs, .. } = expr.kind() else {
             return false;
         };
 
@@ -160,8 +160,8 @@ fn partial_fold_multiply() {
     visitor::visit_variable_declarations(&mut ast_root, &mut |var_decl: &mut AstVariableDeclaration| {
         if let Some(init) = var_decl.initializer.as_ref() {
             match init {
-                AstVariableInitializer::Scalar(full_expr) => {
-                    if is_expected(&full_expr.expr) {
+                AstVariableInitializer::Scalar(expr) => {
+                    if is_expected(expr) {
                         found_expected_count += 1;
                     }
                 }
@@ -176,13 +176,13 @@ fn partial_fold_multiply() {
 fn get_return_integer_value(ast_root: &mut AstRoot) -> u64 {
     let mut ret_value = 0;
 
-    visitor::visit_functions(ast_root, &mut |func: &mut AstFunction| {
+    visitor::visit_function_defns(ast_root, &mut |func: &mut AstFunction| {
         let block = func.body.as_mut().unwrap();
 
         visitor::visit_statements_in_block(block, &mut |stmt: &mut AstStatement| match stmt {
-            AstStatement::Return(full_expr) => {
-                if let AstExpression::IntegerLiteral { value, .. } = full_expr.expr {
-                    ret_value = value;
+            AstStatement::Return(expr) => {
+                if let AstExpressionKind::IntegerLiteral { value, .. } = expr.kind() {
+                    ret_value = *value;
                 } else {
                     assert!(false, "Not an integer literal");
                 }
@@ -197,13 +197,13 @@ fn get_return_integer_value(ast_root: &mut AstRoot) -> u64 {
 fn get_return_f64_value(ast_root: &mut AstRoot) -> f64 {
     let mut ret_value = 0.0_f64;
 
-    visitor::visit_functions(ast_root, &mut |func: &mut AstFunction| {
+    visitor::visit_function_defns(ast_root, &mut |func: &mut AstFunction| {
         let block = func.body.as_mut().unwrap();
 
         visitor::visit_statements_in_block(block, &mut |stmt: &mut AstStatement| match stmt {
-            AstStatement::Return(full_expr) => {
-                if let AstExpression::FloatLiteral { value, .. } = full_expr.expr {
-                    ret_value = value;
+            AstStatement::Return(expr) => {
+                if let AstExpressionKind::FloatLiteral { value, .. } = expr.kind() {
+                    ret_value = *value;
                 } else {
                     assert!(false, "Not a floating-point literal");
                 }
@@ -218,12 +218,12 @@ fn get_return_f64_value(ast_root: &mut AstRoot) -> f64 {
 fn get_function_call_int_argument(ast_root: &mut AstRoot) -> u64 {
     let mut ret_value = 0;
 
-    visitor::visit_full_expressions(ast_root, &mut |full_expr: &mut AstFullExpression| {
-        visitor::visit_expressions_in_full_expression(full_expr, &mut |expr: &mut AstExpression| match expr {
-            AstExpression::FunctionCall { args, .. } => {
+    visitor::visit_full_expressions(ast_root, &mut |full_expr: &mut AstExpression| {
+        visitor::visit_sub_expressions(full_expr, &mut |expr: &mut AstExpression| match expr.kind() {
+            AstExpressionKind::FunctionCall { args, .. } => {
                 if args.len() == 1 {
-                    match args[0] {
-                        AstExpression::IntegerLiteral { value, .. } => ret_value = value,
+                    match args[0].kind() {
+                        AstExpressionKind::IntegerLiteral { value, .. } => ret_value = *value,
                         _ => (),
                     }
                 }
