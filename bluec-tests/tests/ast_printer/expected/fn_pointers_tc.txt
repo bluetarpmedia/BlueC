@@ -1,0 +1,175 @@
+TranslationUnit
+├ FunctionDefn: add, signature: "int (int, int)" [Type = 'int (int, int)']
+│ ├ Linkage: external
+│ ├ Params
+│ │ ├ ParamDecl: a [id.a.0] [Type = 'int']
+│ │ └ ParamDecl: b [id.b.1] [Type = 'int']
+│ └ Body
+│   └ ReturnStmt
+│     └ Binary (Add +) [Type = 'int']
+│       ├ Ident: a [id.a.0] [Type = 'int']
+│       └ Ident: b [id.b.1] [Type = 'int']
+├ FunctionDefn: multiply, signature: "int (int, int)" [Type = 'int (int, int)']
+│ ├ Linkage: external
+│ ├ Params
+│ │ ├ ParamDecl: a [id.a.2] [Type = 'int']
+│ │ └ ParamDecl: b [id.b.3] [Type = 'int']
+│ └ Body
+│   └ ReturnStmt
+│     └ Binary (Multiply *) [Type = 'int']
+│       ├ Ident: a [id.a.2] [Type = 'int']
+│       └ Ident: b [id.b.3] [Type = 'int']
+├ FunctionDefn: switch_to_multiply, signature: "int (int (**)(int, int))" [Type = 'int (int (**)(int, int))']
+│ ├ Linkage: external
+│ ├ Params
+│ │ └ ParamDecl: ptr_to_ptr [id.ptr_to_ptr.4] [Type = 'int (**)(int, int)']
+│ └ Body
+│   ├ ExprStmt
+│   │ └ Assignment [Type = 'int (*)(int, int)']
+│   │   ├ Deref [Type = 'int (*)(int, int)']
+│   │   │ └ Ident: ptr_to_ptr [id.ptr_to_ptr.4] [Type = 'int (**)(int, int)']
+│   │   └ AddressOf [Type = 'int (*)(int, int)']
+│   │     └ Ident: multiply [multiply] [Type = 'int (int, int)']
+│   └ ReturnStmt
+│     └ IntegerLiteral(0) [Type = 'int'] [ConstantExpr]
+└ FunctionDefn: main, signature: "int (void)" [Type = 'int (void)']
+  ├ Linkage: external
+  ├ Params: none
+  └ Body
+    ├ VariableDefn: x [id.x.5], declared="int" [Type = 'int']
+    │ ├ Linkage: none
+    │ ├ Storage: automatic
+    │ └ Initializer
+    │   └ IntegerLiteral(10) [Type = 'int'] [ConstantExpr]
+    ├ VariableDefn: y [id.y.6], declared="int" [Type = 'int']
+    │ ├ Linkage: none
+    │ ├ Storage: automatic
+    │ └ Initializer
+    │   └ IntegerLiteral(5) [Type = 'int'] [ConstantExpr]
+    ├ VariableDefn: fn_ptr [id.fn_ptr.7], declared="int (*)(int, int)" [Type = 'int (*)(int, int)']
+    │ ├ Linkage: none
+    │ ├ Storage: automatic
+    │ └ Initializer
+    │   └ AddressOf [Type = 'int (*)(int, int)']
+    │     └ Ident: add [add] [Type = 'int (int, int)']
+    ├ IfStmt
+    │ ├ Condition
+    │ │ └ Binary (NotEqualTo !=) [Type = 'int']
+    │ │   ├ Call [Type = 'int']
+    │ │   │ ├ Designator
+    │ │   │ │ └ Ident: fn_ptr [id.fn_ptr.7] [Type = 'int (*)(int, int)']
+    │ │   │ └ Args
+    │ │   │   ├ Ident: x [id.x.5] [Type = 'int']
+    │ │   │   └ Ident: y [id.y.6] [Type = 'int']
+    │ │   └ IntegerLiteral(15) [Type = 'int'] [ConstantExpr]
+    │ └ Then
+    │   └ CompoundStmt
+    │     └ ReturnStmt
+    │       └ IntegerLiteral(1) [Type = 'int'] [ConstantExpr]
+    ├ ExprStmt
+    │ └ Assignment [Type = 'int (*)(int, int)']
+    │   ├ Ident: fn_ptr [id.fn_ptr.7] [Type = 'int (*)(int, int)']
+    │   └ AddressOf [Type = 'int (*)(int, int)']
+    │     └ Ident: multiply [multiply] [Type = 'int (int, int)']
+    ├ IfStmt
+    │ ├ Condition
+    │ │ └ Binary (NotEqualTo !=) [Type = 'int']
+    │ │   ├ Call [Type = 'int']
+    │ │   │ ├ Designator
+    │ │   │ │ └ Deref [Type = 'int (int, int)']
+    │ │   │ │   └ Ident: fn_ptr [id.fn_ptr.7] [Type = 'int (*)(int, int)']
+    │ │   │ └ Args
+    │ │   │   ├ IntegerLiteral(100) [Type = 'int'] [ConstantExpr]
+    │ │   │   └ IntegerLiteral(2) [Type = 'int'] [ConstantExpr]
+    │ │   └ IntegerLiteral(200) [Type = 'int'] [ConstantExpr]
+    │ └ Then
+    │   └ CompoundStmt
+    │     └ ReturnStmt
+    │       └ IntegerLiteral(2) [Type = 'int'] [ConstantExpr]
+    ├ ExprStmt
+    │ └ Assignment [Type = 'int (*)(int, int)']
+    │   ├ Ident: fn_ptr [id.fn_ptr.7] [Type = 'int (*)(int, int)']
+    │   └ AddressOf [Type = 'int (*)(int, int)']
+    │     └ Ident: add [add] [Type = 'int (int, int)']
+    ├ IfStmt
+    │ ├ Condition
+    │ │ └ Binary (NotEqualTo !=) [Type = 'int']
+    │ │   ├ Call [Type = 'int']
+    │ │   │ ├ Designator
+    │ │   │ │ └ Deref [Type = 'int (int, int)']
+    │ │   │ │   └ Ident: fn_ptr [id.fn_ptr.7] [Type = 'int (*)(int, int)']
+    │ │   │ └ Args
+    │ │   │   ├ Ident: x [id.x.5] [Type = 'int']
+    │ │   │   └ Ident: y [id.y.6] [Type = 'int']
+    │ │   └ IntegerLiteral(15) [Type = 'int'] [ConstantExpr]
+    │ └ Then
+    │   └ CompoundStmt
+    │     └ ReturnStmt
+    │       └ IntegerLiteral(3) [Type = 'int'] [ConstantExpr]
+    ├ VariableDefn: ptr_to_object [id.ptr_to_object.8], declared="int (**)(int, int)" [Type = 'int (**)(int, int)']
+    │ ├ Linkage: none
+    │ ├ Storage: automatic
+    │ └ Initializer
+    │   └ AddressOf [Type = 'int (**)(int, int)']
+    │     └ Ident: fn_ptr [id.fn_ptr.7] [Type = 'int (*)(int, int)']
+    ├ ExprStmt
+    │ └ Call [Type = 'int']
+    │   ├ Designator
+    │   │ └ Ident: switch_to_multiply [switch_to_multiply] [Type = 'int (int (**)(int, int))']
+    │   └ Args
+    │     └ Ident: ptr_to_object [id.ptr_to_object.8] [Type = 'int (**)(int, int)']
+    ├ IfStmt
+    │ ├ Condition
+    │ │ └ Binary (NotEqualTo !=) [Type = 'int']
+    │ │   ├ Call [Type = 'int']
+    │ │   │ ├ Designator
+    │ │   │ │ └ Ident: fn_ptr [id.fn_ptr.7] [Type = 'int (*)(int, int)']
+    │ │   │ └ Args
+    │ │   │   ├ Ident: x [id.x.5] [Type = 'int']
+    │ │   │   └ Ident: y [id.y.6] [Type = 'int']
+    │ │   └ IntegerLiteral(50) [Type = 'int'] [ConstantExpr]
+    │ └ Then
+    │   └ CompoundStmt
+    │     └ ReturnStmt
+    │       └ IntegerLiteral(4) [Type = 'int'] [ConstantExpr]
+    ├ IfStmt
+    │ ├ Condition
+    │ │ └ Binary (NotEqualTo !=) [Type = 'int']
+    │ │   ├ Call [Type = 'int']
+    │ │   │ ├ Designator
+    │ │   │ │ └ Deref [Type = 'int (int, int)']
+    │ │   │ │   └ Deref [Type = 'int (*)(int, int)']
+    │ │   │ │     └ Ident: ptr_to_object [id.ptr_to_object.8] [Type = 'int (**)(int, int)']
+    │ │   │ └ Args
+    │ │   │   ├ Ident: x [id.x.5] [Type = 'int']
+    │ │   │   └ Ident: y [id.y.6] [Type = 'int']
+    │ │   └ IntegerLiteral(50) [Type = 'int'] [ConstantExpr]
+    │ └ Then
+    │   └ CompoundStmt
+    │     └ ReturnStmt
+    │       └ IntegerLiteral(5) [Type = 'int'] [ConstantExpr]
+    ├ ExprStmt
+    │ └ Assignment [Type = 'int (*)(int, int)']
+    │   ├ Ident: fn_ptr [id.fn_ptr.7] [Type = 'int (*)(int, int)']
+    │   └ AddressOf [Type = 'int (*)(int, int)']
+    │     └ Ident: add [add] [Type = 'int (int, int)']
+    ├ IfStmt
+    │ ├ Condition
+    │ │ └ Binary (NotEqualTo !=) [Type = 'int']
+    │ │   ├ Call [Type = 'int']
+    │ │   │ ├ Designator
+    │ │   │ │ └ Deref [Type = 'int (int, int)']
+    │ │   │ │   └ Ident: fn_ptr [id.fn_ptr.7] [Type = 'int (*)(int, int)']
+    │ │   │ └ Args
+    │ │   │   ├ Unary (Negate -) [Type = 'int'] [ConstantExpr]
+    │ │   │   │ └ IntegerLiteral(50) [Type = 'int'] [ConstantExpr]
+    │ │   │   └ Unary (Negate -) [Type = 'int'] [ConstantExpr]
+    │ │   │     └ IntegerLiteral(50) [Type = 'int'] [ConstantExpr]
+    │ │   └ Unary (Negate -) [Type = 'int'] [ConstantExpr]
+    │ │     └ IntegerLiteral(100) [Type = 'int'] [ConstantExpr]
+    │ └ Then
+    │   └ CompoundStmt
+    │     └ ReturnStmt
+    │       └ IntegerLiteral(6) [Type = 'int'] [ConstantExpr]
+    └ ReturnStmt
+      └ IntegerLiteral(0) [Type = 'int'] [ConstantExpr]

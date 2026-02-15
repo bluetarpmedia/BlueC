@@ -157,6 +157,7 @@ impl Parser {
         options.print_ast = is_flag_set("print-ast");
         options.print_typechecked_ast = is_flag_set("print-tast");
         options.print_ir = is_flag_set("print-ir");
+        options.no_color = is_flag_set("no-color");
         options.flags = self.f_flags;
 
         options
@@ -353,6 +354,7 @@ static OPTIONS: &[&str] = &[
     "-W<warning>",           "Enable a specific warning",
     "-Wno-<warning>",        "Disable a specific warning",
     "","",
+    "--no-color",            "Disables ANSI color code escape sequences when printing to 'stdout' or 'stderr'",
     "-fprint-terse",         "Print terse diagnostics without text wrapping, nor filename/line/column and source code",
     "-fprint-no-source-loc", "Print diagnostics without filename/line/column",
     "","",

@@ -1,0 +1,76 @@
+TranslationUnit
+├ VariableDefn: x [x], declared="long [4]" [Type = 'long [4]']
+│ ├ Linkage: external
+│ ├ Storage: static
+│ └ Initializer
+│   ├ Aggregate [Type = 'long [4]'] [ConstantExpr]
+│   │ ├ ImplicitCast (long) [Type = 'long'] [ConstantExpr]
+│   │ │ └ IntegerLiteral(1) [Type = 'int'] [ConstantExpr]
+│   │ ├ ImplicitCast (long) [Type = 'long'] [ConstantExpr]
+│   │ │ └ IntegerLiteral(2) [Type = 'int'] [ConstantExpr]
+│   │ ├ ImplicitCast (long) [Type = 'long'] [ConstantExpr]
+│   │ │ └ IntegerLiteral(3) [Type = 'int'] [ConstantExpr]
+│   │ └ ImplicitCast (long) [Type = 'long'] [ConstantExpr]
+│   │   └ IntegerLiteral(4) [Type = 'int'] [ConstantExpr]
+│   └ Constant Eval: {{ 1, 2, 3, 4 }}
+├ VariableDefn: ptr [ptr], declared="long *" [Type = 'long *']
+│ ├ Linkage: external
+│ ├ Storage: static
+│ └ Initializer
+│   ├ AddressOf [Type = 'long *']
+│   │ └ Subscript [Type = 'long']
+│   │   ├ AddressOf [Type = 'long *']
+│   │   │ └ Ident: x [x] [Type = 'long [4]']
+│   │   └ IntegerLiteral(0) [Type = 'int'] [ConstantExpr]
+│   └ Constant Eval: long *
+├ VariableDefn: a [a], declared="int" [Type = 'int']
+│ ├ Linkage: external
+│ ├ Storage: static
+│ └ Initializer
+│   ├ Binary (Add +) [Type = 'int'] [ConstantExpr]
+│   │ ├ Binary (Add +) [Type = 'int'] [ConstantExpr]
+│   │ │ ├ IntegerLiteral(1) [Type = 'int'] [ConstantExpr]
+│   │ │ └ IntegerLiteral(2) [Type = 'int'] [ConstantExpr]
+│   │ └ IntegerLiteral(3) [Type = 'int'] [ConstantExpr]
+│   └ Constant Eval: 6
+├ VariableDefn: b [b], declared="float" [Type = 'float']
+│ ├ Linkage: external
+│ ├ Storage: static
+│ └ Initializer
+│   ├ FloatLiteral(Float = 2.0) [Type = 'float'] [ConstantExpr]
+│   └ Constant Eval: 2
+└ FunctionDefn: main, signature: "int (void)" [Type = 'int (void)']
+  ├ Linkage: external
+  ├ Params: none
+  └ Body
+    ├ VariableDefn: text [id.text.0], declared="char [4]" [Type = 'char [4]']
+    │ ├ Linkage: none
+    │ ├ Storage: automatic
+    │ └ Initializer
+    │   └ StringLiteral("abcd" ["abcd"]) [Type = 'char [4]'] [ConstantExpr]
+    ├ VariableDefn: str [id.str.1], declared="char *" [Type = 'char *']
+    │ ├ Linkage: none
+    │ ├ Storage: automatic
+    │ └ Initializer
+    │   └ AddressOf [Type = 'char *'] [ConstantExpr]
+    │     └ StringLiteral("Hello, world!\n" ["Hello, world!\n"]) [Type = 'char [15]'] [ConstantExpr]
+    ├ VariableDefn: s [id.s.2], declared="short" [Type = 'short']
+    │ ├ Linkage: none
+    │ ├ Storage: automatic
+    │ └ Initializer
+    │   └ ImplicitCast (short) [Type = 'short'] [ConstantExpr]
+    │     └ IntegerLiteral(1) [Type = 'int'] [ConstantExpr]
+    ├ VariableDefn: c [id.c.3], declared="char" [Type = 'char']
+    │ ├ Linkage: none
+    │ ├ Storage: automatic
+    │ └ Initializer
+    │   └ ImplicitCast (char) [Type = 'char'] [ConstantExpr]
+    │     └ CharLiteral('a' [97]) [Type = 'int'] [ConstantExpr]
+    ├ VariableDefn: dd [id.dd.4], declared="long double" [Type = 'long double']
+    │ ├ Linkage: none
+    │ ├ Storage: automatic
+    │ └ Initializer
+    │   └ ImplicitCast (long double) [Type = 'long double'] [ConstantExpr]
+    │     └ FloatLiteral(Double = 1.0) [Type = 'double'] [ConstantExpr]
+    └ ReturnStmt
+      └ IntegerLiteral(0) [Type = 'int'] [ConstantExpr]

@@ -1,0 +1,76 @@
+[95mTranslationUnit[0m
+├ [92mVariableDefn[0m: [97mx[0m [x], declared="long [4]" [33m[Type = '[93mlong [4][33m'][0m
+│ ├ Linkage: external
+│ ├ Storage: static
+│ └ Initializer
+│   ├ Aggregate [33m[Type = '[93mlong [4][33m'][0m[33m [ConstantExpr][0m
+│   │ ├ [96mImplicitCast[0m ([96mlong[0m) [33m[Type = '[93mlong[33m'][0m[33m [ConstantExpr][0m
+│   │ │ └ [96mIntegerLiteral[0m([96m1[0m) [33m[Type = '[93mint[33m'][0m[33m [ConstantExpr][0m
+│   │ ├ [96mImplicitCast[0m ([96mlong[0m) [33m[Type = '[93mlong[33m'][0m[33m [ConstantExpr][0m
+│   │ │ └ [96mIntegerLiteral[0m([96m2[0m) [33m[Type = '[93mint[33m'][0m[33m [ConstantExpr][0m
+│   │ ├ [96mImplicitCast[0m ([96mlong[0m) [33m[Type = '[93mlong[33m'][0m[33m [ConstantExpr][0m
+│   │ │ └ [96mIntegerLiteral[0m([96m3[0m) [33m[Type = '[93mint[33m'][0m[33m [ConstantExpr][0m
+│   │ └ [96mImplicitCast[0m ([96mlong[0m) [33m[Type = '[93mlong[33m'][0m[33m [ConstantExpr][0m
+│   │   └ [96mIntegerLiteral[0m([96m4[0m) [33m[Type = '[93mint[33m'][0m[33m [ConstantExpr][0m
+│   └ Constant Eval: {{ [96m1[0m, [96m2[0m, [96m3[0m, [96m4[0m }}
+├ [92mVariableDefn[0m: [97mptr[0m [ptr], declared="long *" [33m[Type = '[93mlong *[33m'][0m
+│ ├ Linkage: external
+│ ├ Storage: static
+│ └ Initializer
+│   ├ [96mAddressOf[0m [33m[Type = '[93mlong *[33m'][0m[33m[0m
+│   │ └ [96mSubscript[0m [33m[Type = '[93mlong[33m'][0m[33m[0m
+│   │   ├ [96mAddressOf[0m [33m[Type = '[93mlong *[33m'][0m[33m[0m
+│   │   │ └ [96mIdent[0m: [97mx[0m [x] [33m[Type = '[93mlong [4][33m'][0m[33m[0m
+│   │   └ [96mIntegerLiteral[0m([96m0[0m) [33m[Type = '[93mint[33m'][0m[33m [ConstantExpr][0m
+│   └ Constant Eval: [96mlong *[0m
+├ [92mVariableDefn[0m: [97ma[0m [a], declared="int" [33m[Type = '[93mint[33m'][0m
+│ ├ Linkage: external
+│ ├ Storage: static
+│ └ Initializer
+│   ├ [96mBinary[0m ([96mAdd +[0m) [33m[Type = '[93mint[33m'][0m[33m [ConstantExpr][0m
+│   │ ├ [96mBinary[0m ([96mAdd +[0m) [33m[Type = '[93mint[33m'][0m[33m [ConstantExpr][0m
+│   │ │ ├ [96mIntegerLiteral[0m([96m1[0m) [33m[Type = '[93mint[33m'][0m[33m [ConstantExpr][0m
+│   │ │ └ [96mIntegerLiteral[0m([96m2[0m) [33m[Type = '[93mint[33m'][0m[33m [ConstantExpr][0m
+│   │ └ [96mIntegerLiteral[0m([96m3[0m) [33m[Type = '[93mint[33m'][0m[33m [ConstantExpr][0m
+│   └ Constant Eval: [96m6[0m
+├ [92mVariableDefn[0m: [97mb[0m [b], declared="float" [33m[Type = '[93mfloat[33m'][0m
+│ ├ Linkage: external
+│ ├ Storage: static
+│ └ Initializer
+│   ├ [96mFloatLiteral[0m(Float = [96m2.0[0m) [33m[Type = '[93mfloat[33m'][0m[33m [ConstantExpr][0m
+│   └ Constant Eval: [96m2[0m
+└ [92mFunctionDefn[0m: [97mmain[0m, signature: "int (void)" [33m[Type = '[93mint (void)[33m'][0m
+  ├ Linkage: external
+  ├ [92mParams[0m: none
+  └ [95mBody[0m
+    ├ [92mVariableDefn[0m: [97mtext[0m [id.text.0], declared="char [4]" [33m[Type = '[93mchar [4][33m'][0m
+    │ ├ Linkage: none
+    │ ├ Storage: automatic
+    │ └ Initializer
+    │   └ [96mStringLiteral[0m("abcd" ["abcd"]) [33m[Type = '[93mchar [4][33m'][0m[33m [ConstantExpr][0m
+    ├ [92mVariableDefn[0m: [97mstr[0m [id.str.1], declared="char *" [33m[Type = '[93mchar *[33m'][0m
+    │ ├ Linkage: none
+    │ ├ Storage: automatic
+    │ └ Initializer
+    │   └ [96mAddressOf[0m [33m[Type = '[93mchar *[33m'][0m[33m [ConstantExpr][0m
+    │     └ [96mStringLiteral[0m("Hello, world!\n" ["Hello, world!\n"]) [33m[Type = '[93mchar [15][33m'][0m[33m [ConstantExpr][0m
+    ├ [92mVariableDefn[0m: [97ms[0m [id.s.2], declared="short" [33m[Type = '[93mshort[33m'][0m
+    │ ├ Linkage: none
+    │ ├ Storage: automatic
+    │ └ Initializer
+    │   └ [96mImplicitCast[0m ([96mshort[0m) [33m[Type = '[93mshort[33m'][0m[33m [ConstantExpr][0m
+    │     └ [96mIntegerLiteral[0m([96m1[0m) [33m[Type = '[93mint[33m'][0m[33m [ConstantExpr][0m
+    ├ [92mVariableDefn[0m: [97mc[0m [id.c.3], declared="char" [33m[Type = '[93mchar[33m'][0m
+    │ ├ Linkage: none
+    │ ├ Storage: automatic
+    │ └ Initializer
+    │   └ [96mImplicitCast[0m ([96mchar[0m) [33m[Type = '[93mchar[33m'][0m[33m [ConstantExpr][0m
+    │     └ [96mCharLiteral[0m([96m'a'[0m [[96m97[0m]) [33m[Type = '[93mint[33m'][0m[33m [ConstantExpr][0m
+    ├ [92mVariableDefn[0m: [97mdd[0m [id.dd.4], declared="long double" [33m[Type = '[93mlong double[33m'][0m
+    │ ├ Linkage: none
+    │ ├ Storage: automatic
+    │ └ Initializer
+    │   └ [96mImplicitCast[0m ([96mlong double[0m) [33m[Type = '[93mlong double[33m'][0m[33m [ConstantExpr][0m
+    │     └ [96mFloatLiteral[0m(Double = [96m1.0[0m) [33m[Type = '[93mdouble[33m'][0m[33m [ConstantExpr][0m
+    └ [95mReturnStmt[0m
+      └ [96mIntegerLiteral[0m([96m0[0m) [33m[Type = '[93mint[33m'][0m[33m [ConstantExpr][0m

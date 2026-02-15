@@ -218,7 +218,7 @@ pub fn parse(driver: &mut Driver, tokens: Vec<lexer::Token>) {
 
     // If client wants to print the parsed AST then we're done.
     if driver.options().print_ast {
-        printer::print(&ast, &metadata);
+        printer::print(&ast, &metadata, driver);
         return;
     }
 

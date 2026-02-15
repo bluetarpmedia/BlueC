@@ -56,6 +56,7 @@ Options:
   -W<warning>            Enable a specific warning
   -Wno-<warning>         Disable a specific warning
 
+  --no-color             Disables ANSI color code escape sequences in output
   -fprint-terse          Print terse diagnostics without text wrapping, nor
                          filename/line/column and source code
   -fprint-no-source-loc  Print diagnostics without filename/line/column

@@ -43,11 +43,15 @@ pub struct AstDeclaredType {
 
 impl fmt::Display for AstDeclaredType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.basic_type)?;
-        if let Some(declarator) = &self.declarator {
-            write!(f, " {declarator}")?;
+        if let Some(resolved_type) = &self.resolved_type {
+            write!(f, "{resolved_type}")
+        } else {
+            write!(f, "{}", self.basic_type)?;
+            if let Some(declarator) = &self.declarator {
+                write!(f, " {declarator}")?;
+            }
+            Ok(())
         }
-        Ok(())
     }
 }
 

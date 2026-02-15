@@ -51,6 +51,9 @@ pub struct DriverOptions {
     /// Prints the BlueTac intermediate representation and stops after lowering to IR.
     pub print_ir: bool,
 
+    /// By default, the BlueC driver prints with ANSI color to `stdout` or `stderr`. Set this to true to disable color.
+    pub no_color: bool,
+
     /// Flags which were passed on the command-line as '-f<flag>'.
     pub flags: HashSet<String>,
 

@@ -132,6 +132,23 @@ impl fmt::Display for AstAssignmentOp {
     }
 }
 
+impl From<AstUnaryOp> for lexer::TokenType {
+    fn from(op: AstUnaryOp) -> Self {
+        match op {
+            AstUnaryOp::Negate => lexer::TokenType::Minus,
+            AstUnaryOp::Plus => lexer::TokenType::Plus,
+            AstUnaryOp::BitwiseNot => lexer::TokenType::BitwiseNot,
+            AstUnaryOp::LogicalNot => lexer::TokenType::LogicalNot,
+            AstUnaryOp::PrefixIncrement => lexer::TokenType::Increment,
+            AstUnaryOp::PrefixDecrement => lexer::TokenType::Decrement,
+            AstUnaryOp::PostfixIncrement => lexer::TokenType::Increment,
+            AstUnaryOp::PostfixDecrement => lexer::TokenType::Decrement,
+            AstUnaryOp::Deref => lexer::TokenType::Multiply,
+            AstUnaryOp::AddressOf => lexer::TokenType::BitwiseAnd,
+        }
+    }
+}
+
 impl From<AstBinaryOp> for lexer::TokenType {
     fn from(op: AstBinaryOp) -> Self {
         match op {

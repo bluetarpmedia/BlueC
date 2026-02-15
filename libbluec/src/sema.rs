@@ -89,7 +89,7 @@ pub fn semantic_analysis(mut ast_root: parser::AstRoot, metadata: parser::AstMet
 
     // If client wants to print the typechecked AST then we're done.
     if driver.options().print_typechecked_ast {
-        parser::printer::print(&ast_root, &chk.metadata);
+        parser::printer::print(&ast_root, &chk.metadata, driver);
         return;
     }
 

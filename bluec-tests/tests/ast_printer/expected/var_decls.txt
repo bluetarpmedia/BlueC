@@ -1,0 +1,67 @@
+TranslationUnit
+├ VariableDefn: x [x], declared="long x[]"
+│ ├ Linkage: external
+│ ├ Storage: static
+│ └ Initializer
+│   └ Aggregate [ConstantExpr]
+│     ├ IntegerLiteral(Int = 1) [ConstantExpr]
+│     ├ IntegerLiteral(Int = 2) [ConstantExpr]
+│     ├ IntegerLiteral(Int = 3) [ConstantExpr]
+│     └ IntegerLiteral(Int = 4) [ConstantExpr]
+├ VariableDefn: ptr [ptr], declared="long *ptr"
+│ ├ Linkage: external
+│ ├ Storage: static
+│ └ Initializer
+│   └ AddressOf
+│     └ Subscript
+│       ├ Ident: x [x]
+│       └ IntegerLiteral(Int = 0) [ConstantExpr]
+├ VariableDefn: a [a], declared="int a"
+│ ├ Linkage: external
+│ ├ Storage: static
+│ └ Initializer
+│   └ Binary (Add +) [ConstantExpr]
+│     ├ Binary (Add +) [ConstantExpr]
+│     │ ├ IntegerLiteral(Int = 1) [ConstantExpr]
+│     │ └ IntegerLiteral(Int = 2) [ConstantExpr]
+│     └ IntegerLiteral(Int = 3) [ConstantExpr]
+├ VariableDefn: b [b], declared="float b"
+│ ├ Linkage: external
+│ ├ Storage: static
+│ └ Initializer
+│   └ FloatLiteral(Float = 2.0) [ConstantExpr]
+└ FunctionDefn: main, signature: "int main()"
+  ├ Linkage: external
+  ├ Params: none
+  └ Body
+    ├ VariableDefn: text [id.text.0], declared="char text[]"
+    │ ├ Linkage: none
+    │ ├ Storage: automatic
+    │ └ Initializer
+    │   └ Aggregate [ConstantExpr]
+    │     ├ CharLiteral('a' [97]) [ConstantExpr]
+    │     ├ CharLiteral('b' [98]) [ConstantExpr]
+    │     ├ CharLiteral('c' [99]) [ConstantExpr]
+    │     └ CharLiteral('d' [100]) [ConstantExpr]
+    ├ VariableDefn: str [id.str.1], declared="char *str"
+    │ ├ Linkage: none
+    │ ├ Storage: automatic
+    │ └ Initializer
+    │   └ StringLiteral("Hello, world!\n" ["Hello, world!\n"]) [ConstantExpr]
+    ├ VariableDefn: s [id.s.2], declared="short s"
+    │ ├ Linkage: none
+    │ ├ Storage: automatic
+    │ └ Initializer
+    │   └ IntegerLiteral(Int = 1) [ConstantExpr]
+    ├ VariableDefn: c [id.c.3], declared="char c"
+    │ ├ Linkage: none
+    │ ├ Storage: automatic
+    │ └ Initializer
+    │   └ CharLiteral('a' [97]) [ConstantExpr]
+    ├ VariableDefn: dd [id.dd.4], declared="long double dd"
+    │ ├ Linkage: none
+    │ ├ Storage: automatic
+    │ └ Initializer
+    │   └ FloatLiteral(Double = 1.0) [ConstantExpr]
+    └ ReturnStmt
+      └ IntegerLiteral(Int = 0) [ConstantExpr]

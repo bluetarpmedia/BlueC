@@ -1,0 +1,172 @@
+TranslationUnit
+├ FunctionDefn: add, signature: "int add(int a, int b)"
+│ ├ Linkage: external
+│ ├ Params
+│ │ ├ ParamDecl: a [id.a.0]
+│ │ └ ParamDecl: b [id.b.1]
+│ └ Body
+│   └ ReturnStmt
+│     └ Binary (Add +)
+│       ├ Ident: a [id.a.0]
+│       └ Ident: b [id.b.1]
+├ FunctionDefn: multiply, signature: "int multiply(int a, int b)"
+│ ├ Linkage: external
+│ ├ Params
+│ │ ├ ParamDecl: a [id.a.2]
+│ │ └ ParamDecl: b [id.b.3]
+│ └ Body
+│   └ ReturnStmt
+│     └ Binary (Multiply *)
+│       ├ Ident: a [id.a.2]
+│       └ Ident: b [id.b.3]
+├ FunctionDefn: switch_to_multiply, signature: "int switch_to_multiply(int **ptr_to_ptr(int, int))"
+│ ├ Linkage: external
+│ ├ Params
+│ │ └ ParamDecl: ptr_to_ptr [id.ptr_to_ptr.4]
+│ └ Body
+│   ├ ExprStmt
+│   │ └ Assignment
+│   │   ├ Deref
+│   │   │ └ Ident: ptr_to_ptr [id.ptr_to_ptr.4]
+│   │   └ Ident: multiply [multiply]
+│   └ ReturnStmt
+│     └ IntegerLiteral(Int = 0) [ConstantExpr]
+└ FunctionDefn: main, signature: "int main()"
+  ├ Linkage: external
+  ├ Params: none
+  └ Body
+    ├ VariableDefn: x [id.x.5], declared="int x"
+    │ ├ Linkage: none
+    │ ├ Storage: automatic
+    │ └ Initializer
+    │   └ IntegerLiteral(Int = 10) [ConstantExpr]
+    ├ VariableDefn: y [id.y.6], declared="int y"
+    │ ├ Linkage: none
+    │ ├ Storage: automatic
+    │ └ Initializer
+    │   └ IntegerLiteral(Int = 5) [ConstantExpr]
+    ├ VariableDefn: fn_ptr [id.fn_ptr.7], declared="int *fn_ptr(int, int)"
+    │ ├ Linkage: none
+    │ ├ Storage: automatic
+    │ └ Initializer
+    │   └ Ident: add [add]
+    ├ IfStmt
+    │ ├ Condition
+    │ │ └ Binary (NotEqualTo !=)
+    │ │   ├ Call
+    │ │   │ ├ Designator
+    │ │   │ │ └ Ident: fn_ptr [id.fn_ptr.7]
+    │ │   │ └ Args
+    │ │   │   ├ Ident: x [id.x.5]
+    │ │   │   └ Ident: y [id.y.6]
+    │ │   └ IntegerLiteral(Int = 15) [ConstantExpr]
+    │ └ Then
+    │   └ CompoundStmt
+    │     └ ReturnStmt
+    │       └ IntegerLiteral(Int = 1) [ConstantExpr]
+    ├ ExprStmt
+    │ └ Assignment
+    │   ├ Ident: fn_ptr [id.fn_ptr.7]
+    │   └ AddressOf
+    │     └ Ident: multiply [multiply]
+    ├ IfStmt
+    │ ├ Condition
+    │ │ └ Binary (NotEqualTo !=)
+    │ │   ├ Call
+    │ │   │ ├ Designator
+    │ │   │ │ └ Deref
+    │ │   │ │   └ Ident: fn_ptr [id.fn_ptr.7]
+    │ │   │ └ Args
+    │ │   │   ├ IntegerLiteral(Int = 100) [ConstantExpr]
+    │ │   │   └ IntegerLiteral(Int = 2) [ConstantExpr]
+    │ │   └ IntegerLiteral(Int = 200) [ConstantExpr]
+    │ └ Then
+    │   └ CompoundStmt
+    │     └ ReturnStmt
+    │       └ IntegerLiteral(Int = 2) [ConstantExpr]
+    ├ ExprStmt
+    │ └ Assignment
+    │   ├ Ident: fn_ptr [id.fn_ptr.7]
+    │   └ AddressOf
+    │     └ Ident: add [add]
+    ├ IfStmt
+    │ ├ Condition
+    │ │ └ Binary (NotEqualTo !=)
+    │ │   ├ Call
+    │ │   │ ├ Designator
+    │ │   │ │ └ Deref
+    │ │   │ │   └ Ident: fn_ptr [id.fn_ptr.7]
+    │ │   │ └ Args
+    │ │   │   ├ Ident: x [id.x.5]
+    │ │   │   └ Ident: y [id.y.6]
+    │ │   └ IntegerLiteral(Int = 15) [ConstantExpr]
+    │ └ Then
+    │   └ CompoundStmt
+    │     └ ReturnStmt
+    │       └ IntegerLiteral(Int = 3) [ConstantExpr]
+    ├ VariableDefn: ptr_to_object [id.ptr_to_object.8], declared="int **ptr_to_object(int, int)"
+    │ ├ Linkage: none
+    │ ├ Storage: automatic
+    │ └ Initializer
+    │   └ AddressOf
+    │     └ Ident: fn_ptr [id.fn_ptr.7]
+    ├ ExprStmt
+    │ └ Call
+    │   ├ Designator
+    │   │ └ Ident: switch_to_multiply [switch_to_multiply]
+    │   └ Args
+    │     └ Ident: ptr_to_object [id.ptr_to_object.8]
+    ├ IfStmt
+    │ ├ Condition
+    │ │ └ Binary (NotEqualTo !=)
+    │ │   ├ Call
+    │ │   │ ├ Designator
+    │ │   │ │ └ Ident: fn_ptr [id.fn_ptr.7]
+    │ │   │ └ Args
+    │ │   │   ├ Ident: x [id.x.5]
+    │ │   │   └ Ident: y [id.y.6]
+    │ │   └ IntegerLiteral(Int = 50) [ConstantExpr]
+    │ └ Then
+    │   └ CompoundStmt
+    │     └ ReturnStmt
+    │       └ IntegerLiteral(Int = 4) [ConstantExpr]
+    ├ IfStmt
+    │ ├ Condition
+    │ │ └ Binary (NotEqualTo !=)
+    │ │   ├ Call
+    │ │   │ ├ Designator
+    │ │   │ │ └ Deref
+    │ │   │ │   └ Deref
+    │ │   │ │     └ Ident: ptr_to_object [id.ptr_to_object.8]
+    │ │   │ └ Args
+    │ │   │   ├ Ident: x [id.x.5]
+    │ │   │   └ Ident: y [id.y.6]
+    │ │   └ IntegerLiteral(Int = 50) [ConstantExpr]
+    │ └ Then
+    │   └ CompoundStmt
+    │     └ ReturnStmt
+    │       └ IntegerLiteral(Int = 5) [ConstantExpr]
+    ├ ExprStmt
+    │ └ Assignment
+    │   ├ Ident: fn_ptr [id.fn_ptr.7]
+    │   └ Ident: add [add]
+    ├ IfStmt
+    │ ├ Condition
+    │ │ └ Binary (NotEqualTo !=)
+    │ │   ├ Call
+    │ │   │ ├ Designator
+    │ │   │ │ └ Deref
+    │ │   │ │   └ Ident: fn_ptr [id.fn_ptr.7]
+    │ │   │ └ Args
+    │ │   │   ├ Unary (Negate -) [ConstantExpr]
+    │ │   │   │ └ IntegerLiteral(Int = 50) [ConstantExpr]
+    │ │   │   └ Unary (Negate -) [ConstantExpr]
+    │ │   │     └ IntegerLiteral(Int = 50) [ConstantExpr]
+    │ │   └ Unary (Negate -) [ConstantExpr]
+    │ │     └ IntegerLiteral(Int = 100) [ConstantExpr]
+    │ └ Then
+    │   └ CompoundStmt
+    │     └ ReturnStmt
+    │       └ IntegerLiteral(Int = 6) [ConstantExpr]
+    └ ReturnStmt
+      └ IntegerLiteral(Int = 0) [ConstantExpr]
