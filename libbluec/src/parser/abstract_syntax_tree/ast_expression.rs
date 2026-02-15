@@ -63,6 +63,7 @@ pub enum AstExpressionKind {
     },
     CharLiteral {
         literal: String,
+        is_multichar: bool,
         value: i32,
     },
     StringLiteral {
@@ -154,6 +155,11 @@ impl AstExpression {
                 | AstExpressionKind::IntegerLiteral { .. }
                 | AstExpressionKind::FloatLiteral { .. }
         )
+    }
+
+    /// Is the AST expression a single character literal?
+    pub fn is_single_char_literal(&self) -> bool {
+        if let AstExpressionKind::CharLiteral { is_multichar, .. } = self.kind { !is_multichar } else { false }
     }
 
     /// Is the AST expression a string literal?

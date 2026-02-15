@@ -17,7 +17,7 @@ use super::{ParseError, ParseResult, Parser, add_error};
 pub fn parse_char_literal(parser: &mut Parser, driver: &mut Driver) -> ParseResult<AstExpression> {
     let token = utils::expect_literal_token(parser, driver, utils::LiteralKind::Char)?;
 
-    let lexer::TokenType::CharLiteral { literal, value } = token.token_type else {
+    let lexer::TokenType::CharLiteral { literal, is_multichar, value } = token.token_type else {
         ICE!("Expected character literal");
     };
 
@@ -25,7 +25,7 @@ pub fn parse_char_literal(parser: &mut Parser, driver: &mut Driver) -> ParseResu
     parser.metadata.add_source_location(node_id, token.location);
     parser.metadata.set_expr_flag(node_id, AstExpressionFlag::IsConstant);
 
-    Ok(AstExpression::new(node_id, AstExpressionKind::CharLiteral { literal, value }))
+    Ok(AstExpression::new(node_id, AstExpressionKind::CharLiteral { literal, is_multichar, value }))
 }
 
 /// Parses a string literal.

@@ -60,9 +60,9 @@ pub enum TokenType {
     Identifier(String),
 
     // Char literal
-    //      The `literal` includes the surrounding single quotes.
+    //      The `literal` String includes the surrounding single quotes.
     //      The value is `i32` because in C a char literal has type of 'int'.
-    CharLiteral { literal: String, value: i32 },
+    CharLiteral { literal: String, is_multichar: bool, value: i32 },
 
     // Numeric literals
     IntegerLiteral { literal: String, base: NumericLiteralBase, suffix: Option<IntegerLiteralSuffix> },
@@ -236,7 +236,7 @@ impl fmt::Display for TokenType {
             TokenType::Identifier(id)               => write!(f, "{}", id),
 
             // Literals
-            TokenType::CharLiteral { literal, value } => {
+            TokenType::CharLiteral { literal, value, .. } => {
                 write!(f, "{literal} ({value})")
             }
 

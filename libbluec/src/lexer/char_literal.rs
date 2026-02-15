@@ -84,7 +84,8 @@ pub fn make_char_literal(line_lexer: &mut LineLexer) -> Result<Token, ()> {
     //      E.g. 'abcABCD' is evaluated as 'ABCD'.
     let value = values.iter().rev().take(4).rev().fold(0, |acc, value| (acc << 8) + value) as i32;
 
-    let token_type = TokenType::CharLiteral { literal, value };
+    let is_multichar = values.len() > 1;
+    let token_type = TokenType::CharLiteral { literal, is_multichar, value };
     let location = SourceLocation::new(start_pos, token_len);
 
     Ok(Token { token_type, location })

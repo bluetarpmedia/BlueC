@@ -107,6 +107,17 @@ fn fold_constant_expression(expr: &mut AstExpression, chk: &mut TypeChecker, dri
         return;
     }
 
+    // Don't try and fold an implicit cast of a single-char CharLiteral (which has type 'int') to a character type,
+    // since this would just be wasted effort, because we'd end up recreating the CharLiteral and the implicit cast.
+    if let AstExpressionKind::Cast { target_type, inner, is_implicit } = expr.kind()
+        && *is_implicit
+        && target_type.is_resolved()
+        && target_type.resolved_type.as_ref().unwrap().is_character()
+        && inner.is_single_char_literal()
+    {
+        return;
+    }
+
     let mut eval = constant_eval::Eval::new(chk, driver);
     let Some(constant_value) = eval.evaluate_expr(expr) else {
         return;
@@ -163,7 +174,8 @@ fn make_char_literal(value: i32, data_type: AstType, chk: &mut TypeChecker) -> A
     let value = value.abs();
     let literal = value.to_string();
 
-    let char_literal = AstExpression::new(node_id, AstExpressionKind::CharLiteral { literal, value });
+    let is_multichar = false;
+    let char_literal = AstExpression::new(node_id, AstExpressionKind::CharLiteral { literal, is_multichar, value });
 
     let char_literal = if is_negative {
         let node_id = make_constant_expr_node_id(AstType::Int, chk);
