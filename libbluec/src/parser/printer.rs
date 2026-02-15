@@ -718,7 +718,7 @@ fn print_expression(expr: &AstExpression, metadata: &AstMetadata, prefix: String
             println!();
         }
 
-        AstExpressionKind::CharLiteral { literal, value } => {
+        AstExpressionKind::CharLiteral { literal, value, .. } => {
             print!("{prefix}{connector}{node_name}({literal} [{value}])");
             print_node_metadata(expr.id(), metadata);
             println!();
