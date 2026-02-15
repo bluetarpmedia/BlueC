@@ -1,0 +1,15 @@
+warning: Implicit conversion from 'int' to 'char' changes value from 1094861636 to 68
+         [-Wconstant-conversion]
+   |
+   | char g_c = 'ABCD';
+   |            ^^^^^^
+   |
+
+warning: Implicit conversion from 'int' to 'char' changes value from 825373492 to 52
+         [-Wconstant-conversion]
+   |
+   |     char loc_c = '1234';
+   |                  ^^^^^^
+   |
+
+2 warnings generated
