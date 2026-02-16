@@ -26,6 +26,7 @@ include!(concat!(env!("OUT_DIR"), "/generated_valid_program_with_warnings_tests.
 fn compile_source_file_and_expect_warnings(source_filename: &str) {
     let mut options = DriverOptions::with_all_warnings();
     options.validate = true;
+    options.no_color = true;
 
     let mut driver = Driver::new(source_filename, options);
     driver.set_flag(DriverFlag::PRINT_NO_SOURCE_LOC);

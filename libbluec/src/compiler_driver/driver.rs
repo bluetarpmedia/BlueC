@@ -189,10 +189,11 @@ impl Driver {
             return;
         }
 
+        let color_enabled = !self.options().no_color;
         let terse = self.is_flag_set(DriverFlag::PRINT_TERSE);
         let show_source_loc = !self.is_flag_set(DriverFlag::PRINT_NO_SOURCE_LOC);
 
-        let mut printer = Printer::new(buffer, &self.tu_file);
+        let mut printer = Printer::new(buffer, &self.tu_file, color_enabled);
         printer.set_terse(terse);
         printer.show_source_file_and_loc(show_source_loc);
         printer.print_diagnostics(&mut self.errors, &mut self.warnings);

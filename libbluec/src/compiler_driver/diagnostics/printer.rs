@@ -18,6 +18,12 @@ pub struct Printer<'a, W: Write> {
     tu_reader: BufReader<File>,
     terse: bool,
     show_source_loc: bool,
+    error_color: &'static str,
+    warn_color: &'static str,
+    bold_color: &'static str,
+    margin_color: &'static str,
+    suggest_color: &'static str,
+    reset_color: &'static str,
 }
 
 #[derive(Debug, Clone)]
@@ -35,9 +41,36 @@ impl<'a, W: Write> Printer<'a, W> {
     /// Creates a new diagnostic printer that writes to the given `buffer`.
     ///
     /// `buffer` must implement `std::io::Write`.
-    pub fn new(buffer: W, tu_file: &'a TuFile) -> Self {
+    pub fn new(buffer: W, tu_file: &'a TuFile, color_enabled: bool) -> Self {
         let tu_reader = BufReader::new(File::open(tu_file.file_path()).expect("Cannot open file"));
-        Self { buffer, tu_file, tu_reader, terse: false, show_source_loc: true }
+
+        const CYAN: &str = "\x1b[36m";
+        const BRIGHT_RED: &str = "\x1b[91m";
+        const BRIGHT_GREEN: &str = "\x1b[92m";
+        const BRIGHT_YELLOW: &str = "\x1b[93m";
+        const BRIGHT_WHITE: &str = "\x1b[97m";
+        const RESET: &str = "\x1b[0m";
+
+        let error_color = if color_enabled { BRIGHT_RED } else { "" };
+        let warn_color = if color_enabled { BRIGHT_YELLOW } else { "" };
+        let bold_color = if color_enabled { BRIGHT_WHITE } else { "" };
+        let margin_color = if color_enabled { CYAN } else { "" };
+        let suggest_color = if color_enabled { BRIGHT_GREEN } else { "" };
+        let reset_color = if color_enabled { RESET } else { "" };
+
+        Self {
+            buffer,
+            tu_file,
+            tu_reader,
+            terse: false,
+            show_source_loc: true,
+            error_color,
+            warn_color,
+            bold_color,
+            margin_color,
+            suggest_color,
+            reset_color,
+        }
     }
 
     /// Sets whether to print in terse mode.
@@ -98,17 +131,7 @@ impl<'a, W: Write> Printer<'a, W> {
 
     /// Prints a diagnostic.
     fn print(&mut self, diagnostic: &Diagnostic) {
-        let prefix = match diagnostic.kind {
-            DiagnosticKind::Error => "error: ",
-            DiagnosticKind::Warning(_) => "warning: ",
-        };
-
-        if self.terse {
-            _ = writeln!(self.buffer, "{}{}", prefix, diagnostic.message);
-            return;
-        }
-
-        self.print_text_with_wrapping(prefix, &diagnostic.message);
+        self.print_diagnostic_message(diagnostic);
 
         // Calculate the width of the left margin.
         //      The margin is the space before the vertical pipe | where we print the source line numbers.
@@ -123,7 +146,7 @@ impl<'a, W: Write> Printer<'a, W> {
 
             if diagnostic.locations.len() == 1 {
                 self.print_source_location_header(&margin_str, &display_locations[0]);
-                self.print_source_line_with_highlight(display_locations, margin_width);
+                self.print_source_line_with_highlight(diagnostic.kind, display_locations, margin_width);
             } else {
                 // If all the locations are on the same line then we only want to print the "<filename>:<line>:<col>"
                 // header once.
@@ -132,26 +155,28 @@ impl<'a, W: Write> Printer<'a, W> {
 
                 if all_locs_on_same_line {
                     self.print_source_location_header(&margin_str, &display_locations[0]);
-                    self.print_source_line_with_highlight(display_locations, margin_width);
+                    self.print_source_line_with_highlight(diagnostic.kind, display_locations, margin_width);
                 } else {
                     for location in display_locations {
                         self.print_source_location_header(&margin_str, &location);
-                        self.print_source_line_with_highlight(vec![location], margin_width);
+                        self.print_source_line_with_highlight(diagnostic.kind, vec![location], margin_width);
                     }
                 }
             }
 
-            _ = writeln!(self.buffer, "{} |", margin_str);
+            _ = writeln!(self.buffer, "{} {}|{}", margin_str, self.margin_color, self.reset_color);
         }
 
         // Print the note(s)
         if let Some(notes) = &diagnostic.notes {
             for note in notes {
-                self.print_text_with_wrapping("note: ", &note.note);
+                let line_indent = "note: ".len();
+                let note_text = make_wrapped_text(&note.note, line_indent, Self::MAX_LINE_WIDTH);
+                _ = writeln!(self.buffer, "{}note:{} {}", self.bold_color, self.reset_color, note_text);
 
                 if let Some(note_location) = &note.loc {
                     let display_loc = self.transform_location_for_display(*note_location);
-                    self.print_source_line_with_highlight(vec![display_loc], margin_width);
+                    self.print_source_line_with_highlight(diagnostic.kind, vec![display_loc], margin_width);
                 }
 
                 if let Some(suggested_code) = &note.suggested_code {
@@ -163,7 +188,7 @@ impl<'a, W: Write> Printer<'a, W> {
                     }
                 }
 
-                _ = writeln!(self.buffer, "{} |", margin_str);
+                _ = writeln!(self.buffer, "{} {}|{}", margin_str, self.margin_color, self.reset_color);
             }
         }
 
@@ -181,28 +206,44 @@ impl<'a, W: Write> Printer<'a, W> {
             let line_no = display_location.line_no;
             let column_no = display_location.column_no;
 
-            _ = writeln!(self.buffer, "{margin_str}--> {filename}:{line_no}:{column_no}");
+            let margin_color = self.margin_color;
+            let reset_color = self.reset_color;
+
+            _ = writeln!(self.buffer, "{margin_str}{margin_color}-->{reset_color} {filename}:{line_no}:{column_no}");
         }
     }
 
     /// Prints a line of source code with '^' highlight characters underneath pointing at the relevant location.
-    fn print_source_line_with_highlight(&mut self, mut locations: Vec<DisplayLocation>, margin_width: usize) {
+    fn print_source_line_with_highlight(
+        &mut self,
+        kind: DiagnosticKind,
+        mut locations: Vec<DisplayLocation>,
+        margin_width: usize,
+    ) {
         debug_assert!(!locations.is_empty());
 
+        let margin_color = self.margin_color;
+        let reset_color = self.reset_color;
+
         let margin_str = " ".repeat(margin_width);
-        _ = writeln!(self.buffer, "{margin_str} |");
+        _ = writeln!(self.buffer, "{margin_str} {margin_color}|{reset_color}");
 
         let primary_loc = &locations[0];
         let primary_column_no = primary_loc.column_no;
         let source_line = self.get_line_of_source_code(primary_loc.source_code_file_pos);
 
         if self.show_source_loc {
-            _ = writeln!(self.buffer, "{:>width$} | {source_line}", primary_loc.line_no, width = margin_width);
+            _ = writeln!(
+                self.buffer,
+                "{margin_color}{:>width$} |{reset_color} {source_line}",
+                primary_loc.line_no,
+                width = margin_width
+            );
         } else {
-            _ = writeln!(self.buffer, "{margin_str} | {source_line}");
+            _ = writeln!(self.buffer, "{margin_str} {margin_color}|{reset_color} {source_line}");
         }
 
-        _ = write!(self.buffer, "{margin_str} |");
+        _ = write!(self.buffer, "{margin_str} {margin_color}|{reset_color}");
 
         let mut running_offset = 0;
 
@@ -218,7 +259,10 @@ impl<'a, W: Write> Printer<'a, W> {
             let highlight_char = if location.column_no == primary_column_no { '^' } else { '~' };
             let highlight = highlight_char.to_string().repeat(highlight_len);
 
-            _ = write!(self.buffer, "{highlight_indent}{highlight}");
+            let highlight_color = if kind == DiagnosticKind::Error { self.error_color } else { self.warn_color };
+            let reset_color = self.reset_color;
+
+            _ = write!(self.buffer, "{highlight_indent}{highlight_color}{highlight}{reset_color}");
 
             running_offset = location.column_no as usize + highlight_len;
         }
@@ -236,8 +280,11 @@ impl<'a, W: Write> Printer<'a, W> {
     /// Print the suggested code.
     fn print_suggested_code(&mut self, suggested_code: &str, margin_width: usize) {
         let margin_str = " ".repeat(margin_width);
-        _ = writeln!(self.buffer, "{margin_str} |");
-        _ = writeln!(self.buffer, "{margin_str} | {suggested_code}");
+        let margin_color = self.margin_color;
+        let reset_color = self.reset_color;
+
+        _ = writeln!(self.buffer, "{margin_str} {margin_color}|{reset_color}");
+        _ = writeln!(self.buffer, "{margin_str} {margin_color}|{reset_color} {suggested_code}");
     }
 
     /// Print the suggested code based on a format string.
@@ -253,7 +300,10 @@ impl<'a, W: Write> Printer<'a, W> {
             return;
         }
 
-        let mut formatted = format_string.to_string();
+        let suggest_color = self.suggest_color;
+        let reset_color = self.reset_color;
+
+        let mut formatted = format!("{suggest_color}{format_string}{reset_color}");
         let mut next_loc_idx = 0;
         let mut next_token = "$$1".to_string();
 
@@ -268,8 +318,9 @@ impl<'a, W: Write> Printer<'a, W> {
             let start_idx = (self.tu_file.get_column_no(loc) - 1) as usize; // column_no is 1-based
             let end_idx = start_idx + loc.length as usize;
             let loc_source_code = &line[start_idx..end_idx];
+            let formatted_source_code = format!("{reset_color}{loc_source_code}{suggest_color}");
 
-            formatted = formatted.replace(&next_token, loc_source_code);
+            formatted = formatted.replace(&next_token, &formatted_source_code);
 
             next_loc_idx += 1;
             next_token = format!("$${}", next_loc_idx + 1); // 1-based
@@ -286,21 +337,33 @@ impl<'a, W: Write> Printer<'a, W> {
         self.print_suggested_code(&formatted, margin_width);
     }
 
-    /// Prints text with line wrapping if needed.
-    fn print_text_with_wrapping(&mut self, prefix: &str, text: &str) {
-        if text.len() <= Self::MAX_LINE_WIDTH {
-            _ = writeln!(self.buffer, "{}{}", prefix, text);
+    /// Prints a diagnostic message.
+    fn print_diagnostic_message(&mut self, diagnostic: &Diagnostic) {
+        let prefix = match diagnostic.kind {
+            DiagnosticKind::Error => {
+                _ = write!(self.buffer, "{}error{}", self.error_color, self.reset_color);
+                "error: "
+            }
+            DiagnosticKind::Warning(_) => {
+                _ = write!(self.buffer, "{}warning{}", self.warn_color, self.reset_color);
+                "warning: "
+            }
+        };
+
+        if self.terse || diagnostic.message.len() <= Self::MAX_LINE_WIDTH {
+            _ = writeln!(self.buffer, "{}: {}{}", self.bold_color, diagnostic.message, self.reset_color);
             return;
         }
 
         // The line indentation allows us to align the wrapped lines like this:
         //
-        // note: some text here\n
-        //       more text here\n
-        //       even more
+        // error: some text here\n
+        //        more text here\n
+        //        even more
         //
         let line_indent = prefix.len();
-        _ = writeln!(self.buffer, "{}{}", prefix, make_wrapped_text(text, line_indent, Self::MAX_LINE_WIDTH));
+        let wrapped_text = make_wrapped_text(&diagnostic.message, line_indent, Self::MAX_LINE_WIDTH);
+        _ = writeln!(self.buffer, "{}: {}{}", self.bold_color, wrapped_text, self.reset_color);
     }
 
     /// Calculate the required margin width based on line numbers in the diagnostic's location(s) and note(s).

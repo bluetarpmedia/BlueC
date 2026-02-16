@@ -27,19 +27,19 @@ impl<'m, W: Write> AstPrinter<'m, W> {
     /// Creates a new AST printer
     pub fn new(writer: W, metadata: &'m AstMetadata, color_enabled: bool, print_node_ids: bool) -> Self {
         const YELLOW: &str = "\x1b[33m";
-        const BOLD_GREEN: &str = "\x1b[92m";
-        const BOLD_YELLOW: &str = "\x1b[93m";
-        const BOLD_PURPLE: &str = "\x1b[95m";
-        const BOLD_CYAN: &str = "\x1b[96m";
-        const BOLD_WHITE: &str = "\x1b[97m";
+        const BRIGHT_GREEN: &str = "\x1b[92m";
+        const BRIGHT_YELLOW: &str = "\x1b[93m";
+        const BRIGHT_PURPLE: &str = "\x1b[95m";
+        const BRIGHT_CYAN: &str = "\x1b[96m";
+        const BRIGHT_WHITE: &str = "\x1b[97m";
         const RESET: &str = "\x1b[0m";
 
-        let decl_color = if color_enabled { BOLD_GREEN } else { "" };
-        let stmt_color = if color_enabled { BOLD_PURPLE } else { "" };
-        let expr_color = if color_enabled { BOLD_CYAN } else { "" };
-        let ident_color = if color_enabled { BOLD_WHITE } else { "" };
+        let decl_color = if color_enabled { BRIGHT_GREEN } else { "" };
+        let stmt_color = if color_enabled { BRIGHT_PURPLE } else { "" };
+        let expr_color = if color_enabled { BRIGHT_CYAN } else { "" };
+        let ident_color = if color_enabled { BRIGHT_WHITE } else { "" };
         let meta_color = if color_enabled { YELLOW } else { "" };
-        let type_color = if color_enabled { BOLD_YELLOW } else { "" };
+        let type_color = if color_enabled { BRIGHT_YELLOW } else { "" };
         let reset_color = if color_enabled { RESET } else { "" };
 
         Self {
