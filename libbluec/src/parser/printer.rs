@@ -199,10 +199,9 @@ fn print_variable_declaration<W: Write>(
     var_decl: &AstVariableDeclaration,
     is_last: bool,
 ) -> io::Result<()> {
-    let connector = make_connector(is_last);
-
     let node_name = if var_decl.is_declaration_only { "VariableDecl" } else { "VariableDefn" };
-    write!(p.writer, "{}{connector}", p.prefix)?;
+
+    p.write_prefix_and_connector(make_connector(is_last))?;
     p.write_decl_str(node_name)?;
 
     let storage = match var_decl.storage {
@@ -228,14 +227,17 @@ fn print_variable_declaration<W: Write>(
     }
 
     p.with_indent(is_last, |p| {
-        writeln!(p.writer, "{}{}Linkage: {linkage}", p.prefix, make_child_connector())?;
+        p.write_prefix_and_connector(make_child_connector())?;
+        writeln!(p.writer, "Linkage: {linkage}")?;
 
         if !var_decl.is_declaration_only {
-            writeln!(p.writer, "{}{}Storage: {storage}", p.prefix, make_child_connector())?;
+            p.write_prefix_and_connector(make_child_connector())?;
+            writeln!(p.writer, "Storage: {storage}")?;
         }
 
         // Initializer expression
-        write!(p.writer, "{}{}Initializer", p.prefix, make_last_child_connector())?;
+        p.write_prefix_and_connector(make_last_child_connector())?;
+        p.write("Initializer")?;
 
         if let Some(init) = &var_decl.initializer {
             p.new_line()?;
@@ -247,8 +249,8 @@ fn print_variable_declaration<W: Write>(
 
                 // Evaluated constant initializer
                 if has_constant_eval {
-                    let connector = make_last_child_connector();
-                    write!(p.writer, "{}{connector}Constant Eval: ", p.prefix)?;
+                    p.write_prefix_and_connector(make_last_child_connector())?;
+                    p.write("Constant Eval: ")?;
 
                     let is_aggregate = var_decl.init_constant_eval.len() > 1;
                     if is_aggregate {
@@ -284,7 +286,7 @@ fn print_variable_declaration<W: Write>(
                 Ok(())
             })
         } else {
-            writeln!(p.writer, ": none")
+            p.writeln(": none")
         }
     })
 }
@@ -298,7 +300,8 @@ fn print_variable_initializer<W: Write>(
         AstVariableInitializer::Scalar(expr) => print_expression(p, expr, is_last),
 
         AstVariableInitializer::Aggregate { node_id, init } => {
-            write!(p.writer, "{}{}Aggregate", p.prefix, make_connector(is_last))?;
+            p.write_prefix_and_connector(make_connector(is_last))?;
+            p.write("Aggregate")?;
             print_node_metadata(p, *node_id)?;
             p.new_line()?;
 
@@ -315,12 +318,11 @@ fn print_variable_initializer<W: Write>(
 }
 
 fn print_function<W: Write>(p: &mut AstPrinter<W>, function: &AstFunction, is_last: bool) -> io::Result<()> {
-    let connector = make_connector(is_last);
-
     let is_decl = function.body.is_none();
-
     let node_name = if is_decl { "FunctionDecl" } else { "FunctionDefn" };
-    write!(p.writer, "{}{connector}{}{node_name}{}", p.prefix, p.decl_color, p.reset_color)?;
+
+    p.write_prefix_and_connector(make_connector(is_last))?;
+    p.write_decl_str(node_name)?;
 
     let linkage = match function.linkage {
         AstLinkage::None => "none",
@@ -336,9 +338,10 @@ fn print_function<W: Write>(p: &mut AstPrinter<W>, function: &AstFunction, is_la
 
     if let Some(func_body) = &function.body {
         p.with_indent(is_last, |p| {
-            writeln!(p.writer, "{}{}Linkage: {linkage}", p.prefix, make_child_connector())?;
+            p.write_prefix_and_connector(make_child_connector())?;
+            writeln!(p.writer, "Linkage: {linkage}")?;
 
-            write!(p.writer, "{}{}", p.prefix, make_child_connector())?;
+            p.write_prefix_and_connector(make_child_connector())?;
             p.write_decl_str("Params")?;
 
             if function.param_names.is_empty() {
@@ -360,7 +363,7 @@ fn print_function<W: Write>(p: &mut AstPrinter<W>, function: &AstFunction, is_la
                     for (idx, (param_ident, unique)) in function.param_names.iter().enumerate() {
                         let param_name = &param_ident.name;
 
-                        write!(p.writer, "{}{}", p.prefix, make_connector(idx == len - 1),)?;
+                        p.write_prefix_and_connector(make_connector(idx == len - 1))?;
                         p.write_decl_str("ParamDecl")?;
                         p.write(": ")?;
                         p.write_ident_str(param_name)?;
@@ -377,7 +380,7 @@ fn print_function<W: Write>(p: &mut AstPrinter<W>, function: &AstFunction, is_la
                 })?
             }
 
-            write!(p.writer, "{}{}", p.prefix, make_last_child_connector())?;
+            p.write_prefix_and_connector(make_last_child_connector())?;
             p.write_stmt_str("Body")?;
             p.new_line()?;
 
@@ -406,8 +409,7 @@ fn print_type_alias_declaration<W: Write>(
     alias_decl: &AstTypeAliasDeclaration,
     is_last: bool,
 ) -> io::Result<()> {
-    let connector = make_connector(is_last);
-    write!(p.writer, "{}{}", p.prefix, connector)?;
+    p.write_prefix_and_connector(make_connector(is_last))?;
     p.write_decl_str("TypeAliasDecl")?;
     p.new_line()?;
 
@@ -507,17 +509,20 @@ fn print_if_statement<W: Write>(
 
     p.with_indent(is_last, |p| {
         // Condition (never the last child)
-        writeln!(p.writer, "{}{}Condition", p.prefix, make_child_connector())?;
+        p.write_prefix_and_connector(make_child_connector())?;
+        p.writeln("Condition")?;
         p.with_indent(false, |p| print_expression(p, controlling_expr, true))?;
 
         // Then (might be the last child, if there's no else)
         let has_else = else_stmt.is_some();
-        writeln!(p.writer, "{}{}Then", p.prefix, make_connector(!has_else))?;
+        p.write_prefix_and_connector(make_connector(!has_else))?;
+        p.writeln("Then")?;
         p.with_indent(!has_else, |p| print_statement(p, then_stmt, true))?;
 
         // Else (always the last child, if it exists)
         if let Some(else_stmt) = else_stmt {
-            writeln!(p.writer, "{}{}Else", p.prefix, make_last_child_connector())?;
+            p.write_prefix_and_connector(make_last_child_connector())?;
+            p.writeln("Else")?;
             p.with_indent(true, |p| print_statement(p, else_stmt, true))?;
         }
 
@@ -538,10 +543,12 @@ fn print_switch_statement<W: Write>(
     p.new_line()?;
 
     p.with_indent(is_last, |p| {
-        writeln!(p.writer, "{}{}Condition", p.prefix, make_child_connector())?;
+        p.write_prefix_and_connector(make_child_connector())?;
+        p.writeln("Condition")?;
         p.with_indent(false, |p| print_expression(p, controlling_expr, true))?;
 
-        writeln!(p.writer, "{}{}Body", p.prefix, make_last_child_connector())?;
+        p.write_prefix_and_connector(make_last_child_connector())?;
+        p.writeln("Body")?;
         p.with_indent(true, |p| print_statement(p, body, true))
     })
 }
@@ -559,10 +566,12 @@ fn print_while_statement<W: Write>(
     p.new_line()?;
 
     p.with_indent(is_last, |p| {
-        writeln!(p.writer, "{}{}Condition", p.prefix, make_child_connector())?;
+        p.write_prefix_and_connector(make_child_connector())?;
+        p.writeln("Condition")?;
         p.with_indent(false, |p| print_expression(p, controlling_expr, true))?;
 
-        writeln!(p.writer, "{}{}Body", p.prefix, make_last_child_connector())?;
+        p.write_prefix_and_connector(make_last_child_connector())?;
+        p.writeln("Body")?;
         p.with_indent(true, |p| print_statement(p, body, true))
     })
 }
@@ -580,10 +589,12 @@ fn print_do_while_statement<W: Write>(
     p.new_line()?;
 
     p.with_indent(is_last, |p| {
-        writeln!(p.writer, "{}{}Body", p.prefix, make_child_connector())?;
+        p.write_prefix_and_connector(make_child_connector())?;
+        p.writeln("Body")?;
         p.with_indent(false, |p| print_statement(p, body, true))?;
 
-        writeln!(p.writer, "{}{}WhileCondition", p.prefix, make_last_child_connector())?;
+        p.write_prefix_and_connector(make_last_child_connector())?;
+        p.writeln("WhileCondition")?;
         p.with_indent(true, |p| print_expression(p, controlling_expr, true))
     })
 }
@@ -601,7 +612,8 @@ fn print_for_statement<W: Write>(p: &mut AstPrinter<W>, stmt: &AstStatement, is_
     p.with_indent(is_last, |p| {
         // Init
         {
-            write!(p.writer, "{}{}Init", p.prefix, make_child_connector())?;
+            p.write_prefix_and_connector(make_child_connector())?;
+            p.write("Init")?;
 
             match init.as_ref() {
                 AstForInitializer::Declaration(var_decls) => {
@@ -630,7 +642,8 @@ fn print_for_statement<W: Write>(p: &mut AstPrinter<W>, stmt: &AstStatement, is_
 
         // Condition
         {
-            write!(p.writer, "{}{}Condition", p.prefix, make_child_connector())?;
+            p.write_prefix_and_connector(make_child_connector())?;
+            p.write("Condition")?;
 
             match controlling_expr {
                 Some(controlling_expr) => {
@@ -645,7 +658,8 @@ fn print_for_statement<W: Write>(p: &mut AstPrinter<W>, stmt: &AstStatement, is_
 
         // Post
         {
-            write!(p.writer, "{}{}Post", p.prefix, make_child_connector())?;
+            p.write_prefix_and_connector(make_child_connector())?;
+            p.write("Post")?;
 
             match post_expr {
                 Some(post_expr) => {
@@ -659,7 +673,8 @@ fn print_for_statement<W: Write>(p: &mut AstPrinter<W>, stmt: &AstStatement, is_
         }
 
         // Body
-        writeln!(p.writer, "{}{}Body", p.prefix, make_last_child_connector())?;
+        p.write_prefix_and_connector(make_last_child_connector())?;
+        p.writeln("Body")?;
         p.with_indent(true, |p| print_statement(p, body, true))
     })
 }
@@ -692,10 +707,12 @@ fn print_switch_case_statement<W: Write>(
     p.new_line()?;
 
     p.with_indent(is_last, |p| {
-        writeln!(p.writer, "{}{}Constant Expr", p.prefix, make_child_connector())?;
+        p.write_prefix_and_connector(make_child_connector())?;
+        p.writeln("Constant Expr")?;
         p.with_indent(false, |p| print_expression(p, constant_expr, true))?;
 
-        writeln!(p.writer, "{}{}Statement", p.prefix, make_last_child_connector())?;
+        p.write_prefix_and_connector(make_last_child_connector())?;
+        p.writeln("Statement")?;
         p.with_indent(true, |p| print_statement(p, stmt, true))
     })
 }
@@ -825,13 +842,16 @@ fn print_expression<W: Write>(p: &mut AstPrinter<W>, expr: &AstExpression, is_la
             p.new_line()?;
 
             p.with_indent(is_last, |p| {
-                writeln!(p.writer, "{}{}Condition", p.prefix, make_child_connector())?;
+                p.write_prefix_and_connector(make_child_connector())?;
+                p.writeln("Condition")?;
                 p.with_indent(false, |p| print_expression(p, condition, true))?;
 
-                writeln!(p.writer, "{}{}Consequent", p.prefix, make_child_connector())?;
+                p.write_prefix_and_connector(make_child_connector())?;
+                p.writeln("Consequent")?;
                 p.with_indent(false, |p| print_expression(p, consequent, true))?;
 
-                writeln!(p.writer, "{}{}Alternative", p.prefix, make_last_child_connector())?;
+                p.write_prefix_and_connector(make_last_child_connector())?;
+                p.writeln("Alternative")?;
                 p.with_indent(true, |p| print_expression(p, alternative, true))
             })
         }
@@ -841,11 +861,14 @@ fn print_expression<W: Write>(p: &mut AstPrinter<W>, expr: &AstExpression, is_la
             p.new_line()?;
 
             p.with_indent(is_last, |p| {
-                writeln!(p.writer, "{}{}Designator", p.prefix, make_child_connector())?;
+                p.write_prefix_and_connector(make_child_connector())?;
+                p.writeln("Designator")?;
                 p.with_indent(false, |p| print_expression(p, designator, true))?;
 
                 // Args
-                write!(p.writer, "{}{}Args", p.prefix, make_last_child_connector())?;
+                p.write_prefix_and_connector(make_last_child_connector())?;
+                p.write("Args")?;
+
                 if args.is_empty() {
                     p.writeln(": void")
                 } else {
@@ -894,17 +917,20 @@ fn print_expression<W: Write>(p: &mut AstPrinter<W>, expr: &AstExpression, is_la
                 p.new_line()?;
 
                 p.with_indent(is_last, |p| {
-                    writeln!(p.writer, "{}{}Literals", p.prefix, make_child_connector())?;
+                    p.write_prefix_and_connector(make_child_connector())?;
+                    p.writeln("Literals")?;
 
                     p.with_indent(false, |p| {
                         let len = literals.len();
                         for (idx, lit) in literals.iter().enumerate() {
-                            writeln!(p.writer, "{}{}{lit}", p.prefix, make_connector(idx == len - 1))?;
+                            p.write_prefix_and_connector(make_connector(idx == len - 1))?;
+                            p.writeln(lit)?;
                         }
                         Ok(())
                     })?;
 
-                    write!(p.writer, "{}{}Evaluated:  \"{ascii_joined}\"", p.prefix, make_last_child_connector())?;
+                    p.write_prefix_and_connector(make_last_child_connector())?;
+                    write!(p.writer, "Evaluated:  \"{ascii_joined}\"")?;
                     print_node_metadata(p, expr.id())?;
                     p.new_line()
                 })
