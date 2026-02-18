@@ -7,7 +7,7 @@ use crate::compiler_driver::{Diagnostic, Driver, SuggestedCode};
 use crate::lexer;
 
 use super::super::{EnclosingStatement, EnclosingStatementChain};
-use super::{AstDeclaration, AstForInitializer, AstNodeId, AstStatement};
+use super::{AstDeclaration, AstForInitializer, AstStatement};
 use super::{ParseError, ParseResult, Parser, add_error};
 use super::{block, decl, expr, peek, utils};
 
@@ -155,7 +155,7 @@ pub fn parse_labeled_statement(parser: &mut Parser, driver: &mut Driver) -> Pars
 
     let stmt = stmt.unwrap();
 
-    let node_id = AstNodeId::new();
+    let node_id = driver.make_node_id();
     parser.metadata.add_source_location(node_id, label_token.location.merge_with(colon_token_loc));
 
     Ok(AstStatement::Labeled { node_id, label_name: label_name.clone(), stmt: Box::new(stmt) })
@@ -233,7 +233,7 @@ pub fn parse_switch_statement(parser: &mut Parser, driver: &mut Driver) -> Parse
     let controlling_expr = expr::parse_expression(parser, driver)?;
     _ = utils::expect_token(lexer::TokenType::CloseParen, parser, driver)?;
 
-    let node_id = AstNodeId::new();
+    let node_id = driver.make_node_id();
     let body = parser.with_enclosing_statement(EnclosingStatement::Switch(node_id), |p| parse_statement(p, driver))?;
     let body = Box::new(body);
 
@@ -340,7 +340,7 @@ pub fn parse_while_statement(parser: &mut Parser, driver: &mut Driver) -> ParseR
     _ = utils::expect_token(lexer::TokenType::CloseParen, parser, driver)?;
 
     // Loop body
-    let node_id = AstNodeId::new();
+    let node_id = driver.make_node_id();
     let body = parser.with_enclosing_statement(EnclosingStatement::Loop(node_id), |p| parse_statement(p, driver))?;
     let body = Box::new(body);
 
@@ -356,7 +356,7 @@ pub fn parse_do_while_statement(parser: &mut Parser, driver: &mut Driver) -> Par
     _ = utils::expect_token(lexer::TokenType::new_identifier("do"), parser, driver)?;
 
     // Loop body
-    let node_id = AstNodeId::new();
+    let node_id = driver.make_node_id();
     let body = parser.with_enclosing_statement(EnclosingStatement::Loop(node_id), |p| parse_statement(p, driver))?;
 
     _ = utils::expect_token(lexer::TokenType::new_identifier("while"), parser, driver)?;
@@ -432,7 +432,7 @@ pub fn parse_for_statement(parser: &mut Parser, driver: &mut Driver) -> ParseRes
         _ = utils::expect_token(lexer::TokenType::CloseParen, parser, driver)?;
 
         // Loop body
-        let node_id = AstNodeId::new();
+        let node_id = driver.make_node_id();
         let body =
             parser.with_enclosing_statement(EnclosingStatement::Loop(node_id), |p| parse_statement(p, driver))?;
 
@@ -512,7 +512,7 @@ pub fn parse_goto_statement(parser: &mut Parser, driver: &mut Driver) -> ParseRe
         })
         .unwrap();
 
-    let node_id = AstNodeId::new();
+    let node_id = driver.make_node_id();
     parser.metadata.add_source_location(node_id, goto_token_loc.merge_with(label_token.location));
 
     Ok(AstStatement::Goto { node_id, label_name: label_name.clone() })

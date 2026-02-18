@@ -17,6 +17,7 @@ pub use diagnostics::error::Error;
 pub use diagnostics::warning::Warning;
 pub use diagnostics::warning_kind::WarningKind;
 pub use diagnostics::{Diagnostic, SuggestedCode};
+pub(crate) use driver::AstNodeIdAccessToken;
 pub use driver::Driver;
 
 use crate::compiler_driver::options::DriverOptions;

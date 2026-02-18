@@ -70,9 +70,6 @@ fn print_ast(source_filename: &str, type_checked: bool, no_color: bool) {
 
     options.no_color = no_color;
 
-    // Undocumented flag to direct the Driver to print its AST without Node IDs.
-    options.flags.insert(format!("ast_printer_no_ids"));
-
     // Undocumented flag to direct the Driver to print to a file instead of 'stdout'.
     options.flags.insert(format!("redirect_stdout"));
     options.flags.insert(format!("redirect_file={actual_file_path}"));

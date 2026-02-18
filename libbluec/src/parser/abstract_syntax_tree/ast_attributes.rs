@@ -3,12 +3,13 @@
 //! The `ast_attributes` module defines various AST attribute types.
 
 use std::fmt;
-use std::sync::atomic::{AtomicU32, Ordering};
 
-use crate::ICE;
+use crate::compiler_driver::AstNodeIdAccessToken;
 use crate::core::SourceLocation;
 
 /// A unique numerical identifier for a node in the AST. Identifiers start from 1.
+///
+/// To create a new `AstNodeId`, call [`Driver::make_node_id`](crate::compiler_driver::Driver::make_node_id).
 #[derive(Debug, Default, Copy, Clone, Hash, Eq, PartialEq)]
 pub struct AstNodeId(u32);
 
@@ -19,25 +20,6 @@ impl fmt::Display for AstNodeId {
 }
 
 impl AstNodeId {
-    /// Creates a new, unique `AstNodeId`.
-    pub fn new() -> Self {
-        static NEXT_ID: AtomicU32 = AtomicU32::new(1);
-
-        let next_id = NEXT_ID.fetch_add(1, Ordering::SeqCst); // Increments and returns previous value, so `1` is first.
-
-        if next_id == u32::MAX {
-            ICE!("Exhausted node ids"); // Technically we have 1 more available but we'll limit ourselves to MAX-1.
-        }
-
-        Self(next_id)
-    }
-
-    /// Creates an `AstNodeId` with the given value. This is used by some unit tests.
-    #[cfg(test)]
-    pub fn with_id(value: u32) -> Self {
-        Self(value)
-    }
-
     /// Creates a null sentinel value for an `AstNodeId`.
     ///
     /// It's invalid for a node in the AST to have this value, except when temporarily breaking the invariant.
@@ -46,6 +28,19 @@ impl AstNodeId {
     /// That temporary replacement node has a null value, until it is replaced again or overwritten.
     pub fn null() -> Self {
         Self(0)
+    }
+
+    /// Creates an `AstNodeId` with the given value. This is used by some unit tests.
+    #[cfg(test)]
+    pub fn with_id(value: u32) -> Self {
+        Self(value)
+    }
+
+    /// Helper function to create an `AstNodeId`.
+    ///
+    /// This function can only be called by [Driver::make_node_id](crate::compiler_driver::Driver::make_node_id).
+    pub(crate) fn new(_token: AstNodeIdAccessToken, id: u32) -> Self {
+        Self(id)
     }
 }
 

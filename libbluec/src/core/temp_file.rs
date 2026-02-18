@@ -5,6 +5,7 @@
 
 use std::fs::{self, OpenOptions};
 use std::path::PathBuf;
+use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// The path to a temporary file.
@@ -74,6 +75,14 @@ impl TempFile {
 }
 
 fn try_make_unique_temp_path(prefix: &str, ext: &str) -> Option<PathBuf> {
+    // Prevent races between threads in our process.
+    //      Our integration tests run in parallel depending on CPU's number of cores, and we have some integration tests
+    //      which attempt to compile the same source file. So without this synchronization we could race on the temp
+    //      file path generated for the source filename prefix.
+    static PATH_LOCK: Mutex<()> = Mutex::new(());
+
+    let _guard = PATH_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+
     let mut counter: u32 = 0;
     let pid = std::process::id();
     let temp_dir_path = std::env::temp_dir();

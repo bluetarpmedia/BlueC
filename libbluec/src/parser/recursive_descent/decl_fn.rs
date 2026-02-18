@@ -11,7 +11,7 @@ use super::AstStorageClassSpecifierOption;
 use super::block;
 use super::utils;
 use super::{
-    AstDeclaration, AstDeclaratorKind, AstDeclaredType, AstFunction, AstIdentifier, AstLinkage, AstNodeId,
+    AstDeclaration, AstDeclaratorKind, AstDeclaredType, AstFunction, AstIdentifier, AstLinkage,
     AstTypeAliasDeclaration, AstUniqueName,
 };
 use super::{ParseError, ParseResult, Parser, add_error};
@@ -172,7 +172,7 @@ pub fn parse_function(
         }
     })?;
 
-    let node_id = AstNodeId::new();
+    let node_id = driver.make_node_id();
     parser.metadata.add_source_location(node_id, fn_ident.loc);
 
     let ident = fn_ident.clone();
@@ -188,7 +188,7 @@ pub fn parse_function(
     });
 
     if is_declared_typedef {
-        let node_id = AstNodeId::new();
+        let node_id = driver.make_node_id();
         Ok(AstDeclaration::TypeAlias(AstTypeAliasDeclaration { node_id, decl: Box::new(fn_decl) }))
     } else {
         Ok(fn_decl)

@@ -4,6 +4,7 @@
 //! ASCII string.
 
 use crate::ICE;
+use crate::compiler_driver::Driver;
 use crate::core::string;
 use crate::parser::{AstExpression, AstExpressionKind, AstType, AstUnaryOp, AstVariableInitializer};
 
@@ -19,6 +20,7 @@ pub fn fold_character_array_variable_initializer(
     var_init: &[AstVariableInitializer],
     data_type: AstType,
     chk: &mut TypeChecker,
+    driver: &mut Driver,
 ) -> AstVariableInitializer {
     let ascii = var_init
         .iter()
@@ -31,7 +33,7 @@ pub fn fold_character_array_variable_initializer(
         })
         .collect();
 
-    let string_literal = make_string_literal(ascii, data_type.clone(), chk);
+    let string_literal = make_string_literal(ascii, data_type.clone(), chk, driver);
 
     chk.set_data_type(string_literal.id(), &data_type);
 
@@ -72,8 +74,13 @@ fn get_char_value(expr: &AstExpression) -> u8 {
     }
 }
 
-fn make_string_literal(ascii: Vec<String>, data_type: AstType, chk: &mut TypeChecker) -> AstExpression {
-    let node_id = super::make_constant_expr_node_id(data_type, chk);
+fn make_string_literal(
+    ascii: Vec<String>,
+    data_type: AstType,
+    chk: &mut TypeChecker,
+    driver: &mut Driver,
+) -> AstExpression {
+    let node_id = super::make_constant_expr_node_id(data_type, chk, driver);
     let literals = vec![format!("\"{}\"", ascii.join(""))];
     AstExpression::new(node_id, AstExpressionKind::StringLiteral { literals, ascii })
 }

@@ -6,9 +6,7 @@ use crate::ICE;
 use crate::compiler_driver::Driver;
 use crate::lexer;
 
-use super::super::{
-    AstAssignmentOp, AstBinaryOp, AstExpression, AstExpressionKind, AstNodeId, AstUnaryOp, ParseResult, Parser,
-};
+use super::super::{AstAssignmentOp, AstBinaryOp, AstExpression, AstExpressionKind, AstUnaryOp, ParseResult, Parser};
 use super::parse_unary_expression;
 
 /// Parses a prefix unary operation and returns an AST expression.
@@ -23,7 +21,7 @@ pub fn parse_prefix_unary_operation(parser: &mut Parser, driver: &mut Driver) ->
 
     let end_loc = parser.token_stream.prev_token_source_location().expect("Should have a location");
 
-    let node_id = AstNodeId::new();
+    let node_id = driver.make_node_id();
     parser.metadata.add_source_location(node_id, unary_op_token.location.merge_with(end_loc));
     parser.metadata.propagate_const_flag_from_child(unary_expr.id(), node_id);
 
@@ -43,7 +41,7 @@ pub fn parse_prefix_unary_operation(parser: &mut Parser, driver: &mut Driver) ->
 pub fn parse_postfix_incr_or_decr(
     expr: AstExpression,
     parser: &mut Parser,
-    _driver: &mut Driver,
+    driver: &mut Driver,
 ) -> ParseResult<AstExpression> {
     let Some(unary_op_token) = parser.token_stream.take_token() else {
         ICE!("Token should exist");
@@ -58,7 +56,7 @@ pub fn parse_postfix_incr_or_decr(
     let unary_op_loc = unary_op_token.location;
     let end_loc = parser.token_stream.prev_token_source_location().expect("Should have a location");
 
-    let node_id = AstNodeId::new();
+    let node_id = driver.make_node_id();
     parser.metadata.add_source_location(node_id, unary_op_loc.merge_with(end_loc));
 
     Ok(AstExpression::new(node_id, AstExpressionKind::Unary { op, operand: Box::new(expr) }))

@@ -5,6 +5,7 @@
 use std::collections::HashMap;
 
 use crate::ICE;
+use crate::compiler_driver::Driver;
 use crate::core::SourceLocation;
 use crate::parser::{AstDeclaredType, AstExpression, AstExpressionKind, AstMetadata, AstNodeId, AstType};
 
@@ -97,8 +98,14 @@ impl TypeChecker {
     }
 
     /// Wraps the given `AstExpression` in a cast to the given `target_type`.
-    pub fn add_cast(&mut self, target_type: &AstType, inner: Box<AstExpression>, is_implicit: bool) -> AstExpression {
-        let node_id = AstNodeId::new();
+    pub fn add_cast(
+        &mut self,
+        target_type: &AstType,
+        inner: Box<AstExpression>,
+        is_implicit: bool,
+        driver: &mut Driver,
+    ) -> AstExpression {
+        let node_id = driver.make_node_id();
 
         self.set_data_type(node_id, target_type);
         self.metadata.copy_source_location_from_child(inner.id(), node_id);
@@ -115,10 +122,11 @@ impl TypeChecker {
         &mut self,
         target_type: &AstType,
         expr: Box<AstExpression>,
+        driver: &mut Driver,
     ) -> Box<AstExpression> {
         let expr_type = self.get_data_type(expr.id());
 
-        if expr_type == *target_type { expr } else { Box::new(self.add_cast(target_type, expr, true)) }
+        if expr_type == *target_type { expr } else { Box::new(self.add_cast(target_type, expr, true, driver)) }
     }
 
     /// If the given boxed `AstExpression`'s type already matches the `target_type` then the existing expression
@@ -127,9 +135,10 @@ impl TypeChecker {
         &mut self,
         target_type: &AstType,
         expr: Box<AstExpression>,
+        driver: &mut Driver,
     ) -> Box<AstExpression> {
         let expr_type = self.get_data_type(expr.id());
 
-        if expr_type == *target_type { expr } else { Box::new(self.add_cast(target_type, expr, false)) }
+        if expr_type == *target_type { expr } else { Box::new(self.add_cast(target_type, expr, false, driver)) }
     }
 }

@@ -10,7 +10,7 @@ use crate::lexer;
 use super::super::AstExpressionFlag;
 use super::hex_float;
 use super::utils;
-use super::{AstExpression, AstExpressionKind, AstFloatLiteralKind, AstIntegerLiteralKind, AstNodeId, AstType};
+use super::{AstExpression, AstExpressionKind, AstFloatLiteralKind, AstIntegerLiteralKind, AstType};
 use super::{ParseError, ParseResult, Parser, add_error};
 
 /// Parses a character literal.
@@ -21,7 +21,7 @@ pub fn parse_char_literal(parser: &mut Parser, driver: &mut Driver) -> ParseResu
         ICE!("Expected character literal");
     };
 
-    let node_id = AstNodeId::new();
+    let node_id = driver.make_node_id();
     parser.metadata.add_source_location(node_id, token.location);
     parser.metadata.set_expr_flag(node_id, AstExpressionFlag::IsConstant);
 
@@ -69,7 +69,7 @@ pub fn parse_string_literal(parser: &mut Parser, driver: &mut Driver) -> ParseRe
     let start_loc = start_loc.ok_or(ParseError)?;
     let end_loc = parser.token_stream.prev_token_source_location().ok_or(ParseError)?;
 
-    let node_id = AstNodeId::new();
+    let node_id = driver.make_node_id();
     parser.metadata.add_source_location(node_id, start_loc.merge_with(end_loc));
     parser.metadata.set_expr_flag(node_id, AstExpressionFlag::IsConstant);
 
@@ -151,7 +151,7 @@ pub fn parse_integer_literal(parser: &mut Parser, driver: &mut Driver) -> ParseR
         _ => kind,
     };
 
-    let node_id = AstNodeId::new();
+    let node_id = driver.make_node_id();
     parser.metadata.add_source_location(node_id, token.location);
     parser.metadata.set_expr_flag(node_id, AstExpressionFlag::IsConstant);
 
@@ -204,7 +204,7 @@ pub fn parse_float_literal(parser: &mut Parser, driver: &mut Driver) -> ParseRes
         None => AstFloatLiteralKind::Double,
     };
 
-    let node_id = AstNodeId::new();
+    let node_id = driver.make_node_id();
     parser.metadata.add_source_location(node_id, token.location);
     parser.metadata.set_expr_flag(node_id, AstExpressionFlag::IsConstant);
 

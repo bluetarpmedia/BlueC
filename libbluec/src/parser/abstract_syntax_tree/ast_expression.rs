@@ -92,19 +92,6 @@ impl AstExpression {
         Self { node_id, kind }
     }
 
-    /// Creates a new `AstExpression:IntegerLiteral` with the given value, in base 10.
-    pub fn new_int_literal(value: u64) -> Self {
-        Self {
-            node_id: AstNodeId::new(),
-            kind: AstExpressionKind::IntegerLiteral {
-                literal: value.to_string(),
-                literal_base: 10,
-                value,
-                kind: AstIntegerLiteralKind::Int,
-            },
-        }
-    }
-
     /// Deconstructs the expression to allow the caller to take ownership of the expression's fields.
     pub fn deconstruct(self) -> (AstNodeId, AstExpressionKind) {
         (self.node_id, self.kind)

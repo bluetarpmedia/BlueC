@@ -4,7 +4,7 @@
 //! to rearrange the tree for constant folding.
 
 use crate::ICE;
-use crate::parser::{AstBinaryOp, AstExpression, AstExpressionKind, AstNodeId};
+use crate::parser::{AstBinaryOp, AstExpression, AstExpressionKind, AstIntegerLiteralKind, AstNodeId};
 
 use super::super::type_check::TypeChecker;
 
@@ -36,7 +36,7 @@ pub fn reassociate_binary_expr(expr: &mut AstExpression, chk: &mut TypeChecker) 
     let current_op = *current_op;
 
     // Take ownership of the given `expr` by replacing it with a dummy/null value (which will get dropped).
-    let null_expr = AstExpression::new_int_literal(0);
+    let null_expr = make_dummy_int_literal();
     let owned_expr = std::mem::replace(expr, null_expr);
 
     // Flatten the terms in the expression tree if they have the same operator.
@@ -129,4 +129,17 @@ fn rebuild_tree(
     }
 
     current
+}
+
+/// Creates a dummy `AstExpression:IntegerLiteral`. Its value is zero and its ID is null/invalid.
+fn make_dummy_int_literal() -> AstExpression {
+    AstExpression::new(
+        AstNodeId::null(),
+        AstExpressionKind::IntegerLiteral {
+            literal: "0".to_string(),
+            literal_base: 10,
+            value: 0,
+            kind: AstIntegerLiteralKind::Int,
+        },
+    )
 }

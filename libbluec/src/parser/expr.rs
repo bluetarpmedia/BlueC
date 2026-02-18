@@ -124,7 +124,7 @@ fn parse_assignment_expression(
 ) -> ParseResult<AstExpression> {
     let rhs = parse_expression_with_precedence(parser, driver, precedence)?;
 
-    let node_id = AstNodeId::new();
+    let node_id = driver.make_node_id();
     parser.metadata.add_operator_sloc(node_id, op_loc);
 
     let source_loc =
@@ -132,7 +132,7 @@ fn parse_assignment_expression(
 
     parser.metadata.add_source_location(node_id, source_loc);
 
-    let computation_node_id = AstNodeId::new(); // No source location needed; this is for the typechecker
+    let computation_node_id = driver.make_node_id(); // No source location needed; this is for the typechecker
     Ok(AstExpression::new(
         node_id,
         AstExpressionKind::Assignment { computation_node_id, op, lhs: Box::new(lhs), rhs: Box::new(rhs) },
@@ -171,7 +171,7 @@ fn parse_ternary_expression(
         .get_source_location(condition.id())
         .merge_with(parser.metadata.get_source_location(alternative.id()));
 
-    let node_id = AstNodeId::new();
+    let node_id = driver.make_node_id();
     parser.metadata.add_source_location(node_id, loc);
     parser.metadata.add_operator_sloc(node_id, ternary_op_loc);
     parser.metadata.propagate_const_flag_from_children(&[condition.id(), consequent.id(), alternative.id()], node_id);
@@ -200,7 +200,7 @@ fn parse_binary_expression(
     let expr_loc =
         parser.metadata.get_source_location(lhs.id()).merge_with(parser.metadata.get_source_location(rhs.id()));
 
-    let node_id = AstNodeId::new();
+    let node_id = driver.make_node_id();
     parser.metadata.add_source_location(node_id, expr_loc);
     parser.metadata.add_operator_sloc(node_id, op_loc);
     parser.metadata.propagate_const_flag_from_children(&[lhs.id(), rhs.id()], node_id);
@@ -273,7 +273,7 @@ fn parse_cast_expression(parser: &mut Parser, driver: &mut Driver) -> ParseResul
     // The resolved type to which the expression is being cast
     let target_type = AstDeclaredType::unresolved(basic_type, None, declarator);
 
-    let node_id = AstNodeId::new();
+    let node_id = driver.make_node_id();
     let sloc = open_paren_loc.merge_with(parser.metadata.get_source_location(expr_to_cast.id()));
     parser.metadata.add_source_location(node_id, sloc);
     parser.metadata.propagate_const_flag_from_child(expr_to_cast.id(), node_id);
@@ -372,7 +372,7 @@ fn parse_function_call_expression(
     let designator = Box::new(expr);
     let designator_loc = parser.metadata.get_source_location(designator.id());
 
-    let node_id = AstNodeId::new();
+    let node_id = driver.make_node_id();
     parser.metadata.add_source_location(node_id, designator_loc);
 
     Ok(AstExpression::new(node_id, AstExpressionKind::FunctionCall { designator, args, args_node_id }))
@@ -405,7 +405,7 @@ fn parse_function_call_arguments(
 
     _ = utils::expect_token(lexer::TokenType::CloseParen, parser, driver)?;
 
-    let args_node_id = AstNodeId::new();
+    let args_node_id = driver.make_node_id();
     parser.metadata.add_source_location(args_node_id, args_start_loc.merge_with(args_end_loc));
 
     Ok((args, args_node_id))
@@ -423,7 +423,7 @@ fn parse_array_subscript_expression(
 
     _ = utils::expect_token(lexer::TokenType::CloseSqBracket, parser, driver)?;
 
-    let node_id = AstNodeId::new();
+    let node_id = driver.make_node_id();
 
     // Set the source location as the '[' token. (Diagnostics can add the other expressions as locations.)
     parser.metadata.add_source_location(node_id, open_sq_bracket_loc);
@@ -448,7 +448,7 @@ fn parse_identifier_expression(parser: &mut Parser, driver: &mut Driver) -> Pars
         return Err(ParseError);
     }
 
-    let node_id = AstNodeId::new();
+    let node_id = driver.make_node_id();
     parser.metadata.add_source_location(node_id, identifier_token.location);
 
     // Identifier resolution

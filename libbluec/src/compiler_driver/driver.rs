@@ -5,6 +5,9 @@
 use std::io::Write;
 use std::path::Path;
 
+use crate::ICE;
+use crate::parser::AstNodeId;
+
 use super::diagnostics::printer::Printer;
 use super::diagnostics::{Diagnostic, DiagnosticKind};
 use super::options::{DriverFlag, DriverOptions};
@@ -47,7 +50,16 @@ pub struct Driver {
     diagnostics_enabled: bool,
     errors: Vec<Diagnostic>,
     warnings: Vec<Diagnostic>,
+
+    // Next AstNodeId
+    next_node_id: u32,
 }
+
+/// A token type which [`Driver::make_node_id`] constructs and passes to [`AstNodeId::new`].
+///
+/// Only [Driver] can construct this type (since it has a private field), meaning the only way for code to construct
+/// [AstNodeId] is by calling `Driver::make_node_id`.
+pub(crate) struct AstNodeIdAccessToken(());
 
 impl Driver {
     /// Creates a new compiler driver configured to compile the given source file.
@@ -62,6 +74,7 @@ impl Driver {
             diagnostics_enabled: true,
             errors: Vec::new(),
             warnings: Vec::new(),
+            next_node_id: 1,
         }
     }
 
@@ -76,6 +89,7 @@ impl Driver {
             diagnostics_enabled: true,
             errors: Vec::new(),
             warnings: Vec::new(),
+            next_node_id: 1,
         }
     }
 
@@ -107,6 +121,19 @@ impl Driver {
         let assembler_output_filename = super::assemble(self)?;
 
         Ok(CompilerGeneratedFile::ObjectFile(assembler_output_filename))
+    }
+
+    /// Creates a new [`AstNodeId`].
+    pub fn make_node_id(&mut self) -> AstNodeId {
+        let next_id = self.next_node_id;
+
+        if next_id == u32::MAX {
+            ICE!("Exhausted node ids"); // Technically we have 1 more available but we'll limit ourselves to MAX-1.
+        }
+
+        self.next_node_id += 1;
+
+        AstNodeId::new(AstNodeIdAccessToken(()), next_id)
     }
 
     /// The compiler driver's options.

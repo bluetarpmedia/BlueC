@@ -239,7 +239,7 @@ pub fn verify_function_parameter_declaration(
     let declared_type = AstDeclaredType::resolved(param_type);
 
     let mut param_decl = AstVariableDeclaration {
-        node_id: AstNodeId::new(),
+        node_id: driver.make_node_id(),
         is_declaration_only: true,
         is_file_scope: false,
         declared_type,

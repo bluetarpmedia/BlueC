@@ -100,7 +100,7 @@ pub fn parse_variable_declaration(
 
     let end_decl_loc = parser.token_stream.prev_token_source_location().unwrap();
 
-    let node_id = AstNodeId::new();
+    let node_id = driver.make_node_id();
     parser.metadata.add_source_location(node_id, var_ident.loc.merge_with(end_decl_loc));
 
     let is_declaration_only = is_declared_extern && initializer.is_none();
@@ -120,7 +120,7 @@ pub fn parse_variable_declaration(
     });
 
     if is_declared_typedef {
-        let node_id = AstNodeId::new();
+        let node_id = driver.make_node_id();
         Ok(AstDeclaration::TypeAlias(AstTypeAliasDeclaration { node_id, decl: Box::new(var_decl) }))
     } else {
         Ok(var_decl)
@@ -281,7 +281,7 @@ fn parse_aggregate_initializer(parser: &mut Parser, driver: &mut Driver) -> Pars
 
     let end_loc = utils::expect_token(TokenType::CloseBrace, parser, driver)?;
 
-    let node_id = AstNodeId::new();
+    let node_id = driver.make_node_id();
     parser.metadata.add_source_location(node_id, start_loc.merge_with(end_loc));
 
     let child_node_ids = aggregate_items.iter().map(|item| item.node_id()).collect::<Vec<AstNodeId>>();

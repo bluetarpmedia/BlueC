@@ -12,7 +12,7 @@ use crate::core::SourceLocation;
 use crate::parser::expr::ops;
 use crate::parser::{
     AstAssignmentOp, AstBinaryOp, AstBlock, AstBlockItem, AstConstantValue, AstDeclaration, AstExpression,
-    AstExpressionFlag, AstExpressionKind, AstForInitializer, AstNodeId, AstRoot, AstStatement,
+    AstExpressionFlag, AstExpressionKind, AstForInitializer, AstIntegerLiteralKind, AstNodeId, AstRoot, AstStatement,
     AstStaticStorageInitializer, AstStorageDuration, AstType, AstUnaryOp, AstUniqueName, AstVariableInitializer,
 };
 
@@ -202,7 +202,7 @@ fn typecheck_variable_aggregate_initializer(
         let loc = chk.metadata.get_source_location(expr.id());
         let scalar_is_literal_zero = expr.is_integer_literal_with_value(0);
         let scalar = std::mem::take(init);
-        *init = vec![AstVariableInitializer::Aggregate { node_id: AstNodeId::new(), init: scalar }];
+        *init = vec![AstVariableInitializer::Aggregate { node_id: driver.make_node_id(), init: scalar }];
 
         if !scalar_is_literal_zero {
             Warning::missing_braces_around_sub_object(loc, driver);
@@ -449,7 +449,7 @@ fn typecheck_expression_with_decay(
 
         // The source span for the new AddressOf expression will be the same as the original expression,
         // since our new AddressOf that we're inserting doesn't appear in the source code.
-        let node_id = AstNodeId::new();
+        let node_id = driver.make_node_id();
         let original_expr_loc = chk.metadata.get_source_location(original_expr.id());
         chk.metadata.add_source_location(node_id, original_expr_loc);
         chk.metadata.propagate_const_flag_from_child(original_expr.id(), node_id);
@@ -465,7 +465,7 @@ fn typecheck_expression_with_decay(
 
         // The source span for the new AddressOf expression will be the same as the original expression,
         // since our new AddressOf that we're inserting doesn't appear in the source code.
-        let node_id = AstNodeId::new();
+        let node_id = driver.make_node_id();
         let original_expr_loc = chk.metadata.get_source_location(original_expr.id());
         chk.metadata.add_source_location(node_id, original_expr_loc);
         chk.metadata.propagate_const_flag_from_child(original_expr.id(), node_id);
@@ -899,8 +899,8 @@ fn typecheck_binary_operation(
     //      But we still cast the lhs to the data type because the lhs may have been promoted to 'int'
     //      if it was a smaller integer type (_Bool, char, short).
     //
-    let lhs = chk.add_implicit_cast_if_needed(&operand_data_type, lhs);
-    let rhs = chk.add_implicit_cast_if_needed(&operand_data_type, rhs);
+    let lhs = chk.add_implicit_cast_if_needed(&operand_data_type, lhs, driver);
+    let rhs = chk.add_implicit_cast_if_needed(&operand_data_type, rhs, driver);
 
     // Determine the data type of the binary operation itself
     let binary_op_data_type = if op.is_relational() { AstType::Int } else { operand_data_type };
@@ -969,7 +969,7 @@ fn typecheck_ptr_and_int_binary_operation(
 
     // If necessary, cast the integer expression to a 'long' type. This helps us later with IR lowering.
     let original_int_expr = utils::take_boxed_expression(&mut int_expr);
-    int_expr = chk.add_explicit_cast_if_needed(&AstType::Long, original_int_expr);
+    int_expr = chk.add_explicit_cast_if_needed(&AstType::Long, original_int_expr, driver);
 
     // The data type of the binary operation is 'int' if the operation is relational or otherwise the pointer's type.
     let expression_type = if op.is_relational() { AstType::Int } else { ptr_type };
@@ -1213,8 +1213,8 @@ fn typecheck_conditional(
     let original_alternative = utils::take_boxed_expression(alternative);
 
     // Wrap each operand in a cast
-    let casted_consequent = chk.add_implicit_cast_if_needed(&common_type, original_consequent);
-    let casted_alternative = chk.add_implicit_cast_if_needed(&common_type, original_alternative);
+    let casted_consequent = chk.add_implicit_cast_if_needed(&common_type, original_consequent, driver);
+    let casted_alternative = chk.add_implicit_cast_if_needed(&common_type, original_alternative, driver);
 
     // Data type of the conditional is the common type of the consequent and alternative
     chk.set_data_type(cond_expr_id, &common_type);
@@ -1605,7 +1605,7 @@ fn convert_expression_type(
 
     // Cast the expression to the target type
     let is_implicit_cast = true;
-    Ok(chk.add_cast(target_type, Box::new(original_expr), is_implicit_cast))
+    Ok(chk.add_cast(target_type, Box::new(original_expr), is_implicit_cast, driver))
 }
 
 /// Checks whether a conversion from a `source_type` to a `dest_type` is valid; emits a diagnostic if not.
@@ -1708,7 +1708,7 @@ fn make_zero_initializer(
     driver: &mut Driver,
 ) -> TypeCheckResult<AstVariableInitializer> {
     if let AstType::Array { element_type: array_elem_type, count } = element_type {
-        let node_id = AstNodeId::new();
+        let node_id = driver.make_node_id();
 
         let mut init = Vec::with_capacity(*count);
         for _ in 0..*count {
@@ -1720,7 +1720,7 @@ fn make_zero_initializer(
         Ok(AstVariableInitializer::Aggregate { node_id, init })
     } else if element_type.is_scalar() {
         // If necessary, this 'int' will get promoted to the `element_type`.
-        let mut constant_zero = AstExpression::new_int_literal(0);
+        let mut constant_zero = make_zero_int_literal(driver);
 
         chk.metadata.add_source_location(constant_zero.id(), SourceLocation::none());
 
@@ -1730,4 +1730,17 @@ fn make_zero_initializer(
     } else {
         ICE!("Did not make a zero initializer for '{element_type}'")
     }
+}
+
+/// Creates an `AstExpression:IntegerLiteral` with a value of zero.
+fn make_zero_int_literal(driver: &mut Driver) -> AstExpression {
+    AstExpression::new(
+        driver.make_node_id(),
+        AstExpressionKind::IntegerLiteral {
+            literal: "0".to_string(),
+            literal_base: 10,
+            value: 0,
+            kind: AstIntegerLiteralKind::Int,
+        },
+    )
 }

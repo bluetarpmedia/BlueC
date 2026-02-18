@@ -1,6 +1,6 @@
 // Copyright 2025-2026 Neil Henderson
 
-use crate::compiler_driver;
+use crate::compiler_driver::Driver;
 use crate::parser;
 use crate::parser::recursive_descent::{block, decl};
 use crate::parser::{AstDeclaration, AstNodeId};
@@ -9,9 +9,11 @@ use super::utils::make_parser;
 
 #[test]
 fn make_node_id() {
-    let node_id1 = AstNodeId::new();
-    let node_id2 = AstNodeId::new();
-    let node_id3 = AstNodeId::new();
+    let mut driver = Driver::for_testing();
+
+    let node_id1 = driver.make_node_id();
+    let node_id2 = driver.make_node_id();
+    let node_id3 = driver.make_node_id();
 
     assert!(node_id1 != node_id2 && node_id2 != node_id3);
     assert!(node_id1 != AstNodeId::null() && node_id2 != AstNodeId::null() && node_id3 != AstNodeId::null());
@@ -24,7 +26,7 @@ fn disable_diagnostics_during_parse() {
         return 0; \
     }";
 
-    let mut driver = compiler_driver::Driver::for_testing();
+    let mut driver = Driver::for_testing();
 
     // Diagnostics disabled
     {
@@ -53,7 +55,7 @@ fn with_new_scope() {
     // We'll parse this with pretend scopes, so the first x is at file-scope, but the other two are inside scopes.
     let source = "int x; int x; int x;";
 
-    let mut driver = compiler_driver::Driver::for_testing();
+    let mut driver = Driver::for_testing();
     let mut parser = make_parser(&mut driver, source);
 
     let x1 = decl::parse_declaration(&mut parser, &mut driver).expect("Should have parsed");
@@ -95,10 +97,10 @@ fn with_new_scope() {
 fn break_with_enclosing_loop_statement() {
     let source = "break;";
 
-    let mut driver = compiler_driver::Driver::for_testing();
+    let mut driver = Driver::for_testing();
     let mut parser = make_parser(&mut driver, source);
 
-    let node_id = AstNodeId::new();
+    let node_id = driver.make_node_id();
     let stmt = parser
         .with_enclosing_statement(parser::EnclosingStatement::Loop(node_id), |p| {
             verify_current_enclosing_statement(p, Some(node_id), None);
@@ -119,10 +121,10 @@ fn break_with_enclosing_loop_statement() {
 fn break_with_enclosing_switch_statement() {
     let source = "break;";
 
-    let mut driver = compiler_driver::Driver::for_testing();
+    let mut driver = Driver::for_testing();
     let mut parser = make_parser(&mut driver, source);
 
-    let node_id = AstNodeId::new();
+    let node_id = driver.make_node_id();
     let stmt = parser
         .with_enclosing_statement(parser::EnclosingStatement::Switch(node_id), |p| {
             verify_current_enclosing_statement(p, None, Some(node_id));
@@ -143,7 +145,7 @@ fn break_with_enclosing_switch_statement() {
 fn break_inside_loop_inside_switch() {
     let source = "break;";
 
-    let mut driver = compiler_driver::Driver::for_testing();
+    let mut driver = Driver::for_testing();
     let mut parser = make_parser(&mut driver, source);
 
     // Outer switch statement
@@ -178,7 +180,7 @@ fn break_inside_loop_inside_switch() {
 fn break_inside_switch_inside_loop() {
     let source = "break;";
 
-    let mut driver = compiler_driver::Driver::for_testing();
+    let mut driver = Driver::for_testing();
     let mut parser = make_parser(&mut driver, source);
 
     // Outer loop statement
@@ -213,7 +215,7 @@ fn break_inside_switch_inside_loop() {
 fn restore_token_stream_after_parsing() {
     let source = "return 10;";
 
-    let mut driver = compiler_driver::Driver::for_testing();
+    let mut driver = Driver::for_testing();
     let mut parser = make_parser(&mut driver, source);
 
     let validate_return_stmt = |stmt| -> bool {
@@ -245,7 +247,7 @@ fn has_errors_emitted() {
             return 0; \
     }";
 
-    let mut driver = compiler_driver::Driver::for_testing();
+    let mut driver = Driver::for_testing();
     let mut parser = make_parser(&mut driver, source);
 
     _ = block::parse_block(&mut parser, &mut driver);
@@ -265,7 +267,7 @@ fn no_errors_emitted() {
             return 0; \
     }";
 
-    let mut driver = compiler_driver::Driver::for_testing();
+    let mut driver = Driver::for_testing();
     let mut parser = make_parser(&mut driver, source);
 
     let block = block::parse_block(&mut parser, &mut driver);

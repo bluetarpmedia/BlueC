@@ -12,7 +12,6 @@ struct AstPrinter<'m, W: Write> {
     writer: BufWriter<W>,
     metadata: &'m AstMetadata,
     prefix: String,
-    print_node_ids: bool,
     inside_type_alias_decl: bool,
     decl_color: &'static str,
     stmt_color: &'static str,
@@ -25,7 +24,7 @@ struct AstPrinter<'m, W: Write> {
 
 impl<'m, W: Write> AstPrinter<'m, W> {
     /// Creates a new AST printer
-    pub fn new(writer: W, metadata: &'m AstMetadata, color_enabled: bool, print_node_ids: bool) -> Self {
+    pub fn new(writer: W, metadata: &'m AstMetadata, color_enabled: bool) -> Self {
         const YELLOW: &str = "\x1b[33m";
         const BRIGHT_GREEN: &str = "\x1b[92m";
         const BRIGHT_YELLOW: &str = "\x1b[93m";
@@ -46,7 +45,6 @@ impl<'m, W: Write> AstPrinter<'m, W> {
             writer: BufWriter::new(writer),
             metadata,
             prefix: String::new(),
-            print_node_ids,
             inside_type_alias_decl: false,
             decl_color,
             stmt_color,
@@ -157,10 +155,9 @@ pub fn print(ast_root: &AstRoot, metadata: &AstMetadata, driver: &mut Driver) {
     if driver.options().flags.contains("redirect_stdout") {
         print_to_file(ast_root, metadata, driver);
     } else {
-        let print_node_ids = !driver.options().flags.contains("ast_printer_no_ids");
         let color_enabled = !driver.options().no_color;
         let stdout = io::stdout();
-        let mut printer = AstPrinter::new(stdout.lock(), metadata, color_enabled, print_node_ids);
+        let mut printer = AstPrinter::new(stdout.lock(), metadata, color_enabled);
         printer.print_ast(ast_root);
     }
 }
@@ -174,9 +171,8 @@ fn print_to_file(ast_root: &AstRoot, metadata: &AstMetadata, driver: &mut Driver
         let redirect_to_file = redirect_to_file.strip_prefix(REDIRECT_FILE_FLAG_PREFIX).unwrap();
 
         if let Ok(file) = std::fs::File::create(redirect_to_file) {
-            let print_node_ids = !driver.options().flags.contains("ast_printer_no_ids");
             let color_enabled = !driver.options().no_color;
-            let mut printer = AstPrinter::new(file, metadata, color_enabled, print_node_ids);
+            let mut printer = AstPrinter::new(file, metadata, color_enabled);
             printer.print_ast(ast_root);
         } else {
             eprintln!("Error: Cannot open '{redirect_to_file}'");
@@ -686,9 +682,7 @@ fn print_break_statement<W: Write>(
 ) -> io::Result<()> {
     p.write_prefix_and_connector(make_connector(is_last))?;
     p.write_stmt_str("BreakStmt")?;
-    if p.print_node_ids {
-        write!(p.writer, " [Enclosing Stmt Id = {enclosing_stmt_node_id}]")?;
-    }
+    write!(p.writer, " [Enclosing Stmt Id = {enclosing_stmt_node_id}]")?;
     p.new_line()
 }
 
@@ -701,9 +695,7 @@ fn print_switch_case_statement<W: Write>(
 ) -> io::Result<()> {
     p.write_prefix_and_connector(make_connector(is_last))?;
     p.write_stmt_str("CaseStmt")?;
-    if p.print_node_ids {
-        write!(p.writer, " [Switch Id = {switch_node_id}]")?;
-    }
+    write!(p.writer, " [Switch Id = {switch_node_id}]")?;
     p.new_line()?;
 
     p.with_indent(is_last, |p| {
@@ -725,9 +717,7 @@ fn print_switch_default_statement<W: Write>(
 ) -> io::Result<()> {
     p.write_prefix_and_connector(make_connector(is_last))?;
     p.write_stmt_str("DefaultStmt")?;
-    if p.print_node_ids {
-        write!(p.writer, " [Switch Id = {switch_node_id}]")?;
-    }
+    write!(p.writer, " [Switch Id = {switch_node_id}]")?;
     p.new_line()?;
 
     p.with_indent(is_last, |p| print_statement(p, stmt, true))
@@ -744,9 +734,7 @@ fn print_return_statement<W: Write>(p: &mut AstPrinter<W>, expr: &AstExpression,
 fn print_continue_statement<W: Write>(p: &mut AstPrinter<W>, loop_node_id: AstNodeId, is_last: bool) -> io::Result<()> {
     p.write_prefix_and_connector(make_connector(is_last))?;
     p.write_stmt_str("ContinueStmt")?;
-    if p.print_node_ids {
-        write!(p.writer, " [Loop Id = {loop_node_id}]")?;
-    }
+    write!(p.writer, " [Loop Id = {loop_node_id}]")?;
     p.new_line()
 }
 
@@ -1005,9 +993,7 @@ fn print_type<W: Write>(p: &mut AstPrinter<W>, ty: &AstType) -> io::Result<()> {
 }
 
 fn print_node_metadata<W: Write>(p: &mut AstPrinter<W>, node_id: AstNodeId) -> io::Result<()> {
-    if p.print_node_ids {
-        write!(p.writer, "{} [Id = {node_id}]", p.meta_color)?;
-    }
+    write!(p.writer, "{} [Id = {node_id}]", p.meta_color)?;
 
     if let Some(ty) = p.metadata.try_get_node_type(node_id) {
         print_type(p, ty)?;

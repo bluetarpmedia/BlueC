@@ -71,12 +71,16 @@ pub fn fold(ast_root: &mut AstRoot, chk: &mut TypeChecker, driver: &mut Driver) 
             && var_init.is_aggregate()
             && !chk.metadata.is_expr_flag_set(var_init.node_id(), AstExpressionFlag::IsStaticStorageInit)
         {
-            visit_aggregate_variable_initializer(var_init, chk)
+            visit_aggregate_variable_initializer(var_init, chk, driver)
         }
     });
 }
 
-fn visit_aggregate_variable_initializer(var_init: &mut AstVariableInitializer, chk: &mut TypeChecker) {
+fn visit_aggregate_variable_initializer(
+    var_init: &mut AstVariableInitializer,
+    chk: &mut TypeChecker,
+    driver: &mut Driver,
+) {
     let AstVariableInitializer::Aggregate { node_id, init } = var_init else {
         return;
     };
@@ -86,7 +90,8 @@ fn visit_aggregate_variable_initializer(var_init: &mut AstVariableInitializer, c
     //
     let aggregate_type = chk.metadata.get_node_type(*node_id);
     if chk.metadata.is_expr_flag_set(*node_id, AstExpressionFlag::IsConstant) && aggregate_type.is_character_array() {
-        *var_init = variable_initializer::fold_character_array_variable_initializer(init, aggregate_type.clone(), chk);
+        *var_init =
+            variable_initializer::fold_character_array_variable_initializer(init, aggregate_type.clone(), chk, driver);
         return;
     }
 
@@ -95,7 +100,7 @@ fn visit_aggregate_variable_initializer(var_init: &mut AstVariableInitializer, c
     //
     for ini in init {
         if ini.is_aggregate() {
-            visit_aggregate_variable_initializer(ini, chk);
+            visit_aggregate_variable_initializer(ini, chk, driver);
         }
     }
 }
@@ -127,39 +132,48 @@ fn fold_constant_expression(expr: &mut AstExpression, chk: &mut TypeChecker, dri
         let sloc = chk.metadata.get_source_location(expr.id()); // Sloc of expression before folding
 
         let data_type = chk.metadata.get_node_type(expr.id()).clone();
-        *expr = make_literal(&constant_value, data_type, chk);
+        *expr = make_literal(&constant_value, data_type, chk, driver);
 
         chk.metadata.add_source_location(expr.id(), sloc); // Set sloc on the new literal that replaced the expr
     }
 }
 
 /// Creates a literal expression with the given constant value for the given data type.
-fn make_literal(constant_value: &AstConstantValue, data_type: AstType, chk: &mut TypeChecker) -> AstExpression {
+fn make_literal(
+    constant_value: &AstConstantValue,
+    data_type: AstType,
+    chk: &mut TypeChecker,
+    driver: &mut Driver,
+) -> AstExpression {
     match constant_value {
         AstConstantValue::Integer(constant_int) => match constant_int {
-            AstConstantInteger::Char(value) => make_char_literal(*value as i32, data_type, chk),
-            AstConstantInteger::UnsignedChar(value) => make_char_literal(*value as i32, data_type, chk),
+            AstConstantInteger::Char(value) => make_char_literal(*value as i32, data_type, chk, driver),
+            AstConstantInteger::UnsignedChar(value) => make_char_literal(*value as i32, data_type, chk, driver),
 
-            AstConstantInteger::Short(value) => make_short_literal(*value as i32, data_type, chk),
-            AstConstantInteger::UnsignedShort(value) => make_short_literal(*value as i32, data_type, chk),
+            AstConstantInteger::Short(value) => make_short_literal(*value as i32, data_type, chk, driver),
+            AstConstantInteger::UnsignedShort(value) => make_short_literal(*value as i32, data_type, chk, driver),
 
             AstConstantInteger::Int(value) => {
-                make_signed_integer_literal(*value as i64, AstIntegerLiteralKind::Int, data_type, chk)
+                make_signed_integer_literal(*value as i64, AstIntegerLiteralKind::Int, data_type, chk, driver)
             }
             AstConstantInteger::LongLong(value) => {
-                make_signed_integer_literal(*value, AstIntegerLiteralKind::LongLong, data_type, chk)
+                make_signed_integer_literal(*value, AstIntegerLiteralKind::LongLong, data_type, chk, driver)
             }
             AstConstantInteger::UnsignedInt(value) => {
-                make_unsigned_integer_literal(*value as u64, AstIntegerLiteralKind::UnsignedInt, data_type, chk)
+                make_unsigned_integer_literal(*value as u64, AstIntegerLiteralKind::UnsignedInt, data_type, chk, driver)
             }
             AstConstantInteger::UnsignedLongLong(value) => {
-                make_unsigned_integer_literal(*value, AstIntegerLiteralKind::UnsignedLongLong, data_type, chk)
+                make_unsigned_integer_literal(*value, AstIntegerLiteralKind::UnsignedLongLong, data_type, chk, driver)
             }
         },
 
         AstConstantValue::Fp(constant_fp) => match constant_fp {
-            AstConstantFp::Float(value) => make_fp_literal(*value as f64, AstFloatLiteralKind::Float, data_type, chk),
-            AstConstantFp::Double(value) => make_fp_literal(*value, AstFloatLiteralKind::Double, data_type, chk),
+            AstConstantFp::Float(value) => {
+                make_fp_literal(*value as f64, AstFloatLiteralKind::Float, data_type, chk, driver)
+            }
+            AstConstantFp::Double(value) => {
+                make_fp_literal(*value, AstFloatLiteralKind::Double, data_type, chk, driver)
+            }
         },
 
         AstConstantValue::String { .. } => ICE!("Unexpected AstConstantValue::String constant value"),
@@ -167,10 +181,10 @@ fn make_literal(constant_value: &AstConstantValue, data_type: AstType, chk: &mut
     }
 }
 
-fn make_char_literal(value: i32, data_type: AstType, chk: &mut TypeChecker) -> AstExpression {
+fn make_char_literal(value: i32, data_type: AstType, chk: &mut TypeChecker, driver: &mut Driver) -> AstExpression {
     let is_negative = value < 0;
 
-    let node_id = make_constant_expr_node_id(AstType::Int, chk); // Char literal has type 'int'
+    let node_id = make_constant_expr_node_id(AstType::Int, chk, driver); // Char literal has type 'int'
     let value = value.abs();
     let literal = value.to_string();
 
@@ -178,7 +192,7 @@ fn make_char_literal(value: i32, data_type: AstType, chk: &mut TypeChecker) -> A
     let char_literal = AstExpression::new(node_id, AstExpressionKind::CharLiteral { literal, is_multichar, value });
 
     let char_literal = if is_negative {
-        let node_id = make_constant_expr_node_id(AstType::Int, chk);
+        let node_id = make_constant_expr_node_id(AstType::Int, chk, driver);
         AstExpression::new(
             node_id,
             AstExpressionKind::Unary { op: AstUnaryOp::Negate, operand: Box::new(char_literal) },
@@ -191,7 +205,7 @@ fn make_char_literal(value: i32, data_type: AstType, chk: &mut TypeChecker) -> A
     if data_type == AstType::Int {
         char_literal
     } else {
-        let node_id = make_constant_expr_node_id(data_type.clone(), chk);
+        let node_id = make_constant_expr_node_id(data_type.clone(), chk, driver);
 
         AstExpression::new(
             node_id,
@@ -204,10 +218,10 @@ fn make_char_literal(value: i32, data_type: AstType, chk: &mut TypeChecker) -> A
     }
 }
 
-fn make_short_literal(value: i32, data_type: AstType, chk: &mut TypeChecker) -> AstExpression {
+fn make_short_literal(value: i32, data_type: AstType, chk: &mut TypeChecker, driver: &mut Driver) -> AstExpression {
     let is_negative = value < 0;
 
-    let node_id = make_constant_expr_node_id(AstType::Int, chk); // Integer literal has no 'short' type
+    let node_id = make_constant_expr_node_id(AstType::Int, chk, driver); // Integer literal has no 'short' type
     let value = value.unsigned_abs();
     let literal = value.to_string();
     let kind = AstIntegerLiteralKind::Int;
@@ -218,7 +232,7 @@ fn make_short_literal(value: i32, data_type: AstType, chk: &mut TypeChecker) -> 
     );
 
     let int_literal = if is_negative {
-        let node_id = make_constant_expr_node_id(AstType::Int, chk);
+        let node_id = make_constant_expr_node_id(AstType::Int, chk, driver);
         AstExpression::new(node_id, AstExpressionKind::Unary { op: AstUnaryOp::Negate, operand: Box::new(int_literal) })
     } else {
         int_literal
@@ -228,7 +242,7 @@ fn make_short_literal(value: i32, data_type: AstType, chk: &mut TypeChecker) -> 
     if data_type == AstType::Int {
         int_literal
     } else {
-        let node_id = make_constant_expr_node_id(data_type.clone(), chk);
+        let node_id = make_constant_expr_node_id(data_type.clone(), chk, driver);
         AstExpression::new(
             node_id,
             AstExpressionKind::Cast {
@@ -245,10 +259,11 @@ fn make_signed_integer_literal(
     kind: AstIntegerLiteralKind,
     data_type: AstType,
     chk: &mut TypeChecker,
+    driver: &mut Driver,
 ) -> AstExpression {
     let is_negative = value < 0;
 
-    let node_id = make_constant_expr_node_id(data_type.clone(), chk);
+    let node_id = make_constant_expr_node_id(data_type.clone(), chk, driver);
 
     let (value, literal) = if value == i64::MIN {
         (9223372036854775808_u64, "9223372036854775808".to_string())
@@ -261,7 +276,7 @@ fn make_signed_integer_literal(
         AstExpression::new(node_id, AstExpressionKind::IntegerLiteral { literal, literal_base: 10, value, kind });
 
     if is_negative {
-        let node_id = make_constant_expr_node_id(data_type, chk);
+        let node_id = make_constant_expr_node_id(data_type, chk, driver);
         AstExpression::new(node_id, AstExpressionKind::Unary { op: AstUnaryOp::Negate, operand: Box::new(int_literal) })
     } else {
         int_literal
@@ -273,14 +288,21 @@ fn make_unsigned_integer_literal(
     kind: AstIntegerLiteralKind,
     data_type: AstType,
     chk: &mut TypeChecker,
+    driver: &mut Driver,
 ) -> AstExpression {
-    let node_id = make_constant_expr_node_id(data_type, chk);
+    let node_id = make_constant_expr_node_id(data_type, chk, driver);
     let literal = value.to_string();
     AstExpression::new(node_id, AstExpressionKind::IntegerLiteral { literal, literal_base: 10, value, kind })
 }
 
-fn make_fp_literal(value: f64, kind: AstFloatLiteralKind, data_type: AstType, chk: &mut TypeChecker) -> AstExpression {
-    let node_id = make_constant_expr_node_id(data_type, chk);
+fn make_fp_literal(
+    value: f64,
+    kind: AstFloatLiteralKind,
+    data_type: AstType,
+    chk: &mut TypeChecker,
+    driver: &mut Driver,
+) -> AstExpression {
+    let node_id = make_constant_expr_node_id(data_type, chk, driver);
     let literal = value.to_string();
     AstExpression::new(node_id, AstExpressionKind::FloatLiteral { literal, literal_base: 10, value, kind })
 }
@@ -296,8 +318,8 @@ fn is_compound_assignment_with_constant_rhs(expr: &AstExpression, chk: &TypeChec
     }
 }
 
-fn make_constant_expr_node_id(data_type: AstType, chk: &mut TypeChecker) -> AstNodeId {
-    let node_id = AstNodeId::new();
+fn make_constant_expr_node_id(data_type: AstType, chk: &mut TypeChecker, driver: &mut Driver) -> AstNodeId {
+    let node_id = driver.make_node_id();
     chk.metadata.set_expr_flag(node_id, AstExpressionFlag::IsConstant);
     chk.metadata.set_node_type(node_id, data_type);
     chk.metadata.add_source_location(node_id, SourceLocation::none());
