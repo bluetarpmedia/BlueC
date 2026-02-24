@@ -229,7 +229,7 @@ So far I've concentrated mostly on the front-end to implement C language feature
     * Unions
   * Type qualifiers (`const`, `volatile`, `restrict`, `_Atomic`)
   * Comma operator
-  * `_Alignas`, `_Atomic`, `_Decimal...`, `_Generic`, `_Noreturn`, `_Static_assert`, `_Thread_local`
+  * `_Alignas`, `_Decimal...`, `_Generic`, `_Noreturn`, `_Static_assert`, `_Thread_local`
 * Sema
   * ✅ Type checking
   * ✅ Compile-time constant expression evaluator
