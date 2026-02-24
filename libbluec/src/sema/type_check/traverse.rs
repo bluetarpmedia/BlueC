@@ -11,9 +11,10 @@ use crate::compiler_driver::{Diagnostic, Driver, Error, Warning};
 use crate::core::SourceLocation;
 use crate::parser::expr::ops;
 use crate::parser::{
-    AstAssignmentOp, AstBinaryOp, AstBlock, AstBlockItem, AstConstantValue, AstDeclaration, AstExpression,
-    AstExpressionFlag, AstExpressionKind, AstForInitializer, AstIntegerLiteralKind, AstNodeId, AstRoot, AstStatement,
-    AstStaticStorageInitializer, AstStorageDuration, AstType, AstUnaryOp, AstUniqueName, AstVariableInitializer,
+    AstAssignmentOp, AstBinaryOp, AstBinaryOpFamily, AstBlock, AstBlockItem, AstConstantValue, AstDeclaration,
+    AstExpression, AstExpressionFlag, AstExpressionKind, AstForInitializer, AstIntegerLiteralKind, AstNodeId, AstRoot,
+    AstStatement, AstStaticStorageInitializer, AstStorageDuration, AstType, AstUnaryOp, AstUniqueName,
+    AstVariableInitializer,
 };
 
 use super::super::constant_eval;
@@ -64,6 +65,13 @@ fn typecheck_declaration(decl: &mut AstDeclaration, chk: &mut TypeChecker, drive
             let var_type =
                 decl.declared_type.resolved_type.as_ref().expect("Expected variable decl type to be resolved");
 
+            // Variable type must be complete
+            if !var_type.is_complete() {
+                let loc = chk.metadata.get_source_location(decl.node_id);
+                Error::variable_has_incomplete_type(loc, (&decl.ident).into(), var_type, driver);
+                return Err(TypeCheckError);
+            }
+
             // Typecheck the initializer expression, if there is one.
             //
             if let Some(initializer) = &mut decl.initializer {
@@ -91,15 +99,25 @@ fn typecheck_declaration(decl: &mut AstDeclaration, chk: &mut TypeChecker, drive
 
             let param_names = &function.param_names;
 
+            // Parameter types must be complete
+            if let Some((param_type, (param_ident, _))) =
+                param_types.iter().zip(param_names).find(|(param_type, _)| !param_type.is_complete())
+            {
+                Error::fn_parameter_has_incomplete_type(param_ident.loc, param_ident.into(), param_type, driver);
+                return Err(TypeCheckError);
+            }
+
+            // Type check the parameters
             let valid_params = param_types.iter().zip(param_names).all(|(param_type, (param_ident, param_unique))| {
                 symbols::verify_function_parameter_declaration(param_unique, param_ident, param_type, chk, driver)
                     .is_ok()
             });
 
+            // Type check the function body, but only if we type checked the params without any errors.
             if valid_params && let Some(body) = function.body.as_mut() {
-                // Record the function's return type so we can use it when we check the `return` statement(s)
+                // Record the function's name and return type so we can use it when we check the `return` statement(s)
                 // inside `typecheck_block`.
-                chk.set_current_function_return_type(return_type);
+                chk.set_current_function(function.node_id, &function.ident.name, return_type);
 
                 let valid_block = typecheck_block(body, chk, driver);
 
@@ -306,9 +324,12 @@ fn typecheck_statement(stmt: &mut AstStatement, chk: &mut TypeChecker, driver: &
 
         AstStatement::Compound(block) => typecheck_block(block, chk, driver)?,
 
-        AstStatement::If { controlling_expr, then_stmt, else_stmt } => {
-            typecheck_expression_with_decay(controlling_expr, chk, driver)?;
+        AstStatement::If { node_id, controlling_expr, then_stmt, else_stmt } => {
+            let controlling_expr_type = typecheck_expression_with_decay(controlling_expr, chk, driver)?;
+            typecheck_cntrl_expr_in_stmt(*node_id, controlling_expr.id(), &controlling_expr_type, chk, driver)?;
+
             typecheck_statement(then_stmt, chk, driver)?;
+
             if else_stmt.is_some() {
                 typecheck_statement(else_stmt.as_mut().unwrap(), chk, driver)?;
             }
@@ -323,17 +344,20 @@ fn typecheck_statement(stmt: &mut AstStatement, chk: &mut TypeChecker, driver: &
 
         AstStatement::Default { stmt, .. } => typecheck_statement(stmt, chk, driver)?,
 
-        AstStatement::While { controlling_expr, body, .. } => {
-            typecheck_expression_with_decay(controlling_expr, chk, driver)?;
+        AstStatement::While { node_id, controlling_expr, body } => {
+            let controlling_expr_type = typecheck_expression_with_decay(controlling_expr, chk, driver)?;
+            typecheck_cntrl_expr_in_stmt(*node_id, controlling_expr.id(), &controlling_expr_type, chk, driver)?;
+
             typecheck_statement(body, chk, driver)?;
         }
 
-        AstStatement::DoWhile { body, controlling_expr, .. } => {
+        AstStatement::DoWhile { node_id, body, controlling_expr } => {
             typecheck_statement(body, chk, driver)?;
-            typecheck_expression_with_decay(controlling_expr, chk, driver)?;
+            let controlling_expr_type = typecheck_expression_with_decay(controlling_expr, chk, driver)?;
+            typecheck_cntrl_expr_in_stmt(*node_id, controlling_expr.id(), &controlling_expr_type, chk, driver)?;
         }
 
-        AstStatement::For { init, controlling_expr, post_expr: post, body, .. } => {
+        AstStatement::For { node_id, init, controlling_expr, post_expr, body } => {
             let init: &mut AstForInitializer = init;
 
             match init {
@@ -348,18 +372,19 @@ fn typecheck_statement(stmt: &mut AstStatement, chk: &mut TypeChecker, driver: &
                 _ => (),
             }
 
-            if controlling_expr.is_some() {
-                typecheck_expression_with_decay(controlling_expr.as_mut().unwrap(), chk, driver)?;
+            if let Some(controlling_expr) = controlling_expr {
+                let controlling_expr_type = typecheck_expression_with_decay(controlling_expr, chk, driver)?;
+                typecheck_cntrl_expr_in_stmt(*node_id, controlling_expr.id(), &controlling_expr_type, chk, driver)?;
             }
 
-            if post.is_some() {
-                typecheck_expression_with_decay(post.as_mut().unwrap(), chk, driver)?;
+            if let Some(post_expr) = post_expr {
+                typecheck_expression_with_decay(post_expr, chk, driver)?;
             }
 
             typecheck_statement(body, chk, driver)?;
         }
 
-        AstStatement::Return(_) => typecheck_return_statement(stmt, chk, driver)?,
+        AstStatement::Return { .. } => typecheck_return_statement(stmt, chk, driver)?,
 
         _ => (),
     }
@@ -408,13 +433,48 @@ fn typecheck_return_statement(
     chk: &mut TypeChecker,
     driver: &mut Driver,
 ) -> TypeCheckResult<()> {
-    let AstStatement::Return(full_expr) = stmt else {
+    let AstStatement::Return { node_id, expr } = stmt else {
         ICE!("Expected return statement");
     };
 
-    let function_return_type = chk.get_current_function_return_type();
+    let (fn_node_id, fn_name, fn_return_type) = chk.get_current_function();
 
-    typecheck_expression_for_result_type(full_expr, &function_return_type, chk, driver).map(|_| ())
+    // Void function with `return;`
+    if fn_return_type == &AstType::Void && expr.is_none() {
+        return Ok(());
+    }
+
+    // Void function with `return <expr>;`
+    if fn_return_type == &AstType::Void
+        && let Some(expr) = expr
+    {
+        let err = format!("void function '{fn_name}' should not return a value");
+        let loc = chk.metadata.get_source_location(expr.id());
+        let mut diag = Diagnostic::error_at_location(err, loc);
+        let fn_loc = chk.metadata.get_source_location(fn_node_id);
+        diag.add_note(format!("Function '{fn_name}' was declared here"), Some(fn_loc));
+        driver.add_diagnostic(diag);
+        return Err(TypeCheckError);
+    }
+
+    // Non-void function with `return;`
+    if fn_return_type != &AstType::Void && expr.is_none() {
+        let err = format!("non-void function '{fn_name}' should return a value of type '{fn_return_type}'");
+        let loc = chk.metadata.get_source_location(*node_id);
+        let mut diag = Diagnostic::error_at_location(err, loc);
+        let fn_loc = chk.metadata.get_source_location(fn_node_id);
+        diag.add_note(format!("Function '{fn_name}' was declared here"), Some(fn_loc));
+        driver.add_diagnostic(diag);
+        return Err(TypeCheckError);
+    }
+
+    // Type check the return expression with the function's return type
+    if let Some(expr) = expr {
+        let fn_return_type = fn_return_type.clone();
+        typecheck_expression_for_result_type(expr, &fn_return_type, chk, driver).map(|_| ())
+    } else {
+        Ok(())
+    }
 }
 
 /// Type checks an expression which must evaluate to a type of `result_type`. If the expression does not already
@@ -437,7 +497,7 @@ fn typecheck_expression_for_result_type(
 }
 
 /// Type checks an expression and performs function-to-function pointer and array-to-pointer decay, where appropriate.
-fn typecheck_expression_with_decay(
+pub(super) fn typecheck_expression_with_decay(
     expr: &mut AstExpression,
     chk: &mut TypeChecker,
     driver: &mut Driver,
@@ -530,19 +590,27 @@ fn typecheck_expression(
         AstExpressionKind::Cast { .. } => typecheck_cast_expression(expr, chk, driver),
 
         AstExpressionKind::Deref { pointer } => {
-            let expr_type = typecheck_expression_with_decay(pointer, chk, driver)?;
+            let ptr_type = typecheck_expression_with_decay(pointer, chk, driver)?;
 
-            if let AstType::Pointer(referenced) = expr_type {
+            // Cannot dereference an incomplete 'void *' pointer type
+            if !ptr_type.is_pointer_to_complete() {
+                let deref_op_loc = chk.metadata.get_operator_sloc(expr_node_id);
+                let ptr_expr_loc = chk.metadata.get_source_location(pointer.id());
+                Error::incomplete_pointer_dereference(deref_op_loc, ptr_expr_loc, &ptr_type, driver);
+                return Err(TypeCheckError);
+            }
+
+            if let AstType::Pointer(referenced) = ptr_type {
                 chk.set_data_type(expr_node_id, &referenced);
                 Ok(*referenced)
             }
             // A function type can be dereferenced
-            else if let AstType::Function { .. } = expr_type {
-                chk.set_data_type(expr_node_id, &expr_type);
-                Ok(expr_type)
+            else if let AstType::Function { .. } = ptr_type {
+                chk.set_data_type(expr_node_id, &ptr_type);
+                Ok(ptr_type)
             } else {
                 let loc = chk.metadata.get_source_location(expr_node_id);
-                Error::indirection_requires_pointer_type(&expr_type, loc, driver);
+                Error::indirection_requires_pointer_type(&ptr_type, loc, driver);
                 Err(TypeCheckError) // Can't set data type, so must abort.
             }
         }
@@ -572,6 +640,10 @@ fn typecheck_expression(
         AstExpressionKind::Conditional { .. } => typecheck_conditional(expr, chk, driver),
 
         AstExpressionKind::FunctionCall { .. } => typecheck_function_call(expr, chk, driver),
+
+        AstExpressionKind::SizeOfExpr { .. } => typecheck_sizeof_expr(expr, chk, driver),
+
+        AstExpressionKind::SizeOfType { .. } => typecheck_sizeof_type(expr, chk, driver),
     }
 }
 
@@ -596,27 +668,42 @@ fn typecheck_cast_expression(
 
     let cast_to_type = target_type.resolved_type.clone().unwrap();
 
+    // Emit an error if the type is an incomplete array, and then continue with other validation.
+    _ = symbols::validate_type_name(&cast_to_type, target_type, driver);
+
+    if cast_to_type == AstType::Void {
+        chk.set_data_type(cast_expr_id, &cast_to_type);
+        return Ok(cast_to_type);
+    }
+
     // Warn if casting a pointer to an integer type smaller than pointer size.
     if expr_type.is_pointer() && cast_to_type.is_integer() && cast_to_type.bits() < expr_type.bits() {
-        let cast_op_loc = chk.metadata.get_source_location(cast_expr_id);
+        let cast_op_loc = chk.metadata.get_operator_sloc(cast_expr_id);
         let expr_loc = chk.metadata.get_source_location(inner_expr.id());
         Warning::pointer_to_smaller_int_cast(&expr_type, &cast_to_type, cast_op_loc, expr_loc, driver);
     }
 
-    // Cannot cast to a function or array type
-    if cast_to_type.is_function() || cast_to_type.is_array() {
-        let cast_op_loc = chk.metadata.get_source_location(cast_expr_id);
+    // Cannot cast to a non-scalar type (e.g. function type, array type). Future: structs.
+    if !cast_to_type.is_scalar() {
+        let cast_op_loc = chk.metadata.get_operator_sloc(cast_expr_id);
         let expr_loc = chk.metadata.get_source_location(inner_expr.id());
+        Error::cannot_cast_to_non_scalar_type(cast_op_loc, expr_loc, &cast_to_type, driver);
+    }
 
-        Error::cannot_cast_to_function_or_array_type(cast_op_loc, expr_loc, &cast_to_type, driver);
+    // Cannot cast a non-scalar type to a scalar type.
+    if !expr_type.is_scalar() {
+        let cast_op_loc = chk.metadata.get_operator_sloc(cast_expr_id);
+        let expr_loc = chk.metadata.get_source_location(inner_expr.id());
+        Error::invalid_cast(cast_op_loc, expr_loc, &expr_type, &cast_to_type, driver);
     }
 
     // Cannot cast between pointer and floating-point types.
     if cast_to_type.is_pointer() && expr_type.is_floating_point()
         || cast_to_type.is_floating_point() && expr_type.is_pointer()
     {
+        let cast_op_loc = chk.metadata.get_operator_sloc(cast_expr_id);
         let expr_loc = chk.metadata.get_source_location(inner_expr.id());
-        Error::invalid_cast(expr_loc, &expr_type, &cast_to_type, driver);
+        Error::invalid_cast(cast_op_loc, expr_loc, &expr_type, &cast_to_type, driver);
     }
 
     chk.set_data_type(cast_expr_id, &cast_to_type);
@@ -669,15 +756,24 @@ fn typecheck_subscript_expression(
         return Err(TypeCheckError);
     }
 
+    let ptr_expr_id = if expr1_type.is_pointer() { expr1.id() } else { expr2.id() };
     let ptr_type = if expr1_type.is_pointer() { expr1_type } else { expr2_type };
-    let AstType::Pointer(referent_type) = ptr_type else {
+
+    let AstType::Pointer(referent_type) = &ptr_type else {
         ICE!("Expected an AstType::Pointer");
     };
 
-    // The type of the subscript expression is the pointer's referent type.
-    chk.set_data_type(subscript_expr_id, &referent_type);
+    // The pointer's referent must be complete (i.e. not a 'void *').
+    if !referent_type.is_complete() {
+        let op_loc = chk.metadata.get_operator_sloc(subscript_expr_id);
+        let ptr_expr_loc = chk.metadata.get_source_location(ptr_expr_id);
+        Error::incomplete_pointer_subscript(op_loc, ptr_expr_loc, &ptr_type, driver);
+    }
 
-    Ok(*referent_type)
+    // The type of the subscript expression is the pointer's referent type.
+    chk.set_data_type(subscript_expr_id, referent_type);
+
+    Ok(*referent_type.clone())
 }
 
 /// Type checks the operand expression in the unary operation and then checks the unary operation itself with
@@ -693,15 +789,23 @@ fn typecheck_unary_operation(
         ICE!("Expected unary operation");
     };
 
+    // Type check the operand expression: the unary expression itself (except for a LogicalNot operator) will have
+    // this type.
+    let operand_type = typecheck_expression_with_decay(operand_expr, chk, driver)?;
+
+    // Operand must be a scalar.
+    if !operand_type.is_scalar() {
+        let op_loc = chk.metadata.get_operator_sloc(unary_expr_id);
+        let operand_loc = chk.metadata.get_source_location(operand_expr.id());
+        Error::invalid_unary_expression_operand(op, op_loc, &operand_type, operand_loc, driver);
+        return Err(TypeCheckError);
+    }
+
     // LogicalNot (and the binary operations for LogicalAnd/Or) have type of 'int'.
     if *op == AstUnaryOp::LogicalNot {
-        typecheck_expression_with_decay(operand_expr, chk, driver)?;
         chk.set_data_type(unary_expr_id, &AstType::Int);
         return Ok(AstType::Int);
     }
-
-    // The unary operation takes the type of its operand expression
-    let operand_type = typecheck_expression_with_decay(operand_expr, chk, driver)?;
 
     // Integer promotion.
     let operand_type = if operand_type.is_integer()
@@ -726,12 +830,21 @@ fn typecheck_unary_operation(
         operand_type
     };
 
-    // Pre/postfix increment & decrement require a modifiable lvalue.
-    if ops::is_incr_or_decr_op(op) && !utils::is_modifiable_lvalue(operand_expr, &operand_type) {
-        let loc = chk.metadata.get_source_location(unary_expr_id);
-        let is_increment = ops::is_increment_op(op);
-        Error::cannot_increment_or_decrement_expression(is_increment, &operand_type, loc, driver);
-        return Err(TypeCheckError);
+    // Pre/postfix increment & decrement
+    if ops::is_incr_or_decr_op(op) {
+        // Requires a modifiable lvalue.
+        if !utils::is_modifiable_lvalue(operand_expr, &operand_type) {
+            let loc = chk.metadata.get_source_location(unary_expr_id);
+            let is_increment = ops::is_increment_op(op);
+            Error::cannot_increment_or_decrement_expression(is_increment, &operand_type, loc, driver);
+            return Err(TypeCheckError);
+        }
+
+        // If the operand is a pointer then it must be a pointer to a complete referent (i.e. not of type 'void *').
+        if operand_type.is_pointer() && !operand_type.is_pointer_to_complete() {
+            utils::error_incomplete_pointer_arithmetic(unary_expr_id, operand_expr, &operand_type, chk, driver);
+            return Err(TypeCheckError);
+        }
     }
 
     if operand_type.is_pointer() && utils::unary_operator_incompatible_with_ptr_operand(*op) {
@@ -772,6 +885,17 @@ fn typecheck_binary_operation(
     let lhs_type = typecheck_expression_with_decay(lhs, chk, driver)?;
     let rhs_type = typecheck_expression_with_decay(rhs, chk, driver)?;
 
+    // Operands must have scalar type.
+    //
+    //      Future: Revisit this when we implement the Comma operator.
+    //              void log_message() { ... }
+    //              int x = (log_message(), 5);
+    //
+    if !(lhs_type.is_scalar() && rhs_type.is_scalar()) {
+        utils::error_invalid_binary_expression_operands(binary_expr_id, lhs, rhs, &lhs_type, &rhs_type, chk, driver);
+        return Err(TypeCheckError);
+    }
+
     // LogicalAnd `&&` and LogicalOr `||` evaluate to a value of type 'int' so we don't need to cast the operands.
     if *op == AstBinaryOp::LogicalAnd || *op == AstBinaryOp::LogicalOr {
         chk.set_data_type(binary_expr_id, &AstType::Int);
@@ -788,6 +912,21 @@ fn typecheck_binary_operation(
         return Err(TypeCheckError);
     }
 
+    // If both operands are pointers but not of the same type then only relational operators are permitted (with a
+    // warning, which is emitted later via the implicit cast(s) to a common type).
+    //
+    if lhs_type.is_pointer()
+        && rhs_type.is_pointer()
+        && lhs_type != rhs_type
+        && op.family() != AstBinaryOpFamily::Relational
+    {
+        let op_loc = chk.metadata.get_operator_sloc(binary_expr_id);
+        let lhs_loc = chk.metadata.get_source_location(lhs.id());
+        let rhs_loc = chk.metadata.get_source_location(rhs.id());
+        Error::incompatible_pointer_types_in_expression(&lhs_type, &rhs_type, op_loc, lhs_loc, rhs_loc, driver);
+        return Err(TypeCheckError);
+    }
+
     // Various binary operators cannot have floating-point operands
     let has_fp_operand = lhs_type.is_floating_point() || rhs_type.is_floating_point();
     if has_fp_operand && utils::binary_operator_incompatible_with_fp_operand(*op) {
@@ -795,7 +934,7 @@ fn typecheck_binary_operation(
         return Err(TypeCheckError);
     }
 
-    // Binary operations where one operand is a pointer and the other is an integer, e.g. `1 + ptr` or `ptr == 0`.
+    // Binary operations where one operand is a pointer and the other is an integer: `1 + ptr` or `ptr == 0`.
     //
     if (lhs_type.is_pointer() && rhs_type.is_integer()) || (rhs_type.is_pointer() && lhs_type.is_integer()) {
         return typecheck_ptr_and_int_binary_operation(expr, chk, driver);
@@ -848,7 +987,20 @@ fn typecheck_binary_operation(
                 common_type
             }
             Err(e) => match e {
-                utils::CommonTypeError::WarnDifferentPointerTypes { a_type, b_type } => {
+                utils::CommonTypeError::IncompletePointer { a_type, b_type } => {
+                    utils::warn_compare_different_pointer_types(
+                        binary_expr_id,
+                        &lhs,
+                        &rhs,
+                        &a_type,
+                        &b_type,
+                        chk,
+                        driver,
+                    );
+                    AstType::Pointer(Box::new(AstType::Void))
+                }
+
+                utils::CommonTypeError::DifferentPointerTypes { a_type, b_type } => {
                     utils::warn_compare_different_pointer_types(
                         binary_expr_id,
                         &lhs,
@@ -867,19 +1019,8 @@ fn typecheck_binary_operation(
                 }
 
                 utils::CommonTypeError::NoCommonType { a_type, b_type } => {
-                    let a_node_id = lhs.id();
-                    let b_node_id = rhs.id();
-                    utils::error_incompatible_types(
-                        &a_type,
-                        &b_type,
-                        binary_expr_id,
-                        a_node_id,
-                        b_node_id,
-                        chk,
-                        driver,
-                    );
-
-                    a_type
+                    utils::error_incompatible_types(&a_type, &b_type, binary_expr_id, lhs.id(), rhs.id(), chk, driver);
+                    return Err(TypeCheckError);
                 }
             },
         }
@@ -954,6 +1095,12 @@ fn typecheck_ptr_and_int_binary_operation(
         (false, rhs_type, rhs, lhs_type, lhs)
     };
 
+    // The pointer's referent must be complete (i.e. not of type 'void *') unless its a relational operation.
+    if !op.is_relational() && !ptr_type.is_pointer_to_complete() {
+        utils::error_incomplete_pointer_arithmetic(binary_expr_id, &ptr_expr, &ptr_type, chk, driver);
+        return Err(TypeCheckError);
+    }
+
     // Emit a warning about if we're comparing a pointer and an integer, except for a null pointer constant.
     if op.is_relational() && !utils::is_null_pointer_constant(&int_expr, &ptr_type, chk, driver) {
         utils::warn_compare_pointer_and_integer(
@@ -983,7 +1130,7 @@ fn typecheck_ptr_and_int_binary_operation(
     Ok(expression_type)
 }
 
-/// Type checks a binary operation with two pointer operands.
+/// Type checks a binary operation with two pointer operands of the same pointer type.
 fn typecheck_ptr_binary_operation(
     expr: &mut AstExpression,
     chk: &mut TypeChecker,
@@ -1004,6 +1151,15 @@ fn typecheck_ptr_binary_operation(
 
     if !valid_op {
         utils::error_invalid_binary_expression_operands(binary_expr_id, lhs, rhs, &lhs_type, &rhs_type, chk, driver);
+        return Err(TypeCheckError);
+    }
+
+    // Subtracting two `void *` pointers
+    if *op == AstBinaryOp::Subtract
+        && let AstType::Pointer(referent) = &lhs_type
+        && referent.as_ref() == &AstType::Void
+    {
+        utils::error_incomplete_pointer_arithmetic(binary_expr_id, lhs, &lhs_type, chk, driver);
         return Err(TypeCheckError);
     }
 
@@ -1084,9 +1240,29 @@ fn typecheck_assignment(
             return Err(TypeCheckError);
         }
 
+        // rhs must be a scalar type
+        if !rhs_type.is_scalar() {
+            utils::error_invalid_binary_expression_operands(
+                assignment_expr_id,
+                lhs,
+                rhs,
+                &lhs_type,
+                &rhs_type,
+                chk,
+                driver,
+            );
+            return Err(TypeCheckError);
+        }
+
         // For compound addition & subtraction (`+=` and `-=`), either both operands must be arithmetic types
         // or the lhs can be a pointer and the rhs can be arithmetic.
         if matches!(op, AstAssignmentOp::Addition | AstAssignmentOp::Subtraction) {
+            // If the lhs is a pointer then it must be a pointer to a complete referent (i.e. not of type 'void *').
+            if lhs_type.is_pointer() && !lhs_type.is_pointer_to_complete() {
+                utils::error_incomplete_pointer_arithmetic(assignment_expr_id, lhs, &lhs_type, chk, driver);
+                return Err(TypeCheckError);
+            }
+
             let valid = (lhs_type.is_arithmetic() && rhs_type.is_arithmetic())
                 || (lhs_type.is_pointer() && rhs_type.is_integer());
 
@@ -1172,39 +1348,60 @@ fn typecheck_conditional(
         ICE!("Expected conditional expression");
     };
 
-    typecheck_expression_with_decay(condition, chk, driver)?;
-    typecheck_expression_with_decay(consequent, chk, driver)?;
-    typecheck_expression_with_decay(alternative, chk, driver)?;
+    // The condition expression must be a scalar.
+    let condition_type = typecheck_expression_with_decay(condition, chk, driver)?;
+    if !condition_type.is_scalar() {
+        let cond_loc = chk.metadata.get_source_location(condition.id());
+        Error::expression_must_be_scalar(cond_loc, &condition_type, driver);
+        return Err(TypeCheckError);
+    }
 
-    let common_type = match utils::get_common_type(consequent, alternative, chk, driver) {
-        Ok((common_type, _)) => common_type,
-        Err(e) => match e {
-            utils::CommonTypeError::WarnDifferentPointerTypes { a_type, b_type } => {
-                utils::warn_pointer_type_mismatch(cond_expr_id, consequent, alternative, &a_type, &b_type, chk, driver);
-                AstType::Pointer(Box::new(AstType::Void))
-            }
+    let con_t = typecheck_expression_with_decay(consequent, chk, driver)?;
+    let alt_t = typecheck_expression_with_decay(alternative, chk, driver)?;
+    let both_void = con_t == AstType::Void && alt_t == AstType::Void;
 
-            utils::CommonTypeError::WarnPointerAndInteger { a_type, b_type } => {
-                utils::warn_conditional_type_mismatch(
-                    cond_expr_id,
-                    consequent,
-                    alternative,
-                    &a_type,
-                    &b_type,
-                    chk,
-                    driver,
-                );
-                if a_type.is_pointer() { a_type } else { b_type }
-            }
+    let common_type = if both_void {
+        AstType::Void
+    } else {
+        match utils::get_common_type(consequent, alternative, chk, driver) {
+            Ok((common_type, _)) => common_type,
+            Err(e) => match e {
+                utils::CommonTypeError::IncompletePointer { .. } => AstType::Pointer(Box::new(AstType::Void)),
 
-            utils::CommonTypeError::NoCommonType { a_type, b_type } => {
-                let a_node_id = consequent.id();
-                let b_node_id = alternative.id();
-                utils::error_incompatible_types(&a_type, &b_type, cond_expr_id, a_node_id, b_node_id, chk, driver);
+                utils::CommonTypeError::DifferentPointerTypes { a_type, b_type } => {
+                    utils::error_incompatible_pointer_types_in_conditional(
+                        cond_expr_id,
+                        consequent,
+                        alternative,
+                        &a_type,
+                        &b_type,
+                        chk,
+                        driver,
+                    );
+                    return Err(TypeCheckError);
+                }
 
-                a_type
-            }
-        },
+                utils::CommonTypeError::WarnPointerAndInteger { a_type, b_type } => {
+                    utils::warn_conditional_type_mismatch(
+                        cond_expr_id,
+                        consequent,
+                        alternative,
+                        &a_type,
+                        &b_type,
+                        chk,
+                        driver,
+                    );
+                    if a_type.is_pointer() { a_type } else { b_type }
+                }
+
+                utils::CommonTypeError::NoCommonType { a_type, b_type } => {
+                    let a_node_id = consequent.id();
+                    let b_node_id = alternative.id();
+                    utils::error_incompatible_types(&a_type, &b_type, cond_expr_id, a_node_id, b_node_id, chk, driver);
+                    return Err(TypeCheckError);
+                }
+            },
+        }
     };
 
     // Take ownership of the expressions (by replacing with a 'null' value, which will never be used).
@@ -1230,6 +1427,25 @@ fn typecheck_conditional(
     );
 
     Ok(common_type)
+}
+
+/// Type checks a controlling expression to ensure its type is a scalar, since a controlling expression must evaluate
+/// to an 'int'.
+fn typecheck_cntrl_expr_in_stmt(
+    stmt_id: AstNodeId,
+    expr_id: AstNodeId,
+    expr_type: &AstType,
+    chk: &mut TypeChecker,
+    driver: &mut Driver,
+) -> TypeCheckResult<()> {
+    if expr_type.is_scalar() {
+        return Ok(());
+    }
+
+    let stmt_loc = chk.metadata.get_source_location(stmt_id);
+    let expr_loc = chk.metadata.get_source_location(expr_id);
+    Error::statement_controlling_expr_must_be_scalar(stmt_loc, expr_loc, expr_type, driver);
+    Err(TypeCheckError)
 }
 
 /// Type checks each argument expression in the function call, wraps each argument in a cast to the appropriate function
@@ -1422,6 +1638,16 @@ fn get_function_designator_type(
             Ok((None, ret_type))
         }
 
+        AstExpressionKind::SizeOfExpr { .. } => {
+            let expr_type = chk.get_data_type(expr_id);
+            Ok((None, expr_type))
+        }
+
+        AstExpressionKind::SizeOfType { .. } => {
+            let expr_type = chk.get_data_type(expr_id);
+            Ok((None, expr_type))
+        }
+
         AstExpressionKind::CharLiteral { .. } => {
             let expr_type = chk.get_data_type(expr_id);
             Ok((None, expr_type))
@@ -1444,6 +1670,76 @@ fn get_function_designator_type(
             Err(TypeCheckError)
         }
     }
+}
+
+fn typecheck_sizeof_expr(
+    expr: &mut AstExpression,
+    chk: &mut TypeChecker,
+    driver: &mut Driver,
+) -> TypeCheckResult<AstType> {
+    let sizeof_expr_id = expr.id();
+
+    let AstExpressionKind::SizeOfExpr { operand } = expr.kind_mut() else {
+        ICE!("Expected AstExpressionKind::SizeOfExpr");
+    };
+
+    let operand_type = typecheck_expression(operand, chk, driver)?;
+
+    // Cannot take the sizeof a function
+    if operand_type.is_function() {
+        let loc = chk.metadata.get_source_location(operand.id());
+        Error::sizeof_function_type(loc, driver);
+        return Err(TypeCheckError);
+    }
+
+    // Check if the operand type is incomplete.
+    if !operand_type.is_complete() {
+        let loc = chk.metadata.get_source_location(operand.id());
+        Error::sizeof_incomplete_type(loc, &operand_type, driver);
+        return Err(TypeCheckError);
+    }
+
+    // The type of the sizeof expression itself is `size_t` (aka `unsigned long`).
+    chk.set_data_type(sizeof_expr_id, &AstType::__size_t());
+
+    Ok(AstType::__size_t())
+}
+
+fn typecheck_sizeof_type(
+    expr: &mut AstExpression,
+    chk: &mut TypeChecker,
+    driver: &mut Driver,
+) -> TypeCheckResult<AstType> {
+    let sizeof_expr_id = expr.id();
+
+    let AstExpressionKind::SizeOfType { declared_type } = expr.kind_mut() else {
+        ICE!("Expected AstExpressionKind::SizeOfType");
+    };
+
+    // Resolve the sizeof(type)
+    let operand_type =
+        type_resolution::resolve_declared_type(declared_type, chk, driver).map_err(|_| TypeCheckError)?;
+    declared_type.resolved_type = Some(operand_type.clone());
+
+    // Cannot take the sizeof a function
+    if operand_type.is_function() {
+        Error::sizeof_function_type(declared_type.location(), driver);
+        return Err(TypeCheckError);
+    }
+
+    // Emit an error if the type is an incomplete array, and then continue with other validation.
+    _ = symbols::validate_type_name(&operand_type, declared_type, driver);
+
+    // Check if the type itself is incomplete.
+    if !operand_type.is_complete() {
+        Error::sizeof_incomplete_type(declared_type.location(), &operand_type, driver);
+        return Err(TypeCheckError);
+    }
+
+    // The type of the sizeof expression itself is `size_t` (aka `unsigned long`).
+    chk.set_data_type(sizeof_expr_id, &AstType::__size_t());
+
+    Ok(AstType::__size_t())
 }
 
 /// Evaluates a variable initializer expression for a static storage variable (must evaluate to a constant value).
@@ -1625,24 +1921,35 @@ fn check_conversion(
         return Ok(());
     }
 
+    // Allow implicit conversion to/from a pointer type and `void *`.
+    if source_type.is_pointer() && dest_type.is_pointer_to_void()
+        || dest_type.is_pointer() && source_type.is_pointer_to_void()
+    {
+        return Ok(());
+    }
+
+    // Cannot implicitly convert a pointer to arithmetic type.
     if dest_type.is_arithmetic() && source_type.is_pointer() {
         let loc = chk.metadata.get_source_location(source_expr_node_id);
         Error::incompatible_pointer_to_arithmetic_conversion(source_type, dest_type, loc, driver);
         return Err(TypeCheckError);
     }
 
+    // Cannot implicitly convert between different function pointer types (we checked above for equality).
     if dest_type.is_function_pointer() && source_type.is_function_pointer() {
         let loc = chk.metadata.get_source_location(source_expr_node_id);
         Error::incompatible_fn_pointer_types(dest_type, source_type, loc, driver);
         return Err(TypeCheckError);
     }
 
+    // Cannot implicitly convert between different pointer types (we checked above for equality).
     if dest_type.is_pointer() && source_type.is_pointer() {
         let loc = chk.metadata.get_source_location(source_expr_node_id);
         Error::incompatible_pointer_types(dest_type, source_type, loc, driver);
         return Err(TypeCheckError);
     }
 
+    // Cannot implicitly convert from arithmetic type to a pointer type, unless it's a null pointer constant.
     if dest_type.is_pointer()
         && source_type.is_arithmetic()
         && !utils::is_null_pointer_constant(source_expr, dest_type, chk, driver)
@@ -1652,10 +1959,18 @@ fn check_conversion(
         return Err(TypeCheckError);
     }
 
+    // Cannot implicitly convert from a scalar to an array type.
     if dest_type.is_array() && source_type.is_scalar() {
         let loc = chk.metadata.get_source_location(source_expr_node_id);
         Error::cannot_initialize_array_with_scalar(source_type, loc, driver);
         return Err(TypeCheckError);
+    }
+
+    // Cannot implicitly convert a non-scalar type to a scalar type (e.g. 'void' to 'int').
+    // Cannot implicitly convert to a non-scalar type (e.g. function type, array type). Future: structs.
+    if !(source_type.is_scalar() && dest_type.is_scalar()) {
+        let expr_loc = chk.metadata.get_source_location(source_expr_node_id);
+        Error::invalid_implicit_conversion(expr_loc, source_type, dest_type, driver);
     }
 
     Ok(())

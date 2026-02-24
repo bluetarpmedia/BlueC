@@ -13,7 +13,7 @@ use crate::parser::{
 };
 
 use super::super::symbol_table::{Definition, SymbolAttributes, SymbolTable};
-use super::checker::{TypeCheckError, TypeChecker};
+use super::checker::{TypeCheckError, TypeCheckResult, TypeChecker};
 use super::type_resolution;
 
 /// Verifies that the type alias declaration is semantically valid.
@@ -21,7 +21,7 @@ pub fn verify_type_alias_declaration(
     alias_decl: &mut AstTypeAliasDeclaration,
     chk: &mut TypeChecker,
     driver: &mut Driver,
-) -> Result<(), TypeCheckError> {
+) -> TypeCheckResult<()> {
     let inner_decl = alias_decl.decl.as_mut();
 
     let (declared_type, alias_ident, alias_unique_name, is_file_scope) = match inner_decl {
@@ -34,6 +34,9 @@ pub fn verify_type_alias_declaration(
 
     let resolved_type =
         type_resolution::resolve_declared_type(declared_type, chk, driver).map_err(|_| TypeCheckError)?;
+
+    // Emit an error if the type is an incomplete array, and then continue with other validation.
+    _ = validate_type_name(&resolved_type, declared_type, driver);
 
     // Is the alias identifier already declared in the current scope?
     //      It's valid to repeat the `typedef` declaration in the same scope multiple times, as long as it
@@ -77,7 +80,7 @@ pub fn verify_file_scope_variable_declaration(
     var_decl: &mut AstVariableDeclaration,
     chk: &mut TypeChecker,
     driver: &mut Driver,
-) -> Result<(), TypeCheckError> {
+) -> TypeCheckResult<()> {
     let var_unique_name = &var_decl.unique_name;
     let var_ident = &var_decl.ident;
     let var_declared_type = &var_decl.declared_type;
@@ -154,6 +157,9 @@ pub fn verify_file_scope_variable_declaration(
         let _ = chk.symbols.set_definition(var_unique_name, definition);
     }
 
+    // Emit an error if the type is an incomplete array, and then continue with other validation.
+    _ = validate_type_name(&var_type, var_declared_type, driver);
+
     var_decl.declared_type.resolved_type = Some(var_type);
 
     Ok(())
@@ -164,7 +170,7 @@ pub fn verify_local_variable_declaration(
     var_decl: &mut AstVariableDeclaration,
     chk: &mut TypeChecker,
     driver: &mut Driver,
-) -> Result<(), TypeCheckError> {
+) -> TypeCheckResult<()> {
     let var_unique_name = &var_decl.unique_name;
     let var_ident = &var_decl.ident;
     let var_declared_type = &var_decl.declared_type;
@@ -223,6 +229,9 @@ pub fn verify_local_variable_declaration(
         let _ = chk.symbols.set_definition(var_unique_name, definition);
     }
 
+    // Emit an error if the type is an incomplete array, and then continue with other validation.
+    _ = validate_type_name(&var_type, var_declared_type, driver);
+
     var_decl.declared_type.resolved_type = Some(var_type);
 
     Ok(())
@@ -235,7 +244,7 @@ pub fn verify_function_parameter_declaration(
     param_type: &AstType,
     chk: &mut TypeChecker,
     driver: &mut Driver,
-) -> Result<(), TypeCheckError> {
+) -> TypeCheckResult<()> {
     let declared_type = AstDeclaredType::resolved(param_type);
 
     let mut param_decl = AstVariableDeclaration {
@@ -259,7 +268,7 @@ pub fn verify_function_declaration(
     function: &mut AstFunction,
     chk: &mut TypeChecker,
     driver: &mut Driver,
-) -> Result<(), TypeCheckError> {
+) -> TypeCheckResult<()> {
     let fn_unique_name = &function.unique_name;
     let fn_ident = &function.ident;
     let fn_declared_type = &function.declared_type;
@@ -267,16 +276,20 @@ pub fn verify_function_declaration(
     // Resolve the function type
     let fn_type = type_resolution::resolve_declared_type(fn_declared_type, chk, driver).map_err(|_| TypeCheckError)?;
 
-    // If any of the parameter types are array types then transform them to a pointer to the array element type.
-    //
+    // Before we possibly perform array-to-pointer decay, check if any of the types are incomplete arrays.
+    _ = validate_type_name(&fn_type, fn_declared_type, driver);
+
     let AstType::Function { return_type, params } = fn_type else {
         ICE!("Expected an AstType::Function");
     };
 
+    // If any of the parameter types are array types then transform them to a pointer to the array element type.
+    //
     let fn_type = if params.iter().any(|param_t| param_t.is_array()) {
         let new_params = params
             .into_iter()
             .map(|param_t| {
+                // Parameter of array type decays to pointer
                 if let AstType::Array { element_type, .. } = param_t {
                     AstType::new_pointer_to(*element_type.clone())
                 } else {
@@ -353,7 +366,7 @@ pub fn verify_function_arguments(
     metadata: &AstMetadata,
     symbols: &SymbolTable,
     driver: &mut Driver,
-) -> Result<(), TypeCheckError> {
+) -> TypeCheckResult<()> {
     let args_count = args.len();
     let params_count = params.len();
 
@@ -376,4 +389,39 @@ pub fn verify_function_arguments(
     }
 
     Ok(())
+}
+
+/// Checks whether the given type is an incomplete array type, or is such a type nested within a larger type.
+///
+/// ```c
+/// void [3];           // Array of 'void'
+/// void (*)[3];        // Pointer to array of 'void'
+/// int (void a[3]);    // Function type with parameter of array of 'void'
+/// ```
+pub fn validate_type_name(ty: &AstType, declared_type: &AstDeclaredType, driver: &mut Driver) -> TypeCheckResult<()> {
+    match ty {
+        AstType::Array { element_type, .. } => {
+            if !element_type.is_complete() {
+                Error::array_has_incomplete_element_type(
+                    declared_type.basic_type.location(),
+                    declared_type.declarator_location(),
+                    element_type,
+                    driver,
+                );
+                return Err(TypeCheckError);
+            }
+            validate_type_name(element_type, declared_type, driver)
+        }
+
+        AstType::Pointer(referent) => validate_type_name(referent, declared_type, driver),
+
+        AstType::Function { return_type, params } => {
+            for param in params {
+                validate_type_name(param, declared_type, driver)?;
+            }
+            validate_type_name(return_type, declared_type, driver)
+        }
+
+        _ => Ok(()),
+    }
 }

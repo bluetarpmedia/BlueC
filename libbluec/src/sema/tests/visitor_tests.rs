@@ -60,7 +60,7 @@ fn visit_statements() {
 
         visitor::visit_statements_in_block(block, &mut |stmt: &mut AstStatement| match stmt {
             AstStatement::Expression(_) => expr_stmt_count += 1,
-            AstStatement::Return(_) => ret_stmt_count += 1,
+            AstStatement::Return { .. } => ret_stmt_count += 1,
             _ => other_stmt_count += 1,
         });
     });

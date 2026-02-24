@@ -5,7 +5,7 @@
 use crate::ICE;
 use crate::core::{SourceIdentifier, SourceLocation, SymbolKind};
 use crate::lexer::{NumericLiteralBase, TokenType};
-use crate::parser::{AstLinkage, AstType};
+use crate::parser::{AstLinkage, AstType, AstUnaryOp};
 
 use super::super::Driver;
 use super::{Diagnostic, SuggestedCode};
@@ -165,9 +165,9 @@ impl Error {
         driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
     }
 
-    /// Emits an error that a type specifier cannot be combined with previous specifiers.
+    /// Emits an error that a type specifier cannot be combined with other specifiers.
     pub fn cannot_combine_type_specifier(specifier: SourceIdentifier, driver: &mut Driver) {
-        let err = format!("Cannot combine '{}' with previous specifiers", specifier.0);
+        let err = format!("Cannot combine '{}' with other specifiers", specifier.0);
         driver.add_diagnostic(Diagnostic::error_at_location(err, specifier.1));
     }
 
@@ -211,6 +211,28 @@ impl Error {
         let literal_type = if is_float { "floating point" } else { "integer" };
         let err = format!("Invalid suffix '{suffix}' on {literal_type} constant.");
         driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
+    }
+
+    /// Emits an error that a statement's controlling expression must be a scalar.
+    pub fn statement_controlling_expr_must_be_scalar(
+        stmt_loc: SourceLocation,
+        expr_loc: SourceLocation,
+        expr_type: &AstType,
+        driver: &mut Driver,
+    ) {
+        let err = format!("Statement requires a controlling expression of scalar type (not '{}')", expr_type);
+        let mut diag = Diagnostic::error_at_location(err, stmt_loc);
+        diag.add_location(expr_loc);
+        diag.add_note("The controlling expression must evaluate to a value that can compare with 0.".into(), None);
+        driver.add_diagnostic(diag);
+    }
+
+    /// Emits an error that an expression must be a scalar.
+    pub fn expression_must_be_scalar(expr_loc: SourceLocation, expr_type: &AstType, driver: &mut Driver) {
+        let err = format!("Expression must have scalar type (not '{}')", expr_type);
+        let mut diag = Diagnostic::error_at_location(err, expr_loc);
+        diag.add_note("The expression must evaluate to a value that can compare with 0.".into(), None);
+        driver.add_diagnostic(diag);
     }
 
     /// Emits an error that an expression is not assignable because it's not an lvalue.
@@ -260,6 +282,64 @@ impl Error {
         driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
     }
 
+    /// Emits an error that a variable is declared with an incomplete type.
+    pub fn variable_has_incomplete_type(
+        loc: SourceLocation,
+        var_ident: SourceIdentifier,
+        var_type: &AstType,
+        driver: &mut Driver,
+    ) {
+        let err = format!("Variable '{}' is declared with incomplete type '{var_type}'", var_ident.0);
+        driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
+    }
+
+    /// Emits an error that an array has an incomplete element type.
+    pub fn array_has_incomplete_element_type(
+        loc: SourceLocation,
+        declarator_loc: Option<SourceLocation>,
+        var_type: &AstType,
+        driver: &mut Driver,
+    ) {
+        let err = format!("Array has incomplete element type '{var_type}'");
+        let mut diag = Diagnostic::error_at_location(err, loc);
+        if let Some(declarator_loc) = declarator_loc {
+            diag.add_location(declarator_loc);
+        }
+        driver.add_diagnostic(diag);
+    }
+
+    /// Emits an error that a function parameter is declared with an incomplete type.
+    pub fn fn_parameter_has_incomplete_type(
+        loc: SourceLocation,
+        param_ident: SourceIdentifier,
+        param_type: &AstType,
+        driver: &mut Driver,
+    ) {
+        let err = format!("Function parameter '{}' is declared with incomplete type '{param_type}'", param_ident.0);
+        let mut diag = Diagnostic::error_at_location(err, loc);
+
+        if param_type == &AstType::Void {
+            diag.add_note(
+                "To declare a function with no parameters, specify 'void' as the first and only parameter.".into(),
+                None,
+            );
+        }
+
+        driver.add_diagnostic(diag);
+    }
+
+    /// Emits an error that 'sizeof' cannot be used with an incomplete type (e.g. 'void').
+    pub fn sizeof_incomplete_type(loc: SourceLocation, operand_type: &AstType, driver: &mut Driver) {
+        let err = format!("Cannot take the size of an incomplete type '{operand_type}'");
+        driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
+    }
+
+    /// Emits an error that 'sizeof' cannot be used with a function type.
+    pub fn sizeof_function_type(loc: SourceLocation, driver: &mut Driver) {
+        let err = "Cannot take the size of a function type".to_string();
+        driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
+    }
+
     /// Emits an error that two types in an expression are incompatible (i.e. there is no common type).
     pub fn incompatible_types(
         a: &AstType,
@@ -277,19 +357,102 @@ impl Error {
     }
 
     /// Emits an error that two pointer types are incompatible (i.e. there is no common type).
-    ///
-    /// -Wincompatible-pointer-types
     pub fn incompatible_pointer_types(a: &AstType, b: &AstType, loc: SourceLocation, driver: &mut Driver) {
         let err = format!("Incompatible pointer types ('{a}' and '{b}')");
         driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
     }
 
+    /// Emits an error that two pointer types are incompatible (i.e. there is no common type).
+    pub fn incompatible_pointer_types_in_expression(
+        a: &AstType,
+        b: &AstType,
+        loc: SourceLocation,
+        a_loc: SourceLocation,
+        b_loc: SourceLocation,
+        driver: &mut Driver,
+    ) {
+        let err = format!("Incompatible pointer types in expression ('{a}' and '{b}')");
+        let mut diag = Diagnostic::error_at_location(err, loc);
+        diag.add_location(a_loc);
+        diag.add_location(b_loc);
+        driver.add_diagnostic(diag);
+    }
+
+    /// Emits an error that two pointer types are incompatible (i.e. there is no common type) in a conditional/
+    /// ternary expression.
+    pub fn incompatible_pointer_types_in_conditional(
+        loc: SourceLocation,
+        a_loc: SourceLocation,
+        b_loc: SourceLocation,
+        a_type: &AstType,
+        b_type: &AstType,
+        driver: &mut Driver,
+    ) {
+        let err = format!("Incompatible pointer types ('{a_type}' and '{b_type}') in conditional expression");
+        let mut diag = Diagnostic::error_at_location(err, loc);
+        diag.add_location(a_loc);
+        diag.add_location(b_loc);
+        driver.add_diagnostic(diag);
+    }
+
+    /// Emits an error that pointer arithmetic cannot be performed on an incomplete pointer type (`void *`).
+    pub fn incomplete_pointer_arithmetic(
+        op_loc: SourceLocation,
+        ptr_expr_loc: SourceLocation,
+        ptr_type: &AstType,
+        driver: &mut Driver,
+    ) {
+        let err = format!("Arithmetic not allowed on incomplete pointer (of type '{ptr_type}')");
+        let mut diag = Diagnostic::error_at_location(err, op_loc);
+        diag.add_location(ptr_expr_loc);
+        driver.add_diagnostic(diag);
+    }
+
+    /// Emits an error that a subscript expression cannot be applied to an incomplete pointer type (`void *`).
+    pub fn incomplete_pointer_subscript(
+        op_loc: SourceLocation,
+        ptr_expr_loc: SourceLocation,
+        ptr_type: &AstType,
+        driver: &mut Driver,
+    ) {
+        let err = format!("Subscript not allowed on incomplete pointer (of type '{ptr_type}')");
+        let mut diag = Diagnostic::error_at_location(err, op_loc);
+        diag.add_location(ptr_expr_loc);
+        driver.add_diagnostic(diag);
+    }
+
+    /// Emits an error that an incomplete pointer type (`void *`) cannot be dereferenced.
+    pub fn incomplete_pointer_dereference(
+        deref_op_loc: SourceLocation,
+        ptr_expr_loc: SourceLocation,
+        ptr_type: &AstType,
+        driver: &mut Driver,
+    ) {
+        let err = format!("Cannot dereference an incomplete pointer (of type '{ptr_type}')");
+        let mut diag = Diagnostic::error_at_location(err, deref_op_loc);
+        diag.add_location(ptr_expr_loc);
+        driver.add_diagnostic(diag);
+    }
+
     /// Emits an error that two function pointer types are incompatible.
-    ///
-    /// -Wincompatible-function_pointer-types
     pub fn incompatible_fn_pointer_types(a: &AstType, b: &AstType, loc: SourceLocation, driver: &mut Driver) {
         let err = format!("Incompatible function pointer types ('{a}' and '{b}')");
         driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
+    }
+
+    /// Emits an error that a unary operation has an operand with an invalid type.
+    pub fn invalid_unary_expression_operand(
+        operator: &AstUnaryOp,
+        operator_loc: SourceLocation,
+        operand_type: &AstType,
+        operand_loc: SourceLocation,
+        driver: &mut Driver,
+    ) {
+        let op_str = TokenType::from(*operator).to_string();
+        let err = format!("Invalid operand type in unary '{op_str}' expression ('{operand_type}')");
+        let mut diag = Diagnostic::error_at_location(err, operand_loc);
+        diag.add_location(operator_loc);
+        driver.add_diagnostic(diag);
     }
 
     /// Emits an error that a binary operation has operands with invalid types.
@@ -327,8 +490,9 @@ impl Error {
         driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
     }
 
-    /// Emits an error that an expression is being casted to a function type (not function pointer) or array type.
-    pub fn cannot_cast_to_function_or_array_type(
+    /// Emits an error that an expression is being casted to a non-scalar type, e.g. array type or function type (not
+    /// function pointer). Future: structs.
+    pub fn cannot_cast_to_non_scalar_type(
         cast_op_loc: SourceLocation,
         expr_loc: SourceLocation,
         cast_to_type: &AstType,
@@ -354,8 +518,27 @@ impl Error {
 
     /// Emits an error that an expression cannot be cast to the given dest type. E.g. pointer type to floating-point,
     /// or vice versa.
-    pub fn invalid_cast(expr_loc: SourceLocation, expr_type: &AstType, dest_type: &AstType, driver: &mut Driver) {
+    pub fn invalid_cast(
+        cast_op_loc: SourceLocation,
+        expr_loc: SourceLocation,
+        expr_type: &AstType,
+        dest_type: &AstType,
+        driver: &mut Driver,
+    ) {
         let err = format!("Cannot cast an expression of type '{expr_type}' to '{dest_type}'");
+        let mut diag = Diagnostic::error_at_location(err, cast_op_loc);
+        diag.add_location(expr_loc);
+        driver.add_diagnostic(diag);
+    }
+
+    /// Emits an error that an expression cannot be implicitly converted to the given dest type.
+    pub fn invalid_implicit_conversion(
+        expr_loc: SourceLocation,
+        expr_type: &AstType,
+        dest_type: &AstType,
+        driver: &mut Driver,
+    ) {
+        let err = format!("Cannot implicitly convert an expression of type '{expr_type}' to '{dest_type}'");
         driver.add_diagnostic(Diagnostic::error_at_location(err, expr_loc));
     }
 

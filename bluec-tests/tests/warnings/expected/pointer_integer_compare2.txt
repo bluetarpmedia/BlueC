@@ -1,0 +1,8 @@
+warning: Comparison between pointer type 'void *' and integer type 'unsigned long'
+         [-Wpointer-integer-compare]
+   |
+   |     return (void *)0 == 20ul;
+   |            ~~~~~~~~~ ^^ ~~~~
+   |
+
+1 warning generated

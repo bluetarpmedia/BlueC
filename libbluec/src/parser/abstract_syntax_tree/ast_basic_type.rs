@@ -45,6 +45,18 @@ impl fmt::Display for AstBasicType {
     }
 }
 
+impl AstBasicType {
+    /// The source location of all specifiers in the basic type.
+    pub fn location(&self) -> SourceLocation {
+        if self.0.is_empty() {
+            return SourceLocation::none();
+        }
+
+        let first_loc = self.0[0].location();
+        self.0.iter().skip(1).fold(first_loc, |acc, specifier| acc.merge_with(specifier.location()))
+    }
+}
+
 /// A basic type specifier.
 ///
 /// A basic type consists of one or more specifiers. In the example below the basic type is 'unsigned long int'
@@ -95,3 +107,13 @@ impl PartialEq for AstBasicTypeSpecifier {
 }
 
 impl Eq for AstBasicTypeSpecifier {}
+
+impl AstBasicTypeSpecifier {
+    /// The source location of the specifier.
+    pub fn location(&self) -> SourceLocation {
+        match self {
+            AstBasicTypeSpecifier::BuiltinType { loc, .. } => *loc,
+            AstBasicTypeSpecifier::Alias { loc, .. } => *loc,
+        }
+    }
+}

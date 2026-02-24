@@ -19,7 +19,7 @@ use super::symbol_table::SymbolAttributes;
 use super::type_check::TypeChecker;
 use super::type_resolution;
 
-// Future: sizeof, _Alignof
+// Future: _Alignof
 
 /// A constant expression evaluator.
 pub struct Eval<'a, 'b> {
@@ -216,6 +216,8 @@ fn evaluate_const_expr_recursively(expr: &AstExpression, eval: &mut Eval) -> Opt
         AstExpressionKind::Unary { .. } => evaluate_unary_operation(expr, eval),
         AstExpressionKind::Binary { .. } => evaluate_binary_operation(expr, eval),
         AstExpressionKind::Conditional { .. } => evaluate_conditional(expr, eval),
+        AstExpressionKind::SizeOfExpr { .. } => evaluate_sizeof_expr(expr, eval),
+        AstExpressionKind::SizeOfType { .. } => evaluate_sizeof_type(expr, eval),
     }
 }
 
@@ -404,6 +406,59 @@ fn evaluate_conditional(expr: &AstExpression, eval: &mut Eval) -> Option<Constan
         Some(_) => Some(consequent),
         None => None,
     }
+}
+
+fn evaluate_sizeof_expr(expr: &AstExpression, eval: &mut Eval) -> Option<ConstantValue> {
+    let AstExpressionKind::SizeOfExpr { operand } = expr.kind() else {
+        ICE!("Expected AstExpressionKind::SizeOfExpr");
+    };
+
+    let ast_type = eval.chk.get_data_type(operand.id());
+    evaluate_sizeof(&ast_type)
+}
+
+fn evaluate_sizeof_type(expr: &AstExpression, eval: &mut Eval) -> Option<ConstantValue> {
+    let AstExpressionKind::SizeOfType { declared_type } = expr.kind() else {
+        ICE!("Expected AstExpressionKind::SizeOfType");
+    };
+
+    let ast_type = type_resolution::resolve_declared_type(declared_type, eval.chk, eval.driver).ok()?;
+    evaluate_sizeof(&ast_type)
+}
+
+fn evaluate_sizeof(ast_type: &AstType) -> Option<ConstantValue> {
+    if !ast_type.is_complete() {
+        return None;
+    }
+
+    if ast_type.is_pointer_to_void() {
+        return Some(ConstantValue::Int { value: 8, signed: false, size: 64 });
+    }
+
+    if let AstType::Pointer(_) = ast_type {
+        return Some(ConstantValue::Int { value: 8, signed: false, size: 64 });
+    }
+
+    if let AstType::Array { element_type, count } = ast_type {
+        let element_size = evaluate_sizeof(element_type)?;
+        let ConstantValue::Int { value, .. } = element_size else {
+            return None;
+        };
+
+        let expr_size = value * (*count as i128);
+        return Some(ConstantValue::Int { value: expr_size, signed: false, size: 64 });
+    }
+
+    // GCC and Clang have a non-standard extension which returns 1 for sizeof(void) or sizeof(function type)
+    // but for no we only provide a strict implementation.
+    let expr_size = match ast_type {
+        AstType::Void => None,
+        AstType::Function { .. } => None,
+        _ => Some(ast_type.bits() / 8),
+    };
+
+    // sizeof evaluates to `size_t` aka `unsigned long`
+    expr_size.map(|expr_size| ConstantValue::Int { value: expr_size as i128, signed: false, size: 64 })
 }
 
 /// `ConstantValue` is used internally as the data type for evaluating constant expressions.

@@ -250,7 +250,7 @@ fn generate_asm_instructions(
 ) {
     for ir in bluetac_instructions {
         match ir {
-            ir::BtInstruction::Return(val) => {
+            ir::BtInstruction::Return(Some(val)) => {
                 let asm_type: AsmType = val.get_type(&generator.symbols).into();
                 let dst_reg = if asm_type.is_floating_point() { HwRegister::XMM0 } else { HwRegister::RAX };
 
@@ -258,6 +258,10 @@ fn generate_asm_instructions(
                 let dst_operand = AsmOperand::hw_reg(dst_reg, asm_type);
 
                 asm_instructions.push(AsmInstruction::Mov { asm_type, src: src_operand, dst: dst_operand });
+                asm_instructions.push(AsmInstruction::Ret);
+            }
+
+            ir::BtInstruction::Return(None) => {
                 asm_instructions.push(AsmInstruction::Ret);
             }
 

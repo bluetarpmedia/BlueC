@@ -53,6 +53,12 @@ impl AstType {
         AstType::Long
     }
 
+    /// An unsigned integer type used to represent the size of objects in bytes.
+    /// The underlying type for `size_t`.
+    pub fn __size_t() -> Self {
+        AstType::UnsignedLong
+    }
+
     /// Is this type a 'basic type'?
     ///
     /// The term 'basic type' is not used in the C Standard, but it is used informally when discussing C parsers. The
@@ -71,9 +77,14 @@ impl AstType {
         !matches!(self, AstType::Pointer(_) | AstType::Array { .. } | AstType::Function { .. })
     }
 
+    /// Is the type a 'complete' type, meaning the compiler knows its size and layout?
+    pub fn is_complete(&self) -> bool {
+        self != &AstType::Void
+    }
+
     /// Is this type a scalar type?
     pub fn is_scalar(&self) -> bool {
-        !self.is_aggregate()
+        !matches!(self, AstType::Void | AstType::Function { .. } | AstType::Array { .. })
     }
 
     /// Is this type an aggregate type?
@@ -84,6 +95,22 @@ impl AstType {
     /// Is this type a pointer type?
     pub fn is_pointer(&self) -> bool {
         matches!(self, AstType::Pointer(_))
+    }
+
+    /// Is this type a pointer-to-void (`void *`) type?
+    pub fn is_pointer_to_void(&self) -> bool {
+        if let AstType::Pointer(referent) = self
+            && referent.as_ref() == &AstType::Void
+        {
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Is this type a pointer to a complete type?
+    pub fn is_pointer_to_complete(&self) -> bool {
+        if let AstType::Pointer(referent) = self { referent.is_complete() } else { false }
     }
 
     /// Is this type an array type?

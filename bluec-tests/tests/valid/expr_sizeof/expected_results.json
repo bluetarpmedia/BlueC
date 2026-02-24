@@ -1,0 +1,4 @@
+[
+    {"filename": "expr_sizeof_sizeof_not_evaluated.c", "exit_code": 4},
+    {"filename": "expr_sizeof_multi_sizeof_extern", "exit_code": 1}
+]

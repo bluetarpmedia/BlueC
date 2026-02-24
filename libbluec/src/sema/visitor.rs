@@ -278,7 +278,7 @@ where
                 visitor_func(post);
             }
         }
-        AstStatement::Return(expr) => visitor_func(expr),
+        AstStatement::Return { expr: Some(expr), .. } => visitor_func(expr),
         _ => (),
     }
 }

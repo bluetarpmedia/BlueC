@@ -1,6 +1,10 @@
 // Copyright 2025-2026 Neil Henderson
 //
 //! The `printer` module provides functionality to print the BlueTac IR to stdout.
+//!
+//! Heavily inspired by LLVM IR, our text representation of BlueTac IR has these characteristics:
+//!   * global identifiers are prefixed with '@'
+//!   * instructions include their type information
 
 use crate::ICE;
 use crate::parser::AstUniqueName;
@@ -140,9 +144,13 @@ fn print_instruction(instr: &BtInstruction, symbols: &SymbolTable) {
     }
 }
 
-fn print_return(value: &BtValue, symbols: &SymbolTable) {
-    let bt_type = get_bt_type(value, symbols).to_printer();
-    println!("  ret {bt_type} {value}");
+fn print_return(value: &Option<BtValue>, symbols: &SymbolTable) {
+    if let Some(value) = value {
+        let bt_type = get_bt_type(value, symbols).to_printer();
+        println!("  ret {bt_type} {value}");
+    } else {
+        println!("  ret");
+    }
 }
 
 fn print_src_dst_instr(instr: &str, src: &BtValue, dst: &BtValue, symbols: &SymbolTable) {
@@ -237,16 +245,25 @@ fn print_switch(
     println!("  }}");
 }
 
-fn print_function_call(designator: &BtValue, args: &Vec<BtValue>, dst: &BtValue, symbols: &SymbolTable) {
-    let dst_type = get_bt_type(dst, symbols).to_printer();
+fn print_function_call(designator: &BtValue, args: &Vec<BtValue>, dst: &Option<BtValue>, symbols: &SymbolTable) {
     let designator_type = get_bt_type(designator, symbols);
+    let fn_has_linkage = does_symbol_have_linkage(designator, symbols);
 
-    if designator_type.is_function() {
-        print!("  {dst} {dst_type} = call @{designator} (");
+    let call_type = if designator_type.is_function() {
+        "call"
     } else if designator_type.is_pointer() {
-        print!("  {dst} {dst_type} = call ptr {designator} (");
+        "call ptr"
     } else {
         ICE!("Invalid function designator type '{designator_type}' for '{designator}'");
+    };
+
+    let designator = if fn_has_linkage { format!("@{designator}") } else { format!("{designator}") };
+
+    if let Some(dst) = dst {
+        let dst_type = get_bt_type(dst, symbols).to_printer();
+        print!("  {dst} {dst_type} = {call_type} {designator} (");
+    } else {
+        print!("  {call_type} void {designator} (");
     }
 
     // Args

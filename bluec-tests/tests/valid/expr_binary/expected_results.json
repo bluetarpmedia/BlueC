@@ -35,10 +35,10 @@
     {"filename": "expr_binary_or_short_circuit.c", "exit_code": 1},
     {"filename": "expr_binary_or_true.c", "exit_code": 3},
     {"filename": "expr_binary_parens.c", "exit_code": 14},
+    {"filename": "expr_binary_precedence_1.c", "exit_code": 14},
     {"filename": "expr_binary_precedence_4.c", "exit_code": 1},
     {"filename": "expr_binary_precedence_5.c", "exit_code": 1},
     {"filename": "expr_binary_precedence_6.c", "exit_code": 1},
-    {"filename": "expr_binary_precedence.c", "exit_code": 14},
     {"filename": "expr_binary_sub_neg.c", "exit_code": 3},
     {"filename": "expr_binary_sub.c", "exit_code": 255},
     {"filename": "expr_binary_unop_parens.c", "exit_code": 253}

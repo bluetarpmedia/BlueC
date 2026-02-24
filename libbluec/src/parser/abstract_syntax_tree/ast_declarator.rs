@@ -14,6 +14,8 @@
 //!     ~~~~
 //! int foo(void);
 //!     ~~~~~~~~~
+//! int [4];             // Abstract array declarator
+//!     ~~~
 //! int *;               // Abstract pointer declarator
 //!     ~
 //! int (void);          // Abstract function declarator

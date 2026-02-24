@@ -177,7 +177,12 @@ fn parse_declarator_recursively(
 
 /// Parses a function's parameters.
 fn parse_function_parameters(parser: &mut Parser, driver: &mut Driver) -> ParseResult<Vec<AstDeclaredType>> {
-    if parser.token_stream.next_token_has_type(TokenType::new_identifier("void")) {
+    // Check for 'void' parameter list.
+    //
+    if let (Some(t1), Some(t2)) = parser.token_stream.peek_next_2_tokens()
+        && t1.is_identifier_with_name("void")
+        && t2.has_type(TokenType::CloseParen)
+    {
         _ = parser.token_stream.take_token();
         return Ok(Vec::new());
     }
@@ -185,6 +190,8 @@ fn parse_function_parameters(parser: &mut Parser, driver: &mut Driver) -> ParseR
     let mut params = Vec::new();
     let mut first_param = true;
 
+    // Parse all the parameters until we reach the closing paren.
+    //
     while !parser.token_stream.next_token_has_type(TokenType::CloseParen) {
         if !first_param {
             _ = utils::expect_token(TokenType::Comma, parser, driver)?;
@@ -225,8 +232,8 @@ fn parse_function_parameters(parser: &mut Parser, driver: &mut Driver) -> ParseR
 fn parse_array_size_expression(parser: &mut Parser, driver: &mut Driver) -> ParseResult<Option<AstExpression>> {
     _ = utils::expect_token(TokenType::OpenSqBracket, parser, driver)?;
 
-    // We allow zero-length arrays (with the zero constant omitted) so check if the next token is the
-    // closing square bracket before trying to parse an integer literal, i.e. we're parsing '[]'.
+    // We allow zero-length arrays (`[]`, with the zero constant omitted) so check if the next token is the
+    // closing square bracket before trying to parse an integer literal.
     //
     let size_expr = if parser.token_stream.next_token_has_type(TokenType::CloseSqBracket) {
         Ok(None)

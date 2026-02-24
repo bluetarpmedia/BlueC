@@ -27,7 +27,7 @@ pub fn copy_params_into_pseudo_registers(bt_func: &ir::BtFunctionDefn, asm_instr
 pub fn generate_function_call(
     designator: &ir::BtValue,
     args: &[ir::BtValue],
-    dst: &ir::BtValue,
+    dst: &Option<ir::BtValue>,
     asm: &mut Vec<AsmInstruction>,
     generator: &mut Generator,
 ) {
@@ -126,11 +126,13 @@ pub fn generate_function_call(
     }
 
     // Copy the function's return value into RAX or XMM0.
-    let asm_type: AsmType = dst.get_type(&generator.symbols).into();
-    let dst_reg = if asm_type.is_floating_point() { HwRegister::XMM0 } else { HwRegister::RAX };
+    if let Some(dst) = dst {
+        let asm_type: AsmType = dst.get_type(&generator.symbols).into();
+        let dst_reg = if asm_type.is_floating_point() { HwRegister::XMM0 } else { HwRegister::RAX };
 
-    let asm_dest = generator.translate_bt_value_to_asm_operand(dst);
-    asm.push(AsmInstruction::Mov { asm_type, src: AsmOperand::hw_reg(dst_reg, asm_type), dst: asm_dest });
+        let asm_dest = generator.translate_bt_value_to_asm_operand(dst);
+        asm.push(AsmInstruction::Mov { asm_type, src: AsmOperand::hw_reg(dst_reg, asm_type), dst: asm_dest });
+    }
 }
 
 /// Classifies the given parameter types into the appropriate operands.

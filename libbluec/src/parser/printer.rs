@@ -420,7 +420,7 @@ fn print_statement<W: Write>(p: &mut AstPrinter<W>, stmt: &AstStatement, is_last
         AstStatement::Null => print_null_statement(p, is_last),
 
         // Control statements: Conditional
-        AstStatement::If { controlling_expr, then_stmt, else_stmt } => {
+        AstStatement::If { controlling_expr, then_stmt, else_stmt, .. } => {
             print_if_statement(p, controlling_expr, then_stmt, else_stmt, is_last)
         }
         AstStatement::Switch { node_id, controlling_expr, body } => {
@@ -446,7 +446,7 @@ fn print_statement<W: Write>(p: &mut AstPrinter<W>, stmt: &AstStatement, is_last
         AstStatement::Default { switch_node_id, stmt } => {
             print_switch_default_statement(p, *switch_node_id, stmt, is_last)
         }
-        AstStatement::Return(expr) => print_return_statement(p, expr, is_last),
+        AstStatement::Return { expr, .. } => print_return_statement(p, expr, is_last),
     }
 }
 
@@ -723,12 +723,16 @@ fn print_switch_default_statement<W: Write>(
     p.with_indent(is_last, |p| print_statement(p, stmt, true))
 }
 
-fn print_return_statement<W: Write>(p: &mut AstPrinter<W>, expr: &AstExpression, is_last: bool) -> io::Result<()> {
+fn print_return_statement<W: Write>(
+    p: &mut AstPrinter<W>,
+    expr: &Option<AstExpression>,
+    is_last: bool,
+) -> io::Result<()> {
     p.write_prefix_and_connector(make_connector(is_last))?;
     p.write_stmt_str("ReturnStmt")?;
     p.new_line()?;
 
-    p.with_indent(is_last, |p| print_expression(p, expr, true))
+    if let Some(expr) = expr { p.with_indent(is_last, |p| print_expression(p, expr, true)) } else { Ok(()) }
 }
 
 fn print_continue_statement<W: Write>(p: &mut AstPrinter<W>, loop_node_id: AstNodeId, is_last: bool) -> io::Result<()> {
@@ -881,6 +885,25 @@ fn print_expression<W: Write>(p: &mut AstPrinter<W>, expr: &AstExpression, is_la
             p.new_line()
         }
 
+        AstExpressionKind::SizeOfExpr { operand } => {
+            print_node_metadata(p, expr.id())?;
+            p.new_line()?;
+
+            p.with_indent(is_last, |p| print_expression(p, operand, true))
+        }
+
+        AstExpressionKind::SizeOfType { declared_type } => {
+            print_node_metadata(p, expr.id())?;
+            p.new_line()?;
+
+            p.with_indent(is_last, |p| {
+                p.write_prefix_and_connector(make_last_child_connector())?;
+                write!(p.writer, "Type: \"{}\"", declared_type)?;
+                print_resolved_type(p, declared_type)?;
+                p.new_line()
+            })
+        }
+
         AstExpressionKind::CharLiteral { literal, is_multichar, value } => {
             let multichar_str = if *is_multichar { " [Multi-char]" } else { "" };
 
@@ -973,6 +996,8 @@ fn get_expression_node_name(kind: &AstExpressionKind) -> &str {
         AstExpressionKind::Cast { is_implicit, .. } if *is_implicit => "ImplicitCast",
         AstExpressionKind::Cast { .. } => "Cast",
         AstExpressionKind::Ident { .. } => "Ident",
+        AstExpressionKind::SizeOfExpr { .. } => "SizeOfExpr",
+        AstExpressionKind::SizeOfType { .. } => "SizeOfType",
         AstExpressionKind::CharLiteral { .. } => "CharLiteral",
         AstExpressionKind::StringLiteral { .. } => "StringLiteral",
         AstExpressionKind::IntegerLiteral { .. } => "IntegerLiteral",

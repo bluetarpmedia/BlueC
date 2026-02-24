@@ -4,6 +4,8 @@
 
 use std::fmt;
 
+use crate::core::SourceLocation;
+
 use super::{AstBasicType, AstDeclarator, AstIdentifier, AstStorageClassSpecifier, AstType};
 
 /// An `AstDeclaredType` represents a parsed type declaration which is not yet resolved to its canonical `AstType`.
@@ -84,5 +86,25 @@ impl AstDeclaredType {
     /// Otherwise returns `None`.
     pub fn get_identifier(&self) -> Option<&AstIdentifier> {
         if let Some(declarator) = &self.declarator { declarator.get_identifier() } else { None }
+    }
+
+    /// The source location of the declared type including the basic type, storage class and declarator (if they exist).
+    pub fn location(&self) -> SourceLocation {
+        let mut loc = self.basic_type.location();
+
+        if let Some(storage_class) = self.storage_class {
+            loc = loc.merge_with(storage_class.loc);
+        }
+
+        if let Some(declarator) = &self.declarator {
+            loc = loc.merge_with(declarator.loc);
+        }
+
+        loc
+    }
+
+    /// If the type includes a declarator, returns its location. Otherwise returns `None`.
+    pub fn declarator_location(&self) -> Option<SourceLocation> {
+        self.declarator.as_ref().map(|declarator| declarator.loc)
     }
 }

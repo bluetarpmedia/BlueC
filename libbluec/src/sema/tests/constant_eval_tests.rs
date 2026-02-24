@@ -445,6 +445,81 @@ fn pointer_arithmetic() {
     }
 }
 
+#[test]
+fn sizeof() {
+    let verify_value = |expr: &str, expected: Option<u64>| {
+        let value = evaluate_expr_with_typechecking(expr);
+
+        if expected.is_none() {
+            assert_eq!(value, None);
+            return;
+        }
+
+        let Some(AstConstantValue::Integer(const_integer)) = value else {
+            assert!(value.is_some(), "Expression '{expr}' did not evaluate to Integer");
+            panic!();
+        };
+
+        match const_integer {
+            AstConstantInteger::UnsignedLongLong(value) => {
+                assert_eq!(expected, Some(value));
+            }
+            _ => assert!(false),
+        }
+    };
+
+    // sizeof(type-name)
+    verify_value("sizeof (void)", None);
+    verify_value("sizeof (void[])", None);
+    verify_value("sizeof (void[0])", None);
+    verify_value("sizeof (void[5])", None);
+    verify_value("sizeof (void[3][2][1])", None);
+
+    verify_value("sizeof (char)", Some(1));
+    verify_value("sizeof (short)", Some(2));
+    verify_value("sizeof (int)", Some(4));
+    verify_value("sizeof (long)", Some(8));
+    verify_value("sizeof (long long)", Some(8));
+    verify_value("sizeof (float)", Some(4));
+    verify_value("sizeof (double)", Some(8));
+
+    verify_value("sizeof (char *)", Some(8));
+    verify_value("sizeof (short *)", Some(8));
+    verify_value("sizeof (int *)", Some(8));
+    verify_value("sizeof (long *)", Some(8));
+    verify_value("sizeof (long long *)", Some(8));
+    verify_value("sizeof (float *)", Some(8));
+    verify_value("sizeof (double *)", Some(8));
+
+    verify_value("sizeof (int (*)[3])", Some(8));
+    verify_value("sizeof (int (*)[3][5])", Some(8));
+    verify_value("sizeof (int *[3])", Some(24));
+    verify_value("sizeof (int *[3][5])", Some(120));
+
+    verify_value("sizeof (char[3])", Some(3));
+    verify_value("sizeof (short[12])", Some(24));
+    verify_value("sizeof (int[3])", Some(12));
+    verify_value("sizeof (int[3][2])", Some(24));
+
+    // sizeof expr
+    verify_value("sizeof (int (float, double))", None);
+    verify_value("sizeof ((void)1)", None);
+    verify_value("sizeof ((void)(long)1)", None);
+    verify_value("sizeof ((void (*)[10])1)", Some(8));
+    verify_value("sizeof ((char)'a')", Some(1));
+    verify_value("sizeof ((short)1)", Some(2));
+    verify_value("sizeof ((long)1)", Some(8));
+    verify_value("sizeof ((long long)1)", Some(8));
+    verify_value("sizeof ((void *)0)", Some(8));
+
+    verify_value("sizeof 'a'", Some(4));
+    verify_value("sizeof 1", Some(4));
+    verify_value("sizeof 1.0f", Some(4));
+    verify_value("sizeof 1.0", Some(8));
+
+    verify_value("sizeof \"test\"", Some(5));
+}
+
 fn verify_expr_evaluates_to_i8(expression_source_code: &str, expected: Option<i8>) {
     let value = evaluate_expr(expression_source_code);
 
@@ -711,6 +786,38 @@ fn evaluate_expr<'a>(expression_source_code: &str) -> Option<AstConstantValue> {
     let expr = expr.unwrap();
 
     let mut chk = type_check::TypeChecker::default();
+    let mut eval = constant_eval::Eval::new(&mut chk, &mut driver);
+    eval.set_diagnostics_enabled(false);
+    eval.evaluate_expr(&expr)
+}
+
+fn evaluate_expr_with_typechecking<'a>(expression_source_code: &str) -> Option<AstConstantValue> {
+    let mut driver = compiler_driver::Driver::for_testing();
+
+    let cursor = Cursor::new(expression_source_code.as_bytes());
+    let mut reader = BufReader::new(cursor);
+
+    let tokens = lexer::lex_buf_reader(&mut driver, &mut reader);
+    if driver.has_error_diagnostics() {
+        driver.debug_print_diagnostics();
+        assert!(false, "Lexer emitted errors");
+    }
+
+    let mut parser = Parser::new(tokens);
+
+    let expr = expr::parse_expression(&mut parser, &mut driver);
+    if driver.has_error_diagnostics() {
+        driver.debug_print_diagnostics();
+        assert!(false, "Parser emitted errors");
+    }
+
+    assert!(expr.is_ok(), "Did not parse {}", expression_source_code);
+    let mut expr = expr.unwrap();
+
+    let Parser { metadata, .. } = parser;
+    let mut chk = type_check::TypeChecker::new(metadata);
+    _ = type_check::type_check_expression(&mut expr, &mut chk, &mut driver);
+
     let mut eval = constant_eval::Eval::new(&mut chk, &mut driver);
     eval.set_diagnostics_enabled(false);
     eval.evaluate_expr(&expr)

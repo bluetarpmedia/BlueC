@@ -58,6 +58,13 @@ impl TokenStream {
         matches!(self.peek_next_token(), Some(token) if token.token_type == token_type)
     }
 
+    /// Peeks at the next token in the stream and returns whether its type is an identifier with the given name.
+    ///
+    /// Returns false if the stream has no more tokens.
+    pub fn next_token_is_identifier(&self, expected_name: &str) -> bool {
+        matches!(self.peek_next_token(), Some(token) if token.is_identifier_with_name(expected_name))
+    }
+
     /// Peeks at the next 2 tokens in the stream without advancing.
     pub fn peek_next_2_tokens(&self) -> (Option<&lexer::Token>, Option<&lexer::Token>) {
         let first = self.peek_next_token();

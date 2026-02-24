@@ -133,6 +133,10 @@ impl<'a, W: Write> Printer<'a, W> {
     fn print(&mut self, diagnostic: &Diagnostic) {
         self.print_diagnostic_message(diagnostic);
 
+        if self.terse {
+            return;
+        }
+
         // Calculate the width of the left margin.
         //      The margin is the space before the vertical pipe | where we print the source line numbers.
         //      It has to be wide enough for the character length of the line number, plus 1 extra space.
@@ -146,7 +150,7 @@ impl<'a, W: Write> Printer<'a, W> {
 
             if diagnostic.locations.len() == 1 {
                 self.print_source_location_header(&margin_str, &display_locations[0]);
-                self.print_source_line_with_highlight(diagnostic.kind, display_locations, margin_width);
+                self.print_source_line_with_highlight(Some(diagnostic.kind), display_locations, margin_width);
             } else {
                 // If all the locations are on the same line then we only want to print the "<filename>:<line>:<col>"
                 // header once.
@@ -155,11 +159,11 @@ impl<'a, W: Write> Printer<'a, W> {
 
                 if all_locs_on_same_line {
                     self.print_source_location_header(&margin_str, &display_locations[0]);
-                    self.print_source_line_with_highlight(diagnostic.kind, display_locations, margin_width);
+                    self.print_source_line_with_highlight(Some(diagnostic.kind), display_locations, margin_width);
                 } else {
                     for location in display_locations {
                         self.print_source_location_header(&margin_str, &location);
-                        self.print_source_line_with_highlight(diagnostic.kind, vec![location], margin_width);
+                        self.print_source_line_with_highlight(Some(diagnostic.kind), vec![location], margin_width);
                     }
                 }
             }
@@ -176,7 +180,7 @@ impl<'a, W: Write> Printer<'a, W> {
 
                 if let Some(note_location) = &note.loc {
                     let display_loc = self.transform_location_for_display(*note_location);
-                    self.print_source_line_with_highlight(diagnostic.kind, vec![display_loc], margin_width);
+                    self.print_source_line_with_highlight(None, vec![display_loc], margin_width);
                 }
 
                 if let Some(suggested_code) = &note.suggested_code {
@@ -216,7 +220,7 @@ impl<'a, W: Write> Printer<'a, W> {
     /// Prints a line of source code with '^' highlight characters underneath pointing at the relevant location.
     fn print_source_line_with_highlight(
         &mut self,
-        kind: DiagnosticKind,
+        kind: Option<DiagnosticKind>,
         mut locations: Vec<DisplayLocation>,
         margin_width: usize,
     ) {
@@ -259,7 +263,14 @@ impl<'a, W: Write> Printer<'a, W> {
             let highlight_char = if location.column_no == primary_column_no { '^' } else { '~' };
             let highlight = highlight_char.to_string().repeat(highlight_len);
 
-            let highlight_color = if kind == DiagnosticKind::Error { self.error_color } else { self.warn_color };
+            let highlight_color = if kind.is_some_and(|k| k == DiagnosticKind::Error) {
+                self.error_color
+            } else if kind.is_some_and(|k| matches!(k, DiagnosticKind::Warning(_))) {
+                self.warn_color
+            } else {
+                self.bold_color
+            };
+
             let reset_color = self.reset_color;
 
             _ = write!(self.buffer, "{highlight_indent}{highlight_color}{highlight}{reset_color}");

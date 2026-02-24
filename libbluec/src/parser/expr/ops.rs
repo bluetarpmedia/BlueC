@@ -7,7 +7,6 @@ use crate::compiler_driver::Driver;
 use crate::lexer;
 
 use super::super::{AstAssignmentOp, AstBinaryOp, AstExpression, AstExpressionKind, AstUnaryOp, ParseResult, Parser};
-use super::parse_unary_expression;
 
 /// Parses a prefix unary operation and returns an AST expression.
 pub fn parse_prefix_unary_operation(parser: &mut Parser, driver: &mut Driver) -> ParseResult<AstExpression> {
@@ -17,21 +16,22 @@ pub fn parse_prefix_unary_operation(parser: &mut Parser, driver: &mut Driver) ->
 
     let unary_op_token = unary_op_token.clone();
     let op = translate_prefix_unary_operator(&unary_op_token.token_type);
-    let unary_expr = parse_unary_expression(parser, driver)?;
+    let operand_expr = super::parse_cast_expression(parser, driver)?; // Cast or Unary
 
     let end_loc = parser.token_stream.prev_token_source_location().expect("Should have a location");
 
     let node_id = driver.make_node_id();
+    parser.metadata.add_operator_sloc(node_id, unary_op_token.location);
     parser.metadata.add_source_location(node_id, unary_op_token.location.merge_with(end_loc));
-    parser.metadata.propagate_const_flag_from_child(unary_expr.id(), node_id);
+    parser.metadata.propagate_const_flag_from_child(operand_expr.id(), node_id);
 
     // We parse dereference and address-of as unary operations but output dedicated AstExpressions for them,
     // rather than storing them as `AstExpression::UnaryOperation`s. This makes it easier to handle them later
     // for type checking etc.
     let kind = match op {
-        AstUnaryOp::Deref => AstExpressionKind::Deref { pointer: Box::new(unary_expr) },
-        AstUnaryOp::AddressOf => AstExpressionKind::AddressOf { target: Box::new(unary_expr) },
-        _ => AstExpressionKind::Unary { op, operand: Box::new(unary_expr) },
+        AstUnaryOp::Deref => AstExpressionKind::Deref { pointer: Box::new(operand_expr) },
+        AstUnaryOp::AddressOf => AstExpressionKind::AddressOf { target: Box::new(operand_expr) },
+        _ => AstExpressionKind::Unary { op, operand: Box::new(operand_expr) },
     };
 
     Ok(AstExpression::new(node_id, kind))
@@ -57,6 +57,7 @@ pub fn parse_postfix_incr_or_decr(
     let end_loc = parser.token_stream.prev_token_source_location().expect("Should have a location");
 
     let node_id = driver.make_node_id();
+    parser.metadata.add_operator_sloc(node_id, unary_op_loc);
     parser.metadata.add_source_location(node_id, unary_op_loc.merge_with(end_loc));
 
     Ok(AstExpression::new(node_id, AstExpressionKind::Unary { op, operand: Box::new(expr) }))

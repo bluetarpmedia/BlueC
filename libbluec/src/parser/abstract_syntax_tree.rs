@@ -114,6 +114,7 @@ pub enum AstStatement {
     Compound(AstBlock),
     Null, // An empty expression-statement, e.g. a single ';'
     If {
+        node_id: AstNodeId,
         controlling_expr: AstExpression,
         then_stmt: Box<AstStatement>,
         else_stmt: Option<Box<AstStatement>>,
@@ -159,7 +160,10 @@ pub enum AstStatement {
         node_id: AstNodeId,
         label_name: String,
     },
-    Return(AstExpression),
+    Return {
+        node_id: AstNodeId,
+        expr: Option<AstExpression>,
+    },
 }
 
 /// A for-statement initializer can either be a variable declaration or an expression, or nothing.

@@ -568,25 +568,6 @@ impl Warning {
         driver.add_diagnostic(diag);
     }
 
-    /// Emits a warning that two pointers in an expression have different types.
-    ///
-    /// -Wpointer-type-mismatch
-    pub fn pointer_type_mismatch(
-        a: &AstType,
-        b: &AstType,
-        operator_loc: SourceLocation,
-        a_loc: SourceLocation,
-        b_loc: SourceLocation,
-        driver: &mut Driver,
-    ) {
-        let kind = WarningKind::PointerTypeMismatch;
-        let warning = format!("Pointer type mismatch ('{a}' and '{b}')");
-        let mut diag = Diagnostic::warning_at_location(kind, warning, operator_loc);
-        diag.add_location(a_loc);
-        diag.add_location(b_loc);
-        driver.add_diagnostic(diag);
-    }
-
     /// Emits a warning that there are too many elements in the initializer list for the given `variable_type`.
     ///
     /// -Wexcess-initializers

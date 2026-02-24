@@ -1,0 +1,9 @@
+[
+    {
+        "test_case": "expr_sizeof_multi_sizeof_extern",
+        "filenames": [
+            "multi/sizeof_extern.c",
+            "multi/sizeof_extern_client.c"
+        ]
+    }
+]

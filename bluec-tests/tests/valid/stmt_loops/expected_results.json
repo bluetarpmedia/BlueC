@@ -9,6 +9,7 @@
     {"filename": "stmt_loops_do_while.c", "exit_code": 16},
     {"filename": "stmt_loops_empty_loop_body.c", "exit_code": 252},
     {"filename": "stmt_loops_for_decl.c", "exit_code": 101},
+    {"filename": "stmt_loops_for_decl_no_init.c", "exit_code": 2},
     {"filename": "stmt_loops_for_multiple_decl_1.c", "exit_code": 10},
     {"filename": "stmt_loops_for_multiple_decl_2.c", "exit_code": 15},
     {"filename": "stmt_loops_for_nested_shadow.c", "exit_code": 1},

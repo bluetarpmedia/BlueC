@@ -16,185 +16,185 @@ TranslationUnit
     │ ├ Linkage: none
     │ ├ Storage: automatic
     │ └ Initializer
-    │   └ IntegerLiteral(1) [Id = 5] [Type = 'int'] [ConstantExpr]
+    │   └ IntegerLiteral(1) [Id = 6] [Type = 'int'] [ConstantExpr]
     ├ VariableDefn: b [id.b.2], declared="int" [Type = 'int']
     │ ├ Linkage: none
     │ ├ Storage: automatic
     │ └ Initializer
-    │   └ IntegerLiteral(2) [Id = 7] [Type = 'int'] [ConstantExpr]
+    │   └ IntegerLiteral(2) [Id = 8] [Type = 'int'] [ConstantExpr]
     ├ ExprStmt
-    │ └ Assignment [Id = 12] [Type = 'int']
-    │   ├ Ident: a [id.a.1] [Id = 9] [Type = 'int']
-    │   └ Unary (Negate -) [Id = 11] [Type = 'int']
-    │     └ Ident: b [id.b.2] [Id = 10] [Type = 'int']
+    │ └ Assignment [Id = 13] [Type = 'int']
+    │   ├ Ident: a [id.a.1] [Id = 10] [Type = 'int']
+    │   └ Unary (Negate -) [Id = 12] [Type = 'int']
+    │     └ Ident: b [id.b.2] [Id = 11] [Type = 'int']
     ├ ExprStmt
-    │ └ CompoundAssignment (AdditionAssignment +=) [Computation Type = 'int'] [Id = 20] [Type = 'int']
-    │   ├ Ident: a [id.a.1] [Id = 14] [Type = 'int']
-    │   └ IntegerLiteral(1) [Id = 129] [Type = 'int'] [ConstantExpr]
+    │ └ CompoundAssignment (AdditionAssignment +=) [Computation Type = 'int'] [Id = 21] [Type = 'int']
+    │   ├ Ident: a [id.a.1] [Id = 15] [Type = 'int']
+    │   └ IntegerLiteral(1) [Id = 137] [Type = 'int'] [ConstantExpr]
     ├ ExprStmt
-    │ └ Assignment [Id = 29] [Type = 'int']
-    │   ├ Ident: a [id.a.1] [Id = 22] [Type = 'int']
-    │   └ Ternary [Id = 28] [Type = 'int']
+    │ └ Assignment [Id = 30] [Type = 'int']
+    │   ├ Ident: a [id.a.1] [Id = 23] [Type = 'int']
+    │   └ Ternary [Id = 29] [Type = 'int']
     │     ├ Condition
-    │     │ └ Binary (GreaterThan >) [Id = 25] [Type = 'int']
-    │     │   ├ Ident: b [id.b.2] [Id = 23] [Type = 'int']
-    │     │   └ IntegerLiteral(3) [Id = 24] [Type = 'int'] [ConstantExpr]
+    │     │ └ Binary (GreaterThan >) [Id = 26] [Type = 'int']
+    │     │   ├ Ident: b [id.b.2] [Id = 24] [Type = 'int']
+    │     │   └ IntegerLiteral(3) [Id = 25] [Type = 'int'] [ConstantExpr]
     │     ├ Consequent
-    │     │ └ IntegerLiteral(1) [Id = 26] [Type = 'int'] [ConstantExpr]
+    │     │ └ IntegerLiteral(1) [Id = 27] [Type = 'int'] [ConstantExpr]
     │     └ Alternative
-    │       └ IntegerLiteral(2) [Id = 27] [Type = 'int'] [ConstantExpr]
+    │       └ IntegerLiteral(2) [Id = 28] [Type = 'int'] [ConstantExpr]
     ├ VariableDefn: squared [id.squared.3], declared="float" [Type = 'float']
     │ ├ Linkage: none
     │ ├ Storage: automatic
     │ └ Initializer
-    │   └ Call [Id = 34] [Type = 'float']
+    │   └ Call [Id = 35] [Type = 'float']
     │     ├ Designator
-    │     │ └ Ident: sq [sq] [Id = 31] [Type = 'float (float)']
+    │     │ └ Ident: sq [sq] [Id = 32] [Type = 'float (float)']
     │     └ Args
-    │       └ ImplicitCast (float) [Id = 126] [Type = 'float']
-    │         └ Ident: a [id.a.1] [Id = 32] [Type = 'int']
+    │       └ ImplicitCast (float) [Id = 134] [Type = 'float']
+    │         └ Ident: a [id.a.1] [Id = 33] [Type = 'int']
     ├ ExprStmt
-    │ └ Assignment [Id = 38] [Type = 'int']
-    │   ├ Ident: a [id.a.1] [Id = 36] [Type = 'int']
-    │   └ ImplicitCast (int) [Id = 127] [Type = 'int']
-    │     └ Ident: squared [id.squared.3] [Id = 37] [Type = 'float']
+    │ └ Assignment [Id = 39] [Type = 'int']
+    │   ├ Ident: a [id.a.1] [Id = 37] [Type = 'int']
+    │   └ ImplicitCast (int) [Id = 135] [Type = 'int']
+    │     └ Ident: squared [id.squared.3] [Id = 38] [Type = 'float']
     ├ ExprStmt
-    │ └ Assignment [Id = 42] [Type = 'int']
-    │   ├ Ident: b [id.b.2] [Id = 40] [Type = 'int']
-    │   └ ImplicitCast (int) [Id = 128] [Type = 'int']
-    │     └ Ident: squared [id.squared.3] [Id = 41] [Type = 'float']
+    │ └ Assignment [Id = 43] [Type = 'int']
+    │   ├ Ident: b [id.b.2] [Id = 41] [Type = 'int']
+    │   └ ImplicitCast (int) [Id = 136] [Type = 'int']
+    │     └ Ident: squared [id.squared.3] [Id = 42] [Type = 'float']
     ├ VariableDefn: ptr [id.ptr.4], declared="float *" [Type = 'float *']
     │ ├ Linkage: none
     │ ├ Storage: automatic
     │ └ Initializer
-    │   └ AddressOf [Id = 45] [Type = 'float *']
-    │     └ Ident: squared [id.squared.3] [Id = 44] [Type = 'float']
+    │   └ AddressOf [Id = 46] [Type = 'float *']
+    │     └ Ident: squared [id.squared.3] [Id = 45] [Type = 'float']
     ├ VariableDefn: r1 [id.r1.5], declared="float" [Type = 'float']
     │ ├ Linkage: none
     │ ├ Storage: automatic
     │ └ Initializer
-    │   └ Deref [Id = 48] [Type = 'float']
-    │     └ Ident: ptr [id.ptr.4] [Id = 47] [Type = 'float *']
+    │   └ Deref [Id = 49] [Type = 'float']
+    │     └ Ident: ptr [id.ptr.4] [Id = 48] [Type = 'float *']
     ├ VariableDefn: r2 [id.r2.6], declared="float" [Type = 'float']
     │ ├ Linkage: none
     │ ├ Storage: automatic
     │ └ Initializer
-    │   └ Subscript [Id = 52] [Type = 'float']
-    │     ├ Ident: ptr [id.ptr.4] [Id = 50] [Type = 'float *']
-    │     └ IntegerLiteral(0) [Id = 51] [Type = 'int'] [ConstantExpr]
+    │   └ Subscript [Id = 53] [Type = 'float']
+    │     ├ Ident: ptr [id.ptr.4] [Id = 51] [Type = 'float *']
+    │     └ IntegerLiteral(0) [Id = 52] [Type = 'int'] [ConstantExpr]
     ├ IfStmt
     │ ├ Condition
-    │ │ └ IntegerLiteral(0) [Id = 130] [Type = 'int'] [ConstantExpr]
+    │ │ └ IntegerLiteral(0) [Id = 138] [Type = 'int'] [ConstantExpr]
     │ ├ Then
     │ │ └ CompoundStmt
     │ │   └ ReturnStmt
-    │ │     └ CharLiteral('c' [99]) [Id = 57] [Type = 'int'] [ConstantExpr]
+    │ │     └ CharLiteral('c' [99]) [Id = 58] [Type = 'int'] [ConstantExpr]
     │ └ Else
     │   └ CompoundStmt
     │     └ ReturnStmt
-    │       └ CharLiteral('d' [100]) [Id = 58] [Type = 'int'] [ConstantExpr]
+    │       └ CharLiteral('d' [100]) [Id = 60] [Type = 'int'] [ConstantExpr]
     ├ IfStmt
     │ ├ Condition
-    │ │ └ IntegerLiteral(0) [Id = 131] [Type = 'int'] [ConstantExpr]
+    │ │ └ IntegerLiteral(0) [Id = 139] [Type = 'int'] [ConstantExpr]
     │ ├ Then
     │ │ └ ReturnStmt
-    │ │   └ CharLiteral('c' [99]) [Id = 62] [Type = 'int'] [ConstantExpr]
+    │ │   └ CharLiteral('c' [99]) [Id = 66] [Type = 'int'] [ConstantExpr]
     │ └ Else
     │   └ ReturnStmt
-    │     └ CharLiteral('d' [100]) [Id = 63] [Type = 'int'] [ConstantExpr]
-    ├ SwitchStmt [Id = 65]
+    │     └ CharLiteral('d' [100]) [Id = 68] [Type = 'int'] [ConstantExpr]
+    ├ SwitchStmt [Id = 72]
     │ ├ Condition
-    │ │ └ Ident: a [id.a.1] [Id = 64] [Type = 'int']
+    │ │ └ Ident: a [id.a.1] [Id = 71] [Type = 'int']
     │ └ Body
     │   └ CompoundStmt
-    │     ├ CaseStmt [Switch Id = 65]
+    │     ├ CaseStmt [Switch Id = 72]
     │     │ ├ Constant Expr
-    │     │ │ └ IntegerLiteral(1) [Id = 66] [Type = 'int'] [ConstantExpr]
+    │     │ │ └ IntegerLiteral(1) [Id = 73] [Type = 'int'] [ConstantExpr]
     │     │ └ Statement
     │     │   └ ExprStmt
-    │     │     └ Assignment [Id = 69] [Type = 'int']
-    │     │       ├ Ident: b [id.b.2] [Id = 67] [Type = 'int']
-    │     │       └ IntegerLiteral(2) [Id = 68] [Type = 'int'] [ConstantExpr]
-    │     ├ BreakStmt [Enclosing Stmt Id = 65]
-    │     ├ CaseStmt [Switch Id = 65]
+    │     │     └ Assignment [Id = 76] [Type = 'int']
+    │     │       ├ Ident: b [id.b.2] [Id = 74] [Type = 'int']
+    │     │       └ IntegerLiteral(2) [Id = 75] [Type = 'int'] [ConstantExpr]
+    │     ├ BreakStmt [Enclosing Stmt Id = 72]
+    │     ├ CaseStmt [Switch Id = 72]
     │     │ ├ Constant Expr
-    │     │ │ └ IntegerLiteral(2) [Id = 71] [Type = 'int'] [ConstantExpr]
+    │     │ │ └ IntegerLiteral(2) [Id = 78] [Type = 'int'] [ConstantExpr]
     │     │ └ Statement
     │     │   └ ExprStmt
-    │     │     └ Assignment [Id = 74] [Type = 'int']
-    │     │       ├ Ident: b [id.b.2] [Id = 72] [Type = 'int']
-    │     │       └ IntegerLiteral(3) [Id = 73] [Type = 'int'] [ConstantExpr]
-    │     ├ BreakStmt [Enclosing Stmt Id = 65]
-    │     └ DefaultStmt [Switch Id = 65]
-    │       └ BreakStmt [Enclosing Stmt Id = 65]
-    ├ WhileStmt [Id = 82]
+    │     │     └ Assignment [Id = 81] [Type = 'int']
+    │     │       ├ Ident: b [id.b.2] [Id = 79] [Type = 'int']
+    │     │       └ IntegerLiteral(3) [Id = 80] [Type = 'int'] [ConstantExpr]
+    │     ├ BreakStmt [Enclosing Stmt Id = 72]
+    │     └ DefaultStmt [Switch Id = 72]
+    │       └ BreakStmt [Enclosing Stmt Id = 72]
+    ├ WhileStmt [Id = 89]
     │ ├ Condition
-    │ │ └ Binary (LessThan <) [Id = 81] [Type = 'int']
-    │ │   ├ Ident: a [id.a.1] [Id = 79] [Type = 'int']
-    │ │   └ IntegerLiteral(10) [Id = 80] [Type = 'int'] [ConstantExpr]
+    │ │ └ Binary (LessThan <) [Id = 88] [Type = 'int']
+    │ │   ├ Ident: a [id.a.1] [Id = 86] [Type = 'int']
+    │ │   └ IntegerLiteral(10) [Id = 87] [Type = 'int'] [ConstantExpr]
     │ └ Body
     │   └ CompoundStmt
     │     └ ExprStmt
-    │       └ Unary (PostfixIncrement ++) [Id = 84] [Type = 'int']
-    │         └ Ident: a [id.a.1] [Id = 83] [Type = 'int']
-    ├ DoStmt [Id = 85]
+    │       └ Unary (PostfixIncrement ++) [Id = 91] [Type = 'int']
+    │         └ Ident: a [id.a.1] [Id = 90] [Type = 'int']
+    ├ DoStmt [Id = 92]
     │ ├ Body
     │ │ └ CompoundStmt
     │ │   └ ExprStmt
-    │ │     └ Unary (PostfixDecrement --) [Id = 87] [Type = 'int']
-    │ │       └ Ident: b [id.b.2] [Id = 86] [Type = 'int']
+    │ │     └ Unary (PostfixDecrement --) [Id = 94] [Type = 'int']
+    │ │       └ Ident: b [id.b.2] [Id = 93] [Type = 'int']
     │ └ WhileCondition
-    │   └ Binary (GreaterThan >) [Id = 93] [Type = 'int']
-    │     ├ Ident: b [id.b.2] [Id = 91] [Type = 'int']
-    │     └ IntegerLiteral(0) [Id = 92] [Type = 'int'] [ConstantExpr]
-    ├ ForStmt [Id = 94]
+    │   └ Binary (GreaterThan >) [Id = 100] [Type = 'int']
+    │     ├ Ident: b [id.b.2] [Id = 98] [Type = 'int']
+    │     └ IntegerLiteral(0) [Id = 99] [Type = 'int'] [ConstantExpr]
+    ├ ForStmt [Id = 101]
     │ ├ Init: None
     │ ├ Condition: None
     │ ├ Post: None
     │ └ Body
     │   └ CompoundStmt
-    ├ ForStmt [Id = 102]
+    ├ ForStmt [Id = 109]
     │ ├ Init
     │ │ └ VariableDefn: i [id.i.7], declared="int" [Type = 'int']
     │ │   ├ Linkage: none
     │ │   ├ Storage: automatic
     │ │   └ Initializer
-    │ │     └ IntegerLiteral(0) [Id = 95] [Type = 'int'] [ConstantExpr]
+    │ │     └ IntegerLiteral(0) [Id = 102] [Type = 'int'] [ConstantExpr]
     │ ├ Condition
-    │ │ └ Binary (LessThan <) [Id = 99] [Type = 'int']
-    │ │   ├ Ident: i [id.i.7] [Id = 97] [Type = 'int']
-    │ │   └ IntegerLiteral(10) [Id = 98] [Type = 'int'] [ConstantExpr]
+    │ │ └ Binary (LessThan <) [Id = 106] [Type = 'int']
+    │ │   ├ Ident: i [id.i.7] [Id = 104] [Type = 'int']
+    │ │   └ IntegerLiteral(10) [Id = 105] [Type = 'int'] [ConstantExpr]
     │ ├ Post
-    │ │ └ Unary (PrefixIncrement ++) [Id = 101] [Type = 'int']
-    │ │   └ Ident: i [id.i.7] [Id = 100] [Type = 'int']
+    │ │ └ Unary (PrefixIncrement ++) [Id = 108] [Type = 'int']
+    │ │   └ Ident: i [id.i.7] [Id = 107] [Type = 'int']
     │ └ Body
     │   └ CompoundStmt
     │     ├ ExprStmt
-    │     │ └ CompoundAssignment (MultiplyAssignment *=) [Computation Type = 'int'] [Id = 105] [Type = 'int']
-    │     │   ├ Ident: a [id.a.1] [Id = 103] [Type = 'int']
-    │     │   └ IntegerLiteral(2) [Id = 104] [Type = 'int'] [ConstantExpr]
-    │     └ BreakStmt [Enclosing Stmt Id = 102]
-    ├ ForStmt [Id = 116]
+    │     │ └ CompoundAssignment (MultiplyAssignment *=) [Computation Type = 'int'] [Id = 112] [Type = 'int']
+    │     │   ├ Ident: a [id.a.1] [Id = 110] [Type = 'int']
+    │     │   └ IntegerLiteral(2) [Id = 111] [Type = 'int'] [ConstantExpr]
+    │     └ BreakStmt [Enclosing Stmt Id = 109]
+    ├ ForStmt [Id = 123]
     │ ├ Init
-    │ │ └ Assignment [Id = 109] [Type = 'int']
-    │ │   ├ Ident: a [id.a.1] [Id = 107] [Type = 'int']
-    │ │   └ IntegerLiteral(0) [Id = 108] [Type = 'int'] [ConstantExpr]
+    │ │ └ Assignment [Id = 116] [Type = 'int']
+    │ │   ├ Ident: a [id.a.1] [Id = 114] [Type = 'int']
+    │ │   └ IntegerLiteral(0) [Id = 115] [Type = 'int'] [ConstantExpr]
     │ ├ Condition
-    │ │ └ Binary (LessThan <) [Id = 113] [Type = 'int']
-    │ │   ├ Ident: a [id.a.1] [Id = 111] [Type = 'int']
-    │ │   └ IntegerLiteral(10) [Id = 112] [Type = 'int'] [ConstantExpr]
+    │ │ └ Binary (LessThan <) [Id = 120] [Type = 'int']
+    │ │   ├ Ident: a [id.a.1] [Id = 118] [Type = 'int']
+    │ │   └ IntegerLiteral(10) [Id = 119] [Type = 'int'] [ConstantExpr]
     │ ├ Post
-    │ │ └ Unary (PrefixIncrement ++) [Id = 115] [Type = 'int']
-    │ │   └ Ident: a [id.a.1] [Id = 114] [Type = 'int']
+    │ │ └ Unary (PrefixIncrement ++) [Id = 122] [Type = 'int']
+    │ │   └ Ident: a [id.a.1] [Id = 121] [Type = 'int']
     │ └ Body
     │   └ CompoundStmt
     │     ├ ExprStmt
-    │     │ └ CompoundAssignment (MultiplyAssignment *=) [Computation Type = 'int'] [Id = 119] [Type = 'int']
-    │     │   ├ Ident: b [id.b.2] [Id = 117] [Type = 'int']
-    │     │   └ IntegerLiteral(2) [Id = 118] [Type = 'int'] [ConstantExpr]
-    │     └ ContinueStmt [Loop Id = 116]
+    │     │ └ CompoundAssignment (MultiplyAssignment *=) [Computation Type = 'int'] [Id = 126] [Type = 'int']
+    │     │   ├ Ident: b [id.b.2] [Id = 124] [Type = 'int']
+    │     │   └ IntegerLiteral(2) [Id = 125] [Type = 'int'] [ConstantExpr]
+    │     └ ContinueStmt [Loop Id = 123]
     ├ GotoStmt: exit
     └ LabeledStmt
       ├ Label: exit
       └ ReturnStmt
-        └ IntegerLiteral(0) [Id = 122] [Type = 'int'] [ConstantExpr]
+        └ IntegerLiteral(0) [Id = 129] [Type = 'int'] [ConstantExpr]

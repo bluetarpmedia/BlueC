@@ -16,21 +16,21 @@ TranslationUnit
 │ │ └ ParamDecl: b [id.b.3]
 │ └ Body
 │   └ ReturnStmt
-│     └ Binary (Multiply *) [Id = 7]
-│       ├ Ident: a [id.a.2] [Id = 5]
-│       └ Ident: b [id.b.3] [Id = 6]
+│     └ Binary (Multiply *) [Id = 8]
+│       ├ Ident: a [id.a.2] [Id = 6]
+│       └ Ident: b [id.b.3] [Id = 7]
 ├ FunctionDefn: switch_to_multiply, signature: "int switch_to_multiply(int **ptr_to_ptr(int, int))"
 │ ├ Linkage: external
 │ ├ Params
 │ │ └ ParamDecl: ptr_to_ptr [id.ptr_to_ptr.4]
 │ └ Body
 │   ├ ExprStmt
-│   │ └ Assignment [Id = 12]
-│   │   ├ Deref [Id = 10]
-│   │   │ └ Ident: ptr_to_ptr [id.ptr_to_ptr.4] [Id = 9]
-│   │   └ Ident: multiply [multiply] [Id = 11]
+│   │ └ Assignment [Id = 14]
+│   │   ├ Deref [Id = 12]
+│   │   │ └ Ident: ptr_to_ptr [id.ptr_to_ptr.4] [Id = 11]
+│   │   └ Ident: multiply [multiply] [Id = 13]
 │   └ ReturnStmt
-│     └ IntegerLiteral(Int = 0) [Id = 14] [ConstantExpr]
+│     └ IntegerLiteral(Int = 0) [Id = 16] [ConstantExpr]
 └ FunctionDefn: main, signature: "int main()"
   ├ Linkage: external
   ├ Params: none
@@ -39,134 +39,134 @@ TranslationUnit
     │ ├ Linkage: none
     │ ├ Storage: automatic
     │ └ Initializer
-    │   └ IntegerLiteral(Int = 10) [Id = 16] [ConstantExpr]
+    │   └ IntegerLiteral(Int = 10) [Id = 19] [ConstantExpr]
     ├ VariableDefn: y [id.y.6], declared="int y"
     │ ├ Linkage: none
     │ ├ Storage: automatic
     │ └ Initializer
-    │   └ IntegerLiteral(Int = 5) [Id = 18] [ConstantExpr]
+    │   └ IntegerLiteral(Int = 5) [Id = 21] [ConstantExpr]
     ├ VariableDefn: fn_ptr [id.fn_ptr.7], declared="int *fn_ptr(int, int)"
     │ ├ Linkage: none
     │ ├ Storage: automatic
     │ └ Initializer
-    │   └ Ident: add [add] [Id = 20]
+    │   └ Ident: add [add] [Id = 23]
     ├ IfStmt
     │ ├ Condition
-    │ │ └ Binary (NotEqualTo !=) [Id = 28]
-    │ │   ├ Call [Id = 26]
+    │ │ └ Binary (NotEqualTo !=) [Id = 31]
+    │ │   ├ Call [Id = 29]
     │ │   │ ├ Designator
-    │ │   │ │ └ Ident: fn_ptr [id.fn_ptr.7] [Id = 22]
+    │ │   │ │ └ Ident: fn_ptr [id.fn_ptr.7] [Id = 25]
     │ │   │ └ Args
-    │ │   │   ├ Ident: x [id.x.5] [Id = 23]
-    │ │   │   └ Ident: y [id.y.6] [Id = 24]
-    │ │   └ IntegerLiteral(Int = 15) [Id = 27] [ConstantExpr]
+    │ │   │   ├ Ident: x [id.x.5] [Id = 26]
+    │ │   │   └ Ident: y [id.y.6] [Id = 27]
+    │ │   └ IntegerLiteral(Int = 15) [Id = 30] [ConstantExpr]
     │ └ Then
     │   └ CompoundStmt
     │     └ ReturnStmt
-    │       └ IntegerLiteral(Int = 1) [Id = 29] [ConstantExpr]
+    │       └ IntegerLiteral(Int = 1) [Id = 32] [ConstantExpr]
     ├ ExprStmt
-    │ └ Assignment [Id = 33]
-    │   ├ Ident: fn_ptr [id.fn_ptr.7] [Id = 30]
-    │   └ AddressOf [Id = 32]
-    │     └ Ident: multiply [multiply] [Id = 31]
+    │ └ Assignment [Id = 38]
+    │   ├ Ident: fn_ptr [id.fn_ptr.7] [Id = 35]
+    │   └ AddressOf [Id = 37]
+    │     └ Ident: multiply [multiply] [Id = 36]
     ├ IfStmt
     │ ├ Condition
-    │ │ └ Binary (NotEqualTo !=) [Id = 42]
-    │ │   ├ Call [Id = 40]
+    │ │ └ Binary (NotEqualTo !=) [Id = 47]
+    │ │   ├ Call [Id = 45]
     │ │   │ ├ Designator
-    │ │   │ │ └ Deref [Id = 36]
-    │ │   │ │   └ Ident: fn_ptr [id.fn_ptr.7] [Id = 35]
+    │ │   │ │ └ Deref [Id = 41]
+    │ │   │ │   └ Ident: fn_ptr [id.fn_ptr.7] [Id = 40]
     │ │   │ └ Args
-    │ │   │   ├ IntegerLiteral(Int = 100) [Id = 37] [ConstantExpr]
-    │ │   │   └ IntegerLiteral(Int = 2) [Id = 38] [ConstantExpr]
-    │ │   └ IntegerLiteral(Int = 200) [Id = 41] [ConstantExpr]
+    │ │   │   ├ IntegerLiteral(Int = 100) [Id = 42] [ConstantExpr]
+    │ │   │   └ IntegerLiteral(Int = 2) [Id = 43] [ConstantExpr]
+    │ │   └ IntegerLiteral(Int = 200) [Id = 46] [ConstantExpr]
     │ └ Then
     │   └ CompoundStmt
     │     └ ReturnStmt
-    │       └ IntegerLiteral(Int = 2) [Id = 43] [ConstantExpr]
+    │       └ IntegerLiteral(Int = 2) [Id = 48] [ConstantExpr]
     ├ ExprStmt
-    │ └ Assignment [Id = 47]
-    │   ├ Ident: fn_ptr [id.fn_ptr.7] [Id = 44]
-    │   └ AddressOf [Id = 46]
-    │     └ Ident: add [add] [Id = 45]
+    │ └ Assignment [Id = 54]
+    │   ├ Ident: fn_ptr [id.fn_ptr.7] [Id = 51]
+    │   └ AddressOf [Id = 53]
+    │     └ Ident: add [add] [Id = 52]
     ├ IfStmt
     │ ├ Condition
-    │ │ └ Binary (NotEqualTo !=) [Id = 56]
-    │ │   ├ Call [Id = 54]
+    │ │ └ Binary (NotEqualTo !=) [Id = 63]
+    │ │   ├ Call [Id = 61]
     │ │   │ ├ Designator
-    │ │   │ │ └ Deref [Id = 50]
-    │ │   │ │   └ Ident: fn_ptr [id.fn_ptr.7] [Id = 49]
+    │ │   │ │ └ Deref [Id = 57]
+    │ │   │ │   └ Ident: fn_ptr [id.fn_ptr.7] [Id = 56]
     │ │   │ └ Args
-    │ │   │   ├ Ident: x [id.x.5] [Id = 51]
-    │ │   │   └ Ident: y [id.y.6] [Id = 52]
-    │ │   └ IntegerLiteral(Int = 15) [Id = 55] [ConstantExpr]
+    │ │   │   ├ Ident: x [id.x.5] [Id = 58]
+    │ │   │   └ Ident: y [id.y.6] [Id = 59]
+    │ │   └ IntegerLiteral(Int = 15) [Id = 62] [ConstantExpr]
     │ └ Then
     │   └ CompoundStmt
     │     └ ReturnStmt
-    │       └ IntegerLiteral(Int = 3) [Id = 57] [ConstantExpr]
+    │       └ IntegerLiteral(Int = 3) [Id = 64] [ConstantExpr]
     ├ VariableDefn: ptr_to_object [id.ptr_to_object.8], declared="int **ptr_to_object(int, int)"
     │ ├ Linkage: none
     │ ├ Storage: automatic
     │ └ Initializer
-    │   └ AddressOf [Id = 59]
-    │     └ Ident: fn_ptr [id.fn_ptr.7] [Id = 58]
+    │   └ AddressOf [Id = 68]
+    │     └ Ident: fn_ptr [id.fn_ptr.7] [Id = 67]
     ├ ExprStmt
-    │ └ Call [Id = 64]
+    │ └ Call [Id = 73]
     │   ├ Designator
-    │   │ └ Ident: switch_to_multiply [switch_to_multiply] [Id = 61]
+    │   │ └ Ident: switch_to_multiply [switch_to_multiply] [Id = 70]
     │   └ Args
-    │     └ Ident: ptr_to_object [id.ptr_to_object.8] [Id = 62]
+    │     └ Ident: ptr_to_object [id.ptr_to_object.8] [Id = 71]
     ├ IfStmt
     │ ├ Condition
-    │ │ └ Binary (NotEqualTo !=) [Id = 71]
-    │ │   ├ Call [Id = 69]
+    │ │ └ Binary (NotEqualTo !=) [Id = 80]
+    │ │   ├ Call [Id = 78]
     │ │   │ ├ Designator
-    │ │   │ │ └ Ident: fn_ptr [id.fn_ptr.7] [Id = 65]
+    │ │   │ │ └ Ident: fn_ptr [id.fn_ptr.7] [Id = 74]
     │ │   │ └ Args
-    │ │   │   ├ Ident: x [id.x.5] [Id = 66]
-    │ │   │   └ Ident: y [id.y.6] [Id = 67]
-    │ │   └ IntegerLiteral(Int = 50) [Id = 70] [ConstantExpr]
+    │ │   │   ├ Ident: x [id.x.5] [Id = 75]
+    │ │   │   └ Ident: y [id.y.6] [Id = 76]
+    │ │   └ IntegerLiteral(Int = 50) [Id = 79] [ConstantExpr]
     │ └ Then
     │   └ CompoundStmt
     │     └ ReturnStmt
-    │       └ IntegerLiteral(Int = 4) [Id = 72] [ConstantExpr]
+    │       └ IntegerLiteral(Int = 4) [Id = 81] [ConstantExpr]
     ├ IfStmt
     │ ├ Condition
-    │ │ └ Binary (NotEqualTo !=) [Id = 81]
-    │ │   ├ Call [Id = 79]
+    │ │ └ Binary (NotEqualTo !=) [Id = 92]
+    │ │   ├ Call [Id = 90]
     │ │   │ ├ Designator
-    │ │   │ │ └ Deref [Id = 75]
-    │ │   │ │   └ Deref [Id = 74]
-    │ │   │ │     └ Ident: ptr_to_object [id.ptr_to_object.8] [Id = 73]
+    │ │   │ │ └ Deref [Id = 86]
+    │ │   │ │   └ Deref [Id = 85]
+    │ │   │ │     └ Ident: ptr_to_object [id.ptr_to_object.8] [Id = 84]
     │ │   │ └ Args
-    │ │   │   ├ Ident: x [id.x.5] [Id = 76]
-    │ │   │   └ Ident: y [id.y.6] [Id = 77]
-    │ │   └ IntegerLiteral(Int = 50) [Id = 80] [ConstantExpr]
+    │ │   │   ├ Ident: x [id.x.5] [Id = 87]
+    │ │   │   └ Ident: y [id.y.6] [Id = 88]
+    │ │   └ IntegerLiteral(Int = 50) [Id = 91] [ConstantExpr]
     │ └ Then
     │   └ CompoundStmt
     │     └ ReturnStmt
-    │       └ IntegerLiteral(Int = 5) [Id = 82] [ConstantExpr]
+    │       └ IntegerLiteral(Int = 5) [Id = 93] [ConstantExpr]
     ├ ExprStmt
-    │ └ Assignment [Id = 85]
-    │   ├ Ident: fn_ptr [id.fn_ptr.7] [Id = 83]
-    │   └ Ident: add [add] [Id = 84]
+    │ └ Assignment [Id = 98]
+    │   ├ Ident: fn_ptr [id.fn_ptr.7] [Id = 96]
+    │   └ Ident: add [add] [Id = 97]
     ├ IfStmt
     │ ├ Condition
-    │ │ └ Binary (NotEqualTo !=) [Id = 97]
-    │ │   ├ Call [Id = 94]
+    │ │ └ Binary (NotEqualTo !=) [Id = 110]
+    │ │   ├ Call [Id = 107]
     │ │   │ ├ Designator
-    │ │   │ │ └ Deref [Id = 88]
-    │ │   │ │   └ Ident: fn_ptr [id.fn_ptr.7] [Id = 87]
+    │ │   │ │ └ Deref [Id = 101]
+    │ │   │ │   └ Ident: fn_ptr [id.fn_ptr.7] [Id = 100]
     │ │   │ └ Args
-    │ │   │   ├ Unary (Negate -) [Id = 90] [ConstantExpr]
-    │ │   │   │ └ IntegerLiteral(Int = 50) [Id = 89] [ConstantExpr]
-    │ │   │   └ Unary (Negate -) [Id = 92] [ConstantExpr]
-    │ │   │     └ IntegerLiteral(Int = 50) [Id = 91] [ConstantExpr]
-    │ │   └ Unary (Negate -) [Id = 96] [ConstantExpr]
-    │ │     └ IntegerLiteral(Int = 100) [Id = 95] [ConstantExpr]
+    │ │   │   ├ Unary (Negate -) [Id = 103] [ConstantExpr]
+    │ │   │   │ └ IntegerLiteral(Int = 50) [Id = 102] [ConstantExpr]
+    │ │   │   └ Unary (Negate -) [Id = 105] [ConstantExpr]
+    │ │   │     └ IntegerLiteral(Int = 50) [Id = 104] [ConstantExpr]
+    │ │   └ Unary (Negate -) [Id = 109] [ConstantExpr]
+    │ │     └ IntegerLiteral(Int = 100) [Id = 108] [ConstantExpr]
     │ └ Then
     │   └ CompoundStmt
     │     └ ReturnStmt
-    │       └ IntegerLiteral(Int = 6) [Id = 98] [ConstantExpr]
+    │       └ IntegerLiteral(Int = 6) [Id = 111] [ConstantExpr]
     └ ReturnStmt
-      └ IntegerLiteral(Int = 0) [Id = 99] [ConstantExpr]
+      └ IntegerLiteral(Int = 0) [Id = 114] [ConstantExpr]

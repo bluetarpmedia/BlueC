@@ -37,8 +37,6 @@ pub fn translate_expression(
     expr: &AstExpression,
     instructions: &mut Vec<BtInstruction>,
 ) -> EvalExpr {
-    let expr_id = expr.id();
-
     match expr.kind() {
         AstExpressionKind::CharLiteral { value, .. } => {
             EvalExpr::Value(BtValue::Constant(BtConstantValue::Int32(*value)))
@@ -47,72 +45,13 @@ pub fn translate_expression(
         AstExpressionKind::IntegerLiteral { .. } => translate_integer_literal(translator, expr),
         AstExpressionKind::FloatLiteral { .. } => translate_float_literal(expr),
 
-        AstExpressionKind::Ident { unique_name, .. } => {
-            let expr_data_type = translator.get_expression_type(expr);
+        AstExpressionKind::Ident { .. } => translate_ident(translator, expr, instructions),
 
-            // If a function designator of function type has decayed (been implicitly cast) to a function pointer
-            // by the typechecker then we need to emit an instruction to take its address.
-            //
-            if expr_data_type.is_function_pointer()
-                && let Some(symbol) = translator.symbols.get(unique_name)
-                && symbol.data_type.is_function()
-            {
-                let src = BtValue::Variable(unique_name.to_string());
-                let dst = translator.make_temp_variable(expr_data_type.clone());
+        AstExpressionKind::Cast { .. } => translate_cast(translator, expr, instructions),
 
-                instructions.push(BtInstruction::StoreAddress { src, dst_ptr: dst.clone() });
+        AstExpressionKind::Deref { .. } => translate_deref(translator, expr, instructions),
 
-                return EvalExpr::Value(dst);
-            }
-
-            EvalExpr::Value(BtValue::Variable(unique_name.to_string()))
-        }
-
-        AstExpressionKind::Cast { target_type, inner, .. } => {
-            let expr_value = translate_expression_to_value(translator, inner, instructions);
-            let expr_data_type = translator.get_expression_type(inner);
-
-            let dst_type = target_type.resolved_type.as_ref().unwrap();
-
-            // No need to cast if the expression's type matches the cast-to type.
-            if expr_data_type == dst_type {
-                return EvalExpr::Value(expr_value);
-            }
-
-            // If we can transform a constant value's type to match the cast-to `dst_type` then we can avoid
-            // performing the cast.
-            if expr_value.is_constant()
-                && dst_type.is_arithmetic()
-                && let Some(transformed_constant) = try_transform_constant_value_type(&expr_value, &dst_type.into())
-            {
-                EvalExpr::Value(transformed_constant)
-            } else {
-                let src_type = expr_data_type.clone();
-                let casted = add_cast_to_temp_var(translator, expr_value, &src_type, dst_type, instructions);
-                EvalExpr::Value(casted)
-            }
-        }
-
-        AstExpressionKind::Deref { pointer, .. } => {
-            let expr_value = translate_expression_to_value(translator, pointer, instructions);
-            EvalExpr::Dereferenced(expr_value)
-        }
-
-        AstExpressionKind::AddressOf { target } => {
-            let expr_result = translate_expression(translator, target, instructions);
-
-            match expr_result {
-                EvalExpr::Value(value) => {
-                    let dst_data_type = translator.get_ast_type_from_node(expr_id);
-                    debug_assert!(dst_data_type.is_pointer());
-
-                    let dst = translator.make_temp_variable(dst_data_type.clone());
-                    instructions.push(BtInstruction::StoreAddress { src: value, dst_ptr: dst.clone() });
-                    EvalExpr::Value(dst)
-                }
-                EvalExpr::Dereferenced(object) => EvalExpr::Value(object),
-            }
-        }
+        AstExpressionKind::AddressOf { .. } => translate_address_of(translator, expr, instructions),
 
         AstExpressionKind::Subscript { .. } => translate_subscript(translator, expr, instructions),
 
@@ -122,55 +61,12 @@ pub fn translate_expression(
 
         AstExpressionKind::Binary { .. } => binary_expr::translate_binary_operation(translator, expr, instructions),
 
-        AstExpressionKind::Conditional { condition, consequent, alternative, .. } => {
-            let dst_data_type = translator.get_expression_type(consequent); // Consequent and alternatives have same type
-            let dst = translator.make_temp_variable(dst_data_type.clone());
+        AstExpressionKind::Conditional { .. } => translate_conditional(translator, expr, instructions),
 
-            let alternative_label = translator.label_maker.make_unique_label("ternary_alt");
-            let end_label = translator.label_maker.make_unique_label("ternary_end");
+        AstExpressionKind::FunctionCall { .. } => translate_function_call(translator, expr, instructions),
 
-            // Condition
-            let condition_value = translate_expression_to_value(translator, condition, instructions);
-
-            instructions
-                .push(BtInstruction::JumpIfZero { condition: condition_value, target: alternative_label.clone() });
-
-            // Consequent
-            let consequent_value = translate_expression_to_value(translator, consequent, instructions);
-
-            instructions.push(BtInstruction::Copy { src: consequent_value, dst: dst.clone() });
-
-            instructions.push(BtInstruction::Jump { target: end_label.clone() });
-
-            // Alternative label
-            instructions.push(BtInstruction::Label { id: alternative_label });
-
-            // Alternative
-            let alternative_value = translate_expression_to_value(translator, alternative, instructions);
-
-            instructions.push(BtInstruction::Copy { src: alternative_value, dst: dst.clone() });
-
-            // End label
-            instructions.push(BtInstruction::Label { id: end_label });
-
-            EvalExpr::Value(dst)
-        }
-
-        AstExpressionKind::FunctionCall { designator, args, .. } => {
-            let dst_data_type = translator.get_ast_type_from_node(expr_id);
-            let dst = translator.make_temp_variable(dst_data_type.clone());
-
-            // Evaluate designator
-            let designator = translate_expression_to_value(translator, designator, instructions);
-
-            // Evaluate arguments
-            let values =
-                args.iter().map(|arg_expr| translate_expression_to_value(translator, arg_expr, instructions)).collect();
-
-            instructions.push(BtInstruction::FunctionCall { designator, args: values, dst: dst.clone() });
-
-            EvalExpr::Value(dst)
-        }
+        AstExpressionKind::SizeOfExpr { .. } => ICE!("SizeOfExpr should have been replaced in sema"),
+        AstExpressionKind::SizeOfType { .. } => ICE!("SizeOfType should have been replaced in sema"),
     }
 }
 
@@ -198,6 +94,8 @@ pub fn translate_expression_to_value(
                 rvalue
             }
         }
+
+        EvalExpr::Void => BtValue::new_constant_i32(0), // Return a null/dummy value, which will be unused
     }
 }
 
@@ -227,7 +125,7 @@ fn translate_string_literal(translator: &mut BlueTacTranslator, expr: &AstExpres
     let literal_node_id = expr.id();
 
     let AstExpressionKind::StringLiteral { ascii, .. } = expr.kind() else {
-        ICE!("Expected an AstExpression::StringLiteral");
+        ICE!("Expected an AstExpressionKind::StringLiteral");
     };
 
     // Concatenate the array of ascii chars/escape sequences.
@@ -261,7 +159,7 @@ fn translate_integer_literal(translator: &mut BlueTacTranslator, expr: &AstExpre
     let literal_node_id = expr.id();
 
     let AstExpressionKind::IntegerLiteral { value, .. } = expr.kind() else {
-        ICE!("Expected an AstExpression::IntegerLiteral");
+        ICE!("Expected an AstExpressionKind::IntegerLiteral");
     };
 
     let literal_type = translator.get_ast_type_from_node(literal_node_id);
@@ -293,7 +191,7 @@ fn translate_integer_literal(translator: &mut BlueTacTranslator, expr: &AstExpre
 
 fn translate_float_literal(expr: &AstExpression) -> EvalExpr {
     let AstExpressionKind::FloatLiteral { value, kind, .. } = expr.kind() else {
-        ICE!("Expected an AstExpression::FloatLiteral");
+        ICE!("Expected an AstExpressionKind::FloatLiteral");
     };
 
     let val = match kind {
@@ -306,13 +204,118 @@ fn translate_float_literal(expr: &AstExpression) -> EvalExpr {
     EvalExpr::Value(val)
 }
 
+fn translate_ident(
+    translator: &mut BlueTacTranslator,
+    expr: &AstExpression,
+    instructions: &mut Vec<BtInstruction>,
+) -> EvalExpr {
+    let AstExpressionKind::Ident { unique_name, .. } = expr.kind() else {
+        ICE!("Expected an AstExpressionKind::Ident");
+    };
+
+    let expr_data_type = translator.get_expression_type(expr);
+
+    // If a function designator of function type has decayed (been implicitly cast) to a function pointer
+    // by the typechecker then we need to emit an instruction to take its address.
+    //
+    if expr_data_type.is_function_pointer()
+        && let Some(symbol) = translator.symbols.get(unique_name)
+        && symbol.data_type.is_function()
+    {
+        let src = BtValue::Variable(unique_name.to_string());
+        let dst = translator.make_temp_variable(expr_data_type.clone());
+
+        instructions.push(BtInstruction::StoreAddress { src, dst_ptr: dst.clone() });
+
+        return EvalExpr::Value(dst);
+    }
+
+    EvalExpr::Value(BtValue::Variable(unique_name.to_string()))
+}
+
+fn translate_cast(
+    translator: &mut BlueTacTranslator,
+    expr: &AstExpression,
+    instructions: &mut Vec<BtInstruction>,
+) -> EvalExpr {
+    let AstExpressionKind::Cast { target_type, inner, .. } = expr.kind() else {
+        ICE!("Expected an AstExpressionKind::Cast");
+    };
+
+    let expr_value = translate_expression_to_value(translator, inner, instructions);
+    let expr_data_type = translator.get_expression_type(inner);
+
+    let dst_type = target_type.resolved_type.as_ref().unwrap();
+
+    // No need to cast if the expression's type matches the cast-to type.
+    if expr_data_type == dst_type {
+        return EvalExpr::Value(expr_value);
+    }
+
+    // If the expression is cast to 'void' then just return a null/void value; it will be unused.
+    if *dst_type == AstType::Void {
+        return EvalExpr::Void;
+    }
+
+    // If we can transform a constant value's type to match the cast-to `dst_type` then we can avoid
+    // performing the cast.
+    if expr_value.is_constant()
+        && dst_type.is_arithmetic()
+        && let Some(transformed_constant) = try_transform_constant_value_type(&expr_value, &dst_type.into())
+    {
+        EvalExpr::Value(transformed_constant)
+    } else {
+        let src_type = expr_data_type.clone();
+        let casted = add_cast_to_temp_var(translator, expr_value, &src_type, dst_type, instructions);
+        EvalExpr::Value(casted)
+    }
+}
+
+fn translate_deref(
+    translator: &mut BlueTacTranslator,
+    expr: &AstExpression,
+    instructions: &mut Vec<BtInstruction>,
+) -> EvalExpr {
+    let AstExpressionKind::Deref { pointer } = expr.kind() else {
+        ICE!("Expected an AstExpressionKind::Deref");
+    };
+
+    let expr_value = translate_expression_to_value(translator, pointer, instructions);
+    EvalExpr::Dereferenced(expr_value)
+}
+
+fn translate_address_of(
+    translator: &mut BlueTacTranslator,
+    expr: &AstExpression,
+    instructions: &mut Vec<BtInstruction>,
+) -> EvalExpr {
+    let AstExpressionKind::AddressOf { target } = expr.kind() else {
+        ICE!("Expected an AstExpressionKind::AddressOf");
+    };
+
+    let expr_result = translate_expression(translator, target, instructions);
+
+    match expr_result {
+        EvalExpr::Value(value) => {
+            let dst_data_type = translator.get_ast_type_from_node(expr.id());
+            debug_assert!(dst_data_type.is_pointer());
+
+            let dst = translator.make_temp_variable(dst_data_type.clone());
+            instructions.push(BtInstruction::StoreAddress { src: value, dst_ptr: dst.clone() });
+            EvalExpr::Value(dst)
+        }
+        EvalExpr::Dereferenced(object) => EvalExpr::Value(object),
+        EvalExpr::Void => ICE!("Cannot take address of Void BtValue"),
+    }
+}
+
 fn translate_subscript(
     translator: &mut BlueTacTranslator,
     expr: &AstExpression,
     instructions: &mut Vec<BtInstruction>,
 ) -> EvalExpr {
     let AstExpressionKind::Subscript { expr1, expr2, .. } = expr.kind() else {
-        ICE!("Expected an AstExpression::Subscript");
+        ICE!("Expected an AstExpressionKind::Subscript");
     };
 
     let expr1_type = translator.get_expression_type(expr1);
@@ -341,13 +344,87 @@ fn translate_subscript(
     EvalExpr::Dereferenced(dst_ptr)
 }
 
+fn translate_conditional(
+    translator: &mut BlueTacTranslator,
+    expr: &AstExpression,
+    instructions: &mut Vec<BtInstruction>,
+) -> EvalExpr {
+    let AstExpressionKind::Conditional { condition, consequent, alternative } = expr.kind() else {
+        ICE!("Expected an AstExpressionKind::Conditional");
+    };
+
+    let dst_data_type = translator.get_expression_type(consequent); // Consequent and alternatives have same type
+    let dst =
+        if *dst_data_type == AstType::Void { None } else { Some(translator.make_temp_variable(dst_data_type.clone())) };
+
+    let alternative_label = translator.label_maker.make_unique_label("ternary_alt");
+    let end_label = translator.label_maker.make_unique_label("ternary_end");
+
+    // Condition
+    let condition_value = translate_expression_to_value(translator, condition, instructions);
+
+    instructions.push(BtInstruction::JumpIfZero { condition: condition_value, target: alternative_label.clone() });
+
+    // Consequent
+    let consequent_value = translate_expression_to_value(translator, consequent, instructions);
+
+    if let Some(dst) = dst.as_ref() {
+        instructions.push(BtInstruction::Copy { src: consequent_value, dst: dst.clone() });
+    }
+
+    instructions.push(BtInstruction::Jump { target: end_label.clone() });
+
+    // Alternative label
+    instructions.push(BtInstruction::Label { id: alternative_label });
+
+    // Alternative
+    let alternative_value = translate_expression_to_value(translator, alternative, instructions);
+
+    if let Some(dst) = dst.as_ref() {
+        instructions.push(BtInstruction::Copy { src: alternative_value, dst: dst.clone() });
+    }
+
+    // End label
+    instructions.push(BtInstruction::Label { id: end_label });
+
+    if let Some(dst) = dst { EvalExpr::Value(dst) } else { EvalExpr::Void }
+}
+
+fn translate_function_call(
+    translator: &mut BlueTacTranslator,
+    expr: &AstExpression,
+    instructions: &mut Vec<BtInstruction>,
+) -> EvalExpr {
+    let AstExpressionKind::FunctionCall { designator, args, .. } = expr.kind() else {
+        ICE!("Expected an AstExpressionKind::FunctionCall");
+    };
+
+    let dst_data_type = translator.get_ast_type_from_node(expr.id()).clone();
+
+    // Evaluate designator
+    let designator = translate_expression_to_value(translator, designator, instructions);
+
+    // Evaluate arguments
+    let values =
+        args.iter().map(|arg_expr| translate_expression_to_value(translator, arg_expr, instructions)).collect();
+
+    if dst_data_type == AstType::Void {
+        instructions.push(BtInstruction::FunctionCall { designator, args: values, dst: None });
+        EvalExpr::Void
+    } else {
+        let dst = translator.make_temp_variable(dst_data_type);
+        instructions.push(BtInstruction::FunctionCall { designator, args: values, dst: Some(dst.clone()) });
+        EvalExpr::Value(dst)
+    }
+}
+
 fn translate_assignment(
     translator: &mut BlueTacTranslator,
     expr: &AstExpression,
     instructions: &mut Vec<BtInstruction>,
 ) -> EvalExpr {
     let AstExpressionKind::Assignment { computation_node_id, op, lhs, rhs, .. } = expr.kind() else {
-        ICE!("Expected an AstExpression::Assignment");
+        ICE!("Expected an AstExpressionKind::Assignment");
     };
 
     let lhs_type = translator.get_expression_type(lhs).clone();
@@ -366,6 +443,8 @@ fn translate_assignment(
                 instructions.push(BtInstruction::Load { src_ptr: object.clone(), dst: deref_value.clone() });
                 (deref_value, Some(object))
             }
+
+            EvalExpr::Void => ICE!("Cannot perform lvalue-to-rvalue conversion for Void BtValue"),
         };
 
         // Get the computation type for the compound binary operation (e.g. common type of `lhs + rhs` for `+=`).
@@ -429,6 +508,7 @@ fn translate_assignment(
                 instructions.push(BtInstruction::Store { src: rhs_value, dst_ptr: lhs_obj.clone() });
                 EvalExpr::Value(lhs_obj)
             }
+            EvalExpr::Void => ICE!("Cannot assign to Void BtValue"),
         }
     }
 }

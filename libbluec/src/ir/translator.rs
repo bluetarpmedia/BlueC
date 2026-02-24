@@ -25,6 +25,7 @@ use super::{
 
 #[derive(Debug)]
 enum EvalExpr {
+    Void,
     Value(BtValue),
     Dereferenced(BtValue),
 }
@@ -230,27 +231,32 @@ fn translate_function(
     let block = function.body.unwrap();
     translate_block(block, &mut instructions, translator, driver);
 
-    // Place a Return(0) at the very end of every function.
-    //
-    //      The C standard allows `main` to omit its return statement, in which case an implicit `return 0` is added.
-    //      But it's undefined behaviour for any other function to reach the end of its body without a return (unless
-    //      the return type is `void`, which we haven't implemented yet). So, for now, we always insert a return
-    //      statement with `return 0` (of type int), since if there's an existing one then the extra one is harmless.
-    //      It doesn't matter if the function's return type is, for example, `long` instead of `int` because we're not
-    //      obligated to return a specific value, we're just ensuring that control returns to the caller.
-    //
-    //      Future: The optimization stage will remove the extra return.
-    //
-    //      TODO: Sema should find functions (except `main`) whose return type is not `void` and is missing a return.
-    //
-    instructions.push(BtInstruction::Return(BtValue::Constant(BtConstantValue::Int32(0))));
-
     let fn_type = function.declared_type.resolved_type.as_ref().unwrap();
     let parser::AstType::Function { return_type, params } = fn_type else {
         ICE!("Function '{}' has wrong AstType", function.ident);
     };
 
     let bt_return_type: BtType = return_type.as_ref().into();
+
+    // Place a Return at the very end of every function.
+    //
+    //      The C standard allows `main` to omit its return statement, in which case an implicit `return 0` is added.
+    //      A function returning `void` can also omit its return statement. But it's undefined behaviour for any other
+    //      function to reach the end of its body without a return.
+    //      So, for now, we insert a return statement at the end of every function, which is harmless since if there's
+    //      an existing one then the extra one is ignored. We insert the equivalent of either `return;` or `return 0;`.
+    //      It doesn't matter if the function's return type is, for example, `float` instead of `int` because we're not
+    //      obligated to return a specific value; we're just ensuring that control returns to the caller.
+    //
+    //      Future: The optimization stage will remove the extra return.
+    //
+    //      TODO: Sema should find functions (except `main`) whose return type is not `void` and is missing a return.
+    //
+    if bt_return_type == BtType::Void {
+        instructions.push(BtInstruction::Return(None));
+    } else {
+        instructions.push(BtInstruction::Return(Some(BtValue::Constant(BtConstantValue::Int32(0)))));
+    }
 
     let bt_params = params
         .iter()
@@ -328,7 +334,7 @@ fn translate_statement(
         parser::AstStatement::Null => (),
 
         // Control statements: Conditional
-        parser::AstStatement::If { controlling_expr, then_stmt, else_stmt } => {
+        parser::AstStatement::If { controlling_expr, then_stmt, else_stmt, .. } => {
             translate_if_statement(controlling_expr, *then_stmt, else_stmt, instructions, translator, driver)
         }
 
@@ -361,20 +367,20 @@ fn translate_statement(
         parser::AstStatement::Continue { loop_node_id } => {
             translate_continue_statement(loop_node_id, instructions, translator, driver)
         }
-        parser::AstStatement::Goto { node_id: _, label_name } => {
+        parser::AstStatement::Goto { label_name, .. } => {
             translate_goto_statement(&label_name, instructions, translator, driver)
         }
-        parser::AstStatement::Return(expr) => translate_return_statement(expr, instructions, translator, driver),
+        parser::AstStatement::Return { expr, .. } => translate_return_statement(expr, instructions, translator, driver),
     }
 }
 
 fn translate_return_statement(
-    expr: parser::AstExpression,
+    expr: Option<parser::AstExpression>,
     instructions: &mut Vec<BtInstruction>,
     translator: &mut BlueTacTranslator,
     _driver: &mut Driver,
 ) {
-    let return_value = expr::translate_full_expression(translator, &expr, instructions);
+    let return_value = expr.map(|expr| expr::translate_full_expression(translator, &expr, instructions));
     instructions.push(BtInstruction::Return(return_value));
 }
 

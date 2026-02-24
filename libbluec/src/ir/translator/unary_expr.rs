@@ -103,6 +103,8 @@ pub fn translate_unary_operation(
                 instructions.push(BtInstruction::Load { src_ptr: object.clone(), dst: deref_value.clone() });
                 (deref_value, Some(object))
             }
+
+            EvalExpr::Void => ICE!("Cannot perform lvalue-to-rvalue conversion of Void BtValue"),
         };
 
         let (old_value, new_value) =

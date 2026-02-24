@@ -19,9 +19,17 @@ pub use checker::TypeChecker;
 use crate::compiler_driver::Driver;
 use crate::parser::AstRoot;
 
+#[cfg(test)]
+use crate::parser::AstExpression;
+
 use super::type_resolution;
 
 /// Performs type checking on the AST.
 pub fn type_check(ast_root: &mut AstRoot, chk: &mut TypeChecker, driver: &mut Driver) {
     traverse::typecheck_ast(ast_root, chk, driver);
+}
+
+#[cfg(test)]
+pub fn type_check_expression(expr: &mut AstExpression, chk: &mut TypeChecker, driver: &mut Driver) {
+    _ = traverse::typecheck_expression_with_decay(expr, chk, driver)
 }

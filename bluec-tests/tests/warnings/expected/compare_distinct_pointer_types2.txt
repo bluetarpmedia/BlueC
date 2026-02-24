@@ -1,0 +1,8 @@
+warning: Comparison of different pointer types ('void *' and 'int *')
+         [-Wcompare-distinct-pointer-types]
+   |
+   |   return ptr < arr + 1;
+   |          ~~~ ^ ~~~~~~~
+   |
+
+1 warning generated

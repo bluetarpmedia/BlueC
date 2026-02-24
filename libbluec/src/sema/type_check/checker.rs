@@ -30,7 +30,7 @@ pub struct TypeChecker {
     pub metadata: AstMetadata,
     pub symbols: SymbolTable,
     pub constants: ConstantTable,
-    current_func_return_type: Option<AstType>,
+    current_fn: Option<(AstNodeId, String, AstType)>, // Id, Name, Return type
     scopes: Vec<DeclarationScope>,
 }
 
@@ -46,7 +46,7 @@ impl TypeChecker {
         let symbols = SymbolTable::new();
         let constants = ConstantTable::new();
         let scopes = vec![DeclarationScope::default()];
-        Self { metadata, symbols, constants, current_func_return_type: None, scopes }
+        Self { metadata, symbols, constants, current_fn: None, scopes }
     }
 
     /// The current declaration scope.
@@ -75,26 +75,28 @@ impl TypeChecker {
         self.metadata.set_node_type(node_id, data_type.clone());
     }
 
-    /// Sets the current function's return type.
+    /// Sets the current function.
     ///
     /// This is needed when processing a return statement, since we need to know what type the function returns
-    /// in order to insert a cast, if necessary.
-    pub fn set_current_function_return_type(&mut self, return_type: &AstType) {
-        self.current_func_return_type = Some(return_type.clone());
+    /// in order to type check the return statement.
+    pub fn set_current_function(&mut self, id: AstNodeId, name: &str, return_type: &AstType) {
+        self.current_fn = Some((id, name.to_string(), return_type.clone()));
     }
 
-    /// Gets the current function's return type.
-    pub fn get_current_function_return_type(&self) -> AstType {
-        let Some(ref function_return_type) = self.current_func_return_type else {
-            ICE!("Current function return type not set");
+    /// Gets the current function.
+    ///
+    /// Emits an ICE if `set_current_function` was not previously called.
+    pub fn get_current_function(&self) -> (AstNodeId, &str, &AstType) {
+        let Some((id, name, return_type)) = &self.current_fn else {
+            ICE!("Current function not set");
         };
 
-        function_return_type.clone()
+        (*id, name, return_type)
     }
 
     /// Clears the current function.
     pub fn clear_current_function(&mut self) {
-        self.current_func_return_type = None;
+        self.current_fn = None;
     }
 
     /// Wraps the given `AstExpression` in a cast to the given `target_type`.

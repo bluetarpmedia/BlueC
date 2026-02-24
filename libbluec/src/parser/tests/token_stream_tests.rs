@@ -86,6 +86,47 @@ fn peek_and_take() {
 }
 
 #[test]
+fn peek_next_token_type() {
+    let tokens = vec![
+        Token::without_location(TokenType::new_identifier("unsigned")),
+        Token::without_location(TokenType::new_identifier("long")),
+        Token::without_location(TokenType::new_identifier("int")),
+        Token::without_location(TokenType::new_identifier("a")),
+        Token::without_location(TokenType::Assignment),
+        Token::without_location(TokenType::new_int_literal("1")),
+        Token::without_location(TokenType::Semicolon),
+    ];
+
+    let mut stream = TokenStream::new(tokens);
+
+    assert!(!stream.next_token_is_identifier("int"));
+    assert!(stream.next_token_is_identifier("unsigned"));
+    _ = stream.take_token();
+
+    assert!(!stream.next_token_is_identifier("int"));
+    assert!(stream.next_token_is_identifier("long"));
+    _ = stream.take_token();
+
+    assert!(stream.next_token_is_identifier("int"));
+    _ = stream.take_token();
+
+    assert!(!stream.next_token_is_identifier("x"));
+    assert!(stream.next_token_is_identifier("a"));
+    _ = stream.take_token();
+
+    assert!(!stream.next_token_is_identifier("int"));
+    assert!(!stream.next_token_has_type(TokenType::OpenBrace));
+    assert!(stream.next_token_has_type(TokenType::Assignment));
+    _ = stream.take_token();
+
+    assert!(stream.next_token_has_type(TokenType::new_int_literal("1")));
+    _ = stream.take_token();
+
+    assert!(stream.next_token_has_type(TokenType::Semicolon));
+    _ = stream.take_token();
+}
+
+#[test]
 fn peek_next_2_tokens() {
     {
         let no_tokens = Vec::new();

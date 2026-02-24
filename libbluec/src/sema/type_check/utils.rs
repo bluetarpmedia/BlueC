@@ -96,7 +96,8 @@ pub fn take_first_scalar_initializer(initializer: &mut AstVariableInitializer) -
 }
 
 pub enum CommonTypeError {
-    WarnDifferentPointerTypes { a_type: AstType, b_type: AstType },
+    DifferentPointerTypes { a_type: AstType, b_type: AstType },
+    IncompletePointer { a_type: AstType, b_type: AstType },
     WarnPointerAndInteger { a_type: AstType, b_type: AstType },
     NoCommonType { a_type: AstType, b_type: AstType },
 }
@@ -116,6 +117,14 @@ pub fn get_common_type(
     let a_type = chk.get_data_type(a.id());
     let b_type = chk.get_data_type(b.id());
 
+    // We don't allow a common type if either is 'void'.
+    //      Ternary/conditional expressions can have 'void' consequent/alternative expressions and we handle this
+    //      in the type checking for that particular expression.
+    //
+    if a_type == AstType::Void || b_type == AstType::Void {
+        return Err(CommonTypeError::NoCommonType { a_type, b_type });
+    }
+
     // A function type should decay/implicitly convert to a function pointer.
     //
     let a_type = if a_type.is_function() { AstType::new_pointer_to(a_type) } else { a_type };
@@ -129,17 +138,22 @@ pub fn get_common_type(
             return Ok((a_type, false));
         }
 
-        // If both types are pointers but not the same (see above), ask the caller to emit a warning.
-        if a_type.is_pointer() && b_type.is_pointer() {
-            return Err(CommonTypeError::WarnDifferentPointerTypes { a_type, b_type });
-        }
-
         if is_null_pointer_constant(a, &b_type, chk, driver) {
             return Ok((b_type, false));
         }
 
         if is_null_pointer_constant(b, &a_type, chk, driver) {
             return Ok((a_type, false));
+        }
+
+        // If both types are pointers and one is `void *` then the common type is `void *`.
+        if a_type.is_pointer_to_void() && b_type.is_pointer() || b_type.is_pointer_to_void() && a_type.is_pointer() {
+            return Err(CommonTypeError::IncompletePointer { a_type, b_type });
+        }
+
+        // If both types are pointers but not the same (see above), ask the caller to emit a warning.
+        if a_type.is_pointer() && b_type.is_pointer() {
+            return Err(CommonTypeError::DifferentPointerTypes { a_type, b_type });
         }
 
         // If one of the types is an integer (and not a null pointer constant) then ask the caller to emit a warning.
@@ -196,7 +210,7 @@ pub fn error_invalid_binary_expression_operands(
     chk: &mut TypeChecker,
     driver: &mut Driver,
 ) {
-    let op_loc = chk.metadata.get_source_location(node_id);
+    let op_loc = chk.metadata.get_operator_sloc(node_id);
     let lhs_loc = chk.metadata.get_source_location(lhs_expr.id());
     let rhs_loc = chk.metadata.get_source_location(rhs_expr.id());
 
@@ -213,10 +227,39 @@ pub fn error_incompatible_types(
     chk: &mut TypeChecker,
     driver: &mut Driver,
 ) {
-    let loc = chk.metadata.get_source_location(expr_node_id);
+    let loc = chk.metadata.get_operator_sloc(expr_node_id);
     let a_loc = chk.metadata.get_source_location(a_node_id);
     let b_loc = chk.metadata.get_source_location(b_node_id);
     Error::incompatible_types(a_type, b_type, loc, a_loc, b_loc, driver);
+}
+
+/// Emits an error that two pointers in a conditional expression have different types.
+pub fn error_incompatible_pointer_types_in_conditional(
+    expr_node_id: AstNodeId,
+    left: &AstExpression,
+    right: &AstExpression,
+    left_type: &AstType,
+    right_type: &AstType,
+    chk: &mut TypeChecker,
+    driver: &mut Driver,
+) {
+    let op_loc = chk.metadata.get_operator_sloc(expr_node_id);
+    let a_loc = chk.metadata.get_source_location(left.id());
+    let b_loc = chk.metadata.get_source_location(right.id());
+    Error::incompatible_pointer_types_in_conditional(op_loc, a_loc, b_loc, left_type, right_type, driver);
+}
+
+/// Emits an error about pointer arithmetic on an incomplete pointer type (`void *`).
+pub fn error_incomplete_pointer_arithmetic(
+    expr_node_id: AstNodeId,
+    ptr_expr: &AstExpression,
+    ptr_type: &AstType,
+    chk: &mut TypeChecker,
+    driver: &mut Driver,
+) {
+    let op_loc = chk.metadata.get_operator_sloc(expr_node_id);
+    let ptr_loc = chk.metadata.get_source_location(ptr_expr.id());
+    Error::incomplete_pointer_arithmetic(op_loc, ptr_loc, ptr_type, driver);
 }
 
 /// Emits a warning that two different pointer types are being compared.
@@ -272,22 +315,6 @@ pub fn warn_conditional_type_mismatch(
     let a_loc = chk.metadata.get_source_location(left.id());
     let b_loc = chk.metadata.get_source_location(right.id());
     Warning::conditional_type_mismatch(left_type, right_type, ternary_op_loc, a_loc, b_loc, driver);
-}
-
-/// Emits a warning that two pointers in an expression have different types.
-pub fn warn_pointer_type_mismatch(
-    expr_node_id: AstNodeId,
-    left: &AstExpression,
-    right: &AstExpression,
-    left_type: &AstType,
-    right_type: &AstType,
-    chk: &mut TypeChecker,
-    driver: &mut Driver,
-) {
-    let op_loc = chk.metadata.get_operator_sloc(expr_node_id);
-    let a_loc = chk.metadata.get_source_location(left.id());
-    let b_loc = chk.metadata.get_source_location(right.id());
-    Warning::pointer_type_mismatch(left_type, right_type, op_loc, a_loc, b_loc, driver);
 }
 
 /// Is the given unary operator incompatible with pointer operands?

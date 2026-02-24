@@ -61,6 +61,12 @@ pub enum AstExpressionKind {
         name: String,
         unique_name: AstUniqueName,
     },
+    SizeOfExpr {
+        operand: Box<AstExpression>,
+    },
+    SizeOfType {
+        declared_type: AstDeclaredType,
+    },
     CharLiteral {
         literal: String,
         is_multichar: bool,

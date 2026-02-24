@@ -178,8 +178,8 @@ The BlueC compiler pipeline is as follows.
 | Stage    | Notes   | Module  |
 | -------- | ------- | ------- |
 | Preprocessor | Currently uses an external tool (`gcc`); will replace with a custom preprocessor | [compiler_driver.rs](libbluec/src/compiler_driver.rs) |
-| Lexer | Hand-written | [lexer.rs](libbluec/src/lexer.rs) |
-| Parser | Hand-written, recursive descent with precedence climbing for binary operations | [parser.rs](libbluec/src/parser.rs) |
+| Lexer | Handwritten | [lexer.rs](libbluec/src/lexer.rs) |
+| Parser | Handwritten, recursive descent with precedence climbing for binary operations | [parser.rs](libbluec/src/parser.rs) |
 | Sema | Semantic analysis of the C AST produced by the Parser | [sema.rs](libbluec/src/sema.rs) |
 | IR lowering | Lowers the C AST into a custom three-address code (TAC) intermediate representation, called BlueTac | [ir.rs](libbluec/src/ir.rs) |
 | Optimizer | Todo! Lowers the IR to SSA form; applies a series of optimization transformations (see below) | |
@@ -221,6 +221,8 @@ So far I've concentrated mostly on the front-end to implement C language feature
     * ✅ Function pointers
     * ✅ Arrays
     * `_Bool`, `void`
+    * `sizeof`, `_Alignof`
+    * Comma operator
     * Structs
     * Enums
     * Unions

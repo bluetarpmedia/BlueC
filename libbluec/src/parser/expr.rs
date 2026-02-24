@@ -33,12 +33,12 @@ pub fn parse_optional_full_expression(
 
 /// Parses a tree of (sub)expression(s).
 ///
-/// An expression is either a unary expression, a binary expression, an assignment expression, or a ternary/conditional
+/// An expression is either a cast expression, a binary expression, an assignment expression, or a ternary/conditional
 /// expression, and may be a subexpression inside a larger tree of expressions. Assignment expressions include
 /// compound assignment operations like `+=`.
 ///
 /// ```markdown
-/// <expr> ::= <unary-expr> | <expr> <binary-op> <expr> | <lhs> <assign-op> <rhs> | <expr> "?" <expr> ":" <expr>
+/// <expr> ::= <cast-expr> | <expr> <binary-op> <expr> | <lhs> <assign-op> <rhs> | <expr> "?" <expr> ":" <expr>
 /// ```
 pub fn parse_expression(parser: &mut Parser, driver: &mut Driver) -> ParseResult<AstExpression> {
     parse_expression_with_precedence(parser, driver, 0)
@@ -57,7 +57,7 @@ fn parse_expression_with_precedence(
     // At the moment this is just a single unary expression, but we name it `left` in case we're about to parse an
     // assignment/ternary/binary operation, in which case it becomes the left-hand-side expression for what
     // follows.
-    let mut left = parse_unary_expression(parser, driver)?;
+    let mut left = parse_cast_expression(parser, driver)?;
 
     // Do we have a binary, assignment, or ternary expression?
     //      If so, keep parsing with precedence climbing to build the expression tree. If not, we'll return the
@@ -208,30 +208,57 @@ fn parse_binary_expression(
     Ok(AstExpression::new(node_id, AstExpressionKind::Binary { op, lhs: Box::new(lhs), rhs: Box::new(rhs) }))
 }
 
-/// Parses a unary expression.
+/// Parses a cast or unary expression.
 ///
-/// A unary expression is either a prefix unary operation, a cast expression, or a postfix expression.
+/// This grammar helps us to parse and distinguish between these cases:
+///
+/// ```c
+/// int x;
+/// (long)((short)x)    // OK: CastExpr(CastExpr(IdentExpr))
+/// -((long) x)         // OK: Unary(Negate, CastExpr)
+/// sizeof x            // OK: SizeOfExpr(IdentExpr)
+/// sizeof (int)        // OK: SizeOfType(Type)
+/// sizeof ((long) x)   // OK: SizeOfExpr(CastExpr)
+/// sizeof (long)x      // Error (correct)
+/// ```
 ///
 /// ```markdown
-/// <unary-expr> ::= <unary-op> <unary-expr> | <cast-expr> | <postfix-expr>
+/// <cast-expr> ::= "(" <type-name> ")" <cast-expr> | <unary-expr>
 /// ```
-pub fn parse_unary_expression(parser: &mut Parser, driver: &mut Driver) -> ParseResult<AstExpression> {
+fn parse_cast_expression(parser: &mut Parser, driver: &mut Driver) -> ParseResult<AstExpression> {
     if let Some(peek_next_token) = parser.token_stream.peek_next_token() {
         let peek_next_token_type = peek_next_token.token_type.clone();
 
         match peek_next_token_type {
-            // Prefix unary operation
-            tt if ops::is_prefix_unary_operator(&tt) => {
-                ops::parse_prefix_unary_operation(parser, driver).map_err(|_| ParseError)
-            }
-
             // Cast expression
+            //
             lexer::TokenType::OpenParen if peek::is_type_cast_operator(parser, driver) => {
-                parse_cast_expression(parser, driver)
+                let open_paren_loc = utils::expect_token(lexer::TokenType::OpenParen, parser, driver)?;
+
+                // The unresolved type to which the expression is being cast
+                let target_type = parse_type_name("cast", parser, driver)?;
+
+                _ = utils::expect_token(lexer::TokenType::CloseParen, parser, driver)?;
+
+                // The expression being cast (which, of course, could itself be a cast)
+                let inner_expr = parse_cast_expression(parser, driver)?;
+
+                let node_id = driver.make_node_id();
+                let entire_expr_sloc = open_paren_loc.merge_with(parser.metadata.get_source_location(inner_expr.id()));
+
+                parser.metadata.add_operator_sloc(node_id, open_paren_loc);
+                parser.metadata.add_source_location(node_id, entire_expr_sloc);
+                parser.metadata.propagate_const_flag_from_child(inner_expr.id(), node_id);
+
+                Ok(AstExpression::new(
+                    node_id,
+                    AstExpressionKind::Cast { target_type, inner: Box::new(inner_expr), is_implicit: false },
+                ))
             }
 
-            // Postfix expression
-            _ => parse_postfix_expression(parser, driver),
+            // Unary expression
+            //
+            _ => parse_unary_expression(parser, driver),
         }
     } else {
         add_error_at_eof(parser, driver, "Expected expression");
@@ -239,22 +266,110 @@ pub fn parse_unary_expression(parser: &mut Parser, driver: &mut Driver) -> Parse
     }
 }
 
-/// Parses a cast expression.
+/// Parses a unary expression.
+///
+/// A unary expression is either a prefix unary operation, a sizeof expression, or a postfix expression.
 ///
 /// ```markdown
-/// <cast-expr> ::= "(" { <type-specifier> }+ [ <abstract-declarator> ] ")" <unary-expr>
+/// <unary-expr> ::= <unary-op> <unary-expr> | <sizeof-expr> | <postfix-expr>
 /// ```
-fn parse_cast_expression(parser: &mut Parser, driver: &mut Driver) -> ParseResult<AstExpression> {
-    let open_paren_loc = utils::expect_token(lexer::TokenType::OpenParen, parser, driver)?;
+pub fn parse_unary_expression(parser: &mut Parser, driver: &mut Driver) -> ParseResult<AstExpression> {
+    if let Some(peek_next_token) = parser.token_stream.peek_next_token() {
+        // Prefix unary operation
+        //
+        if ops::is_prefix_unary_operator(&peek_next_token.token_type) {
+            ops::parse_prefix_unary_operation(parser, driver).map_err(|_| ParseError)
+        }
+        // sizeof expression
+        //
+        else if peek_next_token.is_identifier_with_name("sizeof") {
+            parse_sizeof_expression(parser, driver)
+        }
+        // Postfix expression
+        //
+        else {
+            parse_postfix_expression(parser, driver)
+        }
+    } else {
+        add_error_at_eof(parser, driver, "Expected expression");
+        Err(ParseError)
+    }
+}
 
+/// Parses a `sizeof` expression.
+///
+/// There are two cases: `sizeof(type-name)` and `sizeof <unary-expr>`. Note that an expression can optionally be
+/// enclosed in parens, except for cast expressions which must be enclosed in parens.
+///
+/// ```c
+/// sizeof (int)
+/// sizeof 1.0
+/// sizeof (1.0)
+/// sizeof ((long)1)
+/// ```
+///
+/// ```markdown
+/// <sizeof-expr> ::= "sizeof" <unary-expr> | "sizeof" "(" <type-name> ")"
+/// ```
+fn parse_sizeof_expression(parser: &mut Parser, driver: &mut Driver) -> ParseResult<AstExpression> {
+    let sizeof_loc = utils::expect_identifier_token_with_name("sizeof", parser, driver)?;
+
+    if peek::is_type_cast_operator(parser, driver) {
+        _ = utils::expect_token(lexer::TokenType::OpenParen, parser, driver)?;
+
+        let declared_type = parse_type_name("sizeof", parser, driver)?;
+
+        let close_paren_loc = utils::expect_token(lexer::TokenType::CloseParen, parser, driver)?;
+
+        let node_id = driver.make_node_id();
+        parser.metadata.add_source_location(node_id, sizeof_loc.merge_with(close_paren_loc));
+        parser.metadata.set_expr_flag(node_id, AstExpressionFlag::IsConstant);
+
+        Ok(AstExpression::new(node_id, AstExpressionKind::SizeOfType { declared_type }))
+    } else {
+        let operand_expr = parse_unary_expression(parser, driver)?;
+
+        let node_id = driver.make_node_id();
+        parser.metadata.add_source_location(
+            node_id,
+            sizeof_loc.merge_with(parser.metadata.get_source_location(operand_expr.id())),
+        );
+
+        // The `sizeof` expression itself is always constant, regardless of its operand.
+        parser.metadata.set_expr_flag(node_id, AstExpressionFlag::IsConstant);
+
+        Ok(AstExpression::new(node_id, AstExpressionKind::SizeOfExpr { operand: Box::new(operand_expr) }))
+    }
+}
+
+/// Parses a type name.
+///
+/// A type name consists of at least one type specifier and an optional abstract declarator (see
+/// [`AstDeclarator`](super::AstDeclarator)). The type specifiers form the so-called 'basic type' (see
+/// [`AstBasicType`](super::AstBasicType)).
+///
+/// ```c
+/// int                      // One type specifier
+/// long double *            // Two type specifiers and one abstract pointer declarator
+/// unsigned short int [4]   // Three type specifiers and one abstract array declarator
+/// ```
+///
+/// ```markdown
+/// <type_name> ::= { <type-specifier> }+ [ <abstract-declarator> ]
+/// ```
+fn parse_type_name(context: &str, parser: &mut Parser, driver: &mut Driver) -> ParseResult<AstDeclaredType> {
     // Type specifiers
     let (basic_type, storage) = parse_type_and_storage_specifiers(parser, driver, false)?;
+
     if let Some(storage) = storage {
-        add_error(driver, "A cast expression cannot have a storage class specifier", storage.loc);
+        add_error(driver, format!("Invalid storage class specifier in {context} expression"), storage.loc);
         return Err(ParseError);
     }
 
     // Optional abstract declarator
+    //      We only call this function when parsing either a cast or sizeof expression, and in both cases the
+    //      type name is enclosed in parens, so we can check whether there's a declarator by looking ahead for a
+    //      closing paren.
     let has_declarator = !parser.token_stream.next_token_has_type(lexer::TokenType::CloseParen);
 
     let declarator = if has_declarator {
@@ -265,23 +380,7 @@ fn parse_cast_expression(parser: &mut Parser, driver: &mut Driver) -> ParseResul
         None
     };
 
-    _ = utils::expect_token(lexer::TokenType::CloseParen, parser, driver)?;
-
-    // The expression being cast
-    let expr_to_cast = parse_unary_expression(parser, driver)?;
-
-    // The resolved type to which the expression is being cast
-    let target_type = AstDeclaredType::unresolved(basic_type, None, declarator);
-
-    let node_id = driver.make_node_id();
-    let sloc = open_paren_loc.merge_with(parser.metadata.get_source_location(expr_to_cast.id()));
-    parser.metadata.add_source_location(node_id, sloc);
-    parser.metadata.propagate_const_flag_from_child(expr_to_cast.id(), node_id);
-
-    Ok(AstExpression::new(
-        node_id,
-        AstExpressionKind::Cast { target_type, inner: Box::new(expr_to_cast), is_implicit: false },
-    ))
+    Ok(AstDeclaredType::unresolved(basic_type, None, declarator))
 }
 
 /// Parses a postfix expression.
@@ -369,11 +468,14 @@ fn parse_function_call_expression(
 ) -> ParseResult<AstExpression> {
     let (args, args_node_id) = parse_function_call_arguments(parser, driver)?;
 
+    // The `args_node_id` sloc contains the location of the args inside the parens, but we want the closing paren too.
+    let fn_call_end_loc = parser.token_stream.prev_token_source_location().ok_or(ParseError)?;
+
     let designator = Box::new(expr);
     let designator_loc = parser.metadata.get_source_location(designator.id());
 
     let node_id = driver.make_node_id();
-    parser.metadata.add_source_location(node_id, designator_loc);
+    parser.metadata.add_source_location(node_id, designator_loc.merge_with(fn_call_end_loc));
 
     Ok(AstExpression::new(node_id, AstExpressionKind::FunctionCall { designator, args, args_node_id }))
 }
@@ -421,12 +523,11 @@ fn parse_array_subscript_expression(
 
     let subscript_expr = parse_expression(parser, driver)?; // Note: precedence == 0
 
-    _ = utils::expect_token(lexer::TokenType::CloseSqBracket, parser, driver)?;
+    let close_sq_bracket_loc = utils::expect_token(lexer::TokenType::CloseSqBracket, parser, driver)?;
 
     let node_id = driver.make_node_id();
-
-    // Set the source location as the '[' token. (Diagnostics can add the other expressions as locations.)
-    parser.metadata.add_source_location(node_id, open_sq_bracket_loc);
+    parser.metadata.add_operator_sloc(node_id, open_sq_bracket_loc);
+    parser.metadata.add_source_location(node_id, open_sq_bracket_loc.merge_with(close_sq_bracket_loc));
 
     Ok(AstExpression::new(
         node_id,

@@ -1,0 +1,16 @@
+[
+    {
+        "test_case": "types_void_multi_pass_alloced_memory",
+        "filenames": [
+            "multi/pass_alloced_memory.c",
+            "multi/pass_alloced_memory_client.c"
+        ]
+    },
+    {
+        "test_case": "types_void_multi_test_for_memory_leaks",
+        "filenames": [
+            "multi/test_for_memory_leaks.c",
+            "multi/test_for_memory_leaks_client.c"
+        ]
+    }
+]

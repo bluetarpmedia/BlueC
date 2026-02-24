@@ -180,8 +180,10 @@ fn get_return_integer_value(ast_root: &mut AstRoot) -> u64 {
         let block = func.body.as_mut().unwrap();
 
         visitor::visit_statements_in_block(block, &mut |stmt: &mut AstStatement| match stmt {
-            AstStatement::Return(expr) => {
-                if let AstExpressionKind::IntegerLiteral { value, .. } = expr.kind() {
+            AstStatement::Return { expr, .. } => {
+                if let Some(expr) = expr
+                    && let AstExpressionKind::IntegerLiteral { value, .. } = expr.kind()
+                {
                     ret_value = *value;
                 } else {
                     assert!(false, "Not an integer literal");
@@ -201,8 +203,10 @@ fn get_return_f64_value(ast_root: &mut AstRoot) -> f64 {
         let block = func.body.as_mut().unwrap();
 
         visitor::visit_statements_in_block(block, &mut |stmt: &mut AstStatement| match stmt {
-            AstStatement::Return(expr) => {
-                if let AstExpressionKind::FloatLiteral { value, .. } = expr.kind() {
+            AstStatement::Return { expr, .. } => {
+                if let Some(expr) = expr
+                    && let AstExpressionKind::FloatLiteral { value, .. } = expr.kind()
+                {
                     ret_value = *value;
                 } else {
                     assert!(false, "Not a floating-point literal");

@@ -23,6 +23,72 @@ fn ast_type_bits() {
 }
 
 #[test]
+fn ast_type_is_scalar() {
+    assert!(AstType::Char.is_scalar());
+    assert!(AstType::Short.is_scalar());
+    assert!(AstType::Int.is_scalar());
+    assert!(AstType::Long.is_scalar());
+    assert!(AstType::LongLong.is_scalar());
+
+    assert!(AstType::UnsignedChar.is_scalar());
+    assert!(AstType::UnsignedShort.is_scalar());
+    assert!(AstType::UnsignedInt.is_scalar());
+    assert!(AstType::UnsignedLong.is_scalar());
+    assert!(AstType::UnsignedLongLong.is_scalar());
+
+    assert!(AstType::Float.is_scalar());
+    assert!(AstType::Double.is_scalar());
+    assert!(AstType::LongDouble.is_scalar());
+
+    assert!(!AstType::Void.is_scalar());
+    assert!(!AstType::new_array(AstType::Short, 10).is_scalar());
+    assert!(!AstType::new_fn(AstType::Void, vec![]).is_scalar());
+}
+
+#[test]
+fn ast_type_is_aggregate() {
+    assert!(AstType::new_array(AstType::Short, 10).is_aggregate());
+    assert!(AstType::new_array(AstType::Double, 1).is_aggregate());
+    assert!(AstType::new_array(AstType::Char, 0).is_aggregate());
+
+    assert!(!AstType::Char.is_aggregate());
+    assert!(!AstType::Short.is_aggregate());
+    assert!(!AstType::Int.is_aggregate());
+    assert!(!AstType::Long.is_aggregate());
+    assert!(!AstType::LongLong.is_aggregate());
+
+    assert!(!AstType::UnsignedChar.is_aggregate());
+    assert!(!AstType::UnsignedShort.is_aggregate());
+    assert!(!AstType::UnsignedInt.is_aggregate());
+    assert!(!AstType::UnsignedLong.is_aggregate());
+    assert!(!AstType::UnsignedLongLong.is_aggregate());
+
+    assert!(!AstType::Float.is_aggregate());
+    assert!(!AstType::Double.is_aggregate());
+    assert!(!AstType::LongDouble.is_aggregate());
+
+    assert!(!AstType::Void.is_aggregate());
+    assert!(!AstType::new_fn(AstType::Void, vec![]).is_aggregate());
+}
+
+#[test]
+fn ast_type_is_pointer() {
+    assert!(AstType::new_pointer_to(AstType::Int).is_pointer());
+    assert!(!AstType::new_pointer_to(AstType::Int).is_pointer_to_void());
+
+    assert!(AstType::new_pointer_to(AstType::new_array(AstType::Char, 1)).is_pointer());
+
+    assert!(AstType::new_pointer_to(AstType::new_fn(AstType::Char, vec![])).is_pointer());
+    assert!(AstType::new_pointer_to(AstType::new_fn(AstType::Char, vec![])).is_function_pointer());
+
+    assert!(AstType::new_pointer_to(AstType::Void).is_pointer());
+    assert!(AstType::new_pointer_to(AstType::Void).is_pointer_to_void());
+
+    assert!(!AstType::Void.is_pointer());
+    assert!(!AstType::Void.is_pointer_to_void());
+}
+
+#[test]
 fn ast_type_integer_promotion() {
     assert_eq!(AstType::Char.promote_if_rank_lower_than_int(), (AstType::Int, true));
     assert_eq!(AstType::SignedChar.promote_if_rank_lower_than_int(), (AstType::Int, true));

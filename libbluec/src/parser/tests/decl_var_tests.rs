@@ -58,6 +58,7 @@ fn valid_decl_syntax() {
         "static int a;",
         "int a = {};",
         "int a = {1};",
+        "void *ptr;",
         "int*a;",
         "int *a;",
         "int **a;",

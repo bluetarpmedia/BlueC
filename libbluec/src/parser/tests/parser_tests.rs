@@ -219,7 +219,10 @@ fn restore_token_stream_after_parsing() {
     let mut parser = make_parser(&mut driver, source);
 
     let validate_return_stmt = |stmt| -> bool {
-        let Ok(parser::AstStatement::Return(expr)) = stmt else {
+        let Ok(parser::AstStatement::Return { expr, .. }) = stmt else {
+            return false;
+        };
+        let Some(expr) = expr else {
             return false;
         };
         let parser::AstExpressionKind::IntegerLiteral { value, .. } = expr.kind() else {

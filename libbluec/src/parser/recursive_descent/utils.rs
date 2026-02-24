@@ -9,29 +9,8 @@ use crate::lexer;
 use super::super::recursive_descent::add_error_at_eof;
 use super::super::{ParseError, ParseResult, Parser};
 
-/// Takes the next token from the stream, validates its type against the given expected type, and returns its
-/// source location.
-pub fn expect_token(
-    expected_type: lexer::TokenType,
-    parser: &mut Parser,
-    driver: &mut Driver,
-) -> ParseResult<SourceLocation> {
-    match parser.token_stream.take_token() {
-        Some(token) if token.token_type == expected_type => Ok(token.location),
-        Some(token) => {
-            let err = format!("Expected `{}` instead of `{}`", expected_type, token.token_type);
-            let loc = token.location;
-            driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
-            Err(ParseError)
-        }
-        None => {
-            add_error_at_eof(parser, driver, format!("Expected `{}`", expected_type));
-            Err(ParseError)
-        }
-    }
-}
-
-/// Takes the next token from the stream if it's a semicolon to indicate an end of statement.
+/// Takes the next token from the stream if it's a semicolon to indicate an end of statement. Otherwise emits an
+/// error diagnostic with the given `error` string.
 pub fn expect_end_of_statement(parser: &mut Parser, driver: &mut Driver, error: &str) -> ParseResult<()> {
     if parser.token_stream.next_token_has_type(lexer::TokenType::Semicolon) {
         _ = parser.token_stream.take_token();
@@ -43,14 +22,62 @@ pub fn expect_end_of_statement(parser: &mut Parser, driver: &mut Driver, error: 
     }
 }
 
-/// Returns the next token if it's an identifier.
+/// Takes the next token from the stream and if its type matches the given `expected_type`, returns its source location.
+/// Otherwise emits an error diagnostic.
+pub fn expect_token(
+    expected_type: lexer::TokenType,
+    parser: &mut Parser,
+    driver: &mut Driver,
+) -> ParseResult<SourceLocation> {
+    match parser.token_stream.take_token() {
+        Some(token) if token.token_type == expected_type => Ok(token.location),
+        Some(token) => {
+            let err = format!("Expected '{expected_type}' instead of '{}'", token.token_type);
+            let loc = token.location;
+            driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
+            Err(ParseError)
+        }
+        None => {
+            add_error_at_eof(parser, driver, format!("Expected '{expected_type}'"));
+            Err(ParseError)
+        }
+    }
+}
+
+/// Takes the next token from the stream and if its type is an identifier with the given `expected_name`, returns its
+/// source location. Otherwise emits an error diagnostic.
+pub fn expect_identifier_token_with_name(
+    expected_name: &str,
+    parser: &mut Parser,
+    driver: &mut Driver,
+) -> ParseResult<SourceLocation> {
+    match parser.token_stream.take_token() {
+        Some(token) => {
+            if token.is_identifier_with_name(expected_name) {
+                Ok(token.location)
+            } else {
+                let err = format!("Expected '{expected_name}' instead of '{}'", token.token_type);
+                let loc = token.location;
+                driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
+                Err(ParseError)
+            }
+        }
+        None => {
+            add_error_at_eof(parser, driver, format!("Expected '{expected_name}'"));
+            Err(ParseError)
+        }
+    }
+}
+
+/// Takes the next token from the stream and returns the token if the token's type is an identifier. Otherwise emits an
+/// error diagnostic.
 pub fn expect_identifier(parser: &mut Parser, driver: &mut Driver) -> ParseResult<lexer::Token> {
     match parser.token_stream.take_token() {
         Some(token) => {
             if token.is_identifier() {
                 Ok(token.clone())
             } else {
-                let err = format!("Expected identifier instead of `{}`", token.token_type);
+                let err = format!("Expected identifier instead of '{}'", token.token_type);
                 let loc = token.location;
                 driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
                 Err(ParseError)
@@ -97,7 +124,7 @@ pub fn expect_literal_token(
             {
                 Ok((*token).clone())
             } else {
-                let err = format!("Expected literal instead of `{}`", token.token_type);
+                let err = format!("Expected literal instead of '{}'", token.token_type);
                 let loc = token.location;
                 driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
                 Err(ParseError)
@@ -169,7 +196,8 @@ pub fn is_reserved_keyword(id: &str) -> bool {
         x if is_builtin_type_specifier(x) => true,
         x if is_type_qualifier(x) => true,
         x if is_storage_class_specifier(x) => true,
-        x if is_control_statement_identifier(x) => true,
+        x if is_control_statement_keyword(x) => true,
+        x if is_unary_operator_keyword(x) => true,
         _ => false,
     }
 }
@@ -189,8 +217,8 @@ pub fn is_storage_class_specifier(id: &str) -> bool {
     matches!(id, "static" | "extern" | "typedef") // Future: auto, register, constexpr, thread_local
 }
 
-/// Is the given `id` a control statement identifier?
-pub fn is_control_statement_identifier(id: &str) -> bool {
+/// Is the given `id` a control statement keyword?
+pub fn is_control_statement_keyword(id: &str) -> bool {
     matches!(
         id,
         "if" | "else"
@@ -205,6 +233,11 @@ pub fn is_control_statement_identifier(id: &str) -> bool {
             | "goto"
             | "return"
     )
+}
+
+/// Is the given `id` a unary operator keyword?
+pub fn is_unary_operator_keyword(id: &str) -> bool {
+    matches!(id, "sizeof" | "_Alignof")
 }
 
 /// Evaluates a hex string as a `u64`.

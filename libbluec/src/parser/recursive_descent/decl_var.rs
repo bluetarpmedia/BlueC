@@ -98,13 +98,12 @@ pub fn parse_variable_declaration(
         None
     };
 
-    let end_decl_loc = parser.token_stream.prev_token_source_location().unwrap();
-
     let node_id = driver.make_node_id();
-    parser.metadata.add_source_location(node_id, var_ident.loc.merge_with(end_decl_loc));
+    parser.metadata.add_source_location(node_id, var_ident.loc);
 
     let is_declaration_only = is_declared_extern && initializer.is_none();
     let ident = var_ident.clone();
+    let ident_loc = ident.loc;
 
     let var_decl = AstDeclaration::Variable(AstVariableDeclaration {
         node_id,
@@ -121,6 +120,7 @@ pub fn parse_variable_declaration(
 
     if is_declared_typedef {
         let node_id = driver.make_node_id();
+        parser.metadata.add_source_location(node_id, ident_loc);
         Ok(AstDeclaration::TypeAlias(AstTypeAliasDeclaration { node_id, decl: Box::new(var_decl) }))
     } else {
         Ok(var_decl)

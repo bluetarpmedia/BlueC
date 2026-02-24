@@ -4,13 +4,13 @@ TranslationUnit
 │ ├ Storage: static
 │ └ Initializer
 │   ├ Aggregate [Id = 6] [Type = 'long [4]'] [ConstantExpr]
-│   │ ├ ImplicitCast (long) [Id = 38] [Type = 'long'] [ConstantExpr]
-│   │ │ └ IntegerLiteral(1) [Id = 2] [Type = 'int'] [ConstantExpr]
 │   │ ├ ImplicitCast (long) [Id = 39] [Type = 'long'] [ConstantExpr]
-│   │ │ └ IntegerLiteral(2) [Id = 3] [Type = 'int'] [ConstantExpr]
+│   │ │ └ IntegerLiteral(1) [Id = 2] [Type = 'int'] [ConstantExpr]
 │   │ ├ ImplicitCast (long) [Id = 40] [Type = 'long'] [ConstantExpr]
+│   │ │ └ IntegerLiteral(2) [Id = 3] [Type = 'int'] [ConstantExpr]
+│   │ ├ ImplicitCast (long) [Id = 41] [Type = 'long'] [ConstantExpr]
 │   │ │ └ IntegerLiteral(3) [Id = 4] [Type = 'int'] [ConstantExpr]
-│   │ └ ImplicitCast (long) [Id = 41] [Type = 'long'] [ConstantExpr]
+│   │ └ ImplicitCast (long) [Id = 42] [Type = 'long'] [ConstantExpr]
 │   │   └ IntegerLiteral(4) [Id = 5] [Type = 'int'] [ConstantExpr]
 │   └ Constant Eval: {{ 1, 2, 3, 4 }}
 ├ VariableDefn: ptr [ptr], declared="long *" [Type = 'long *']
@@ -19,7 +19,7 @@ TranslationUnit
 │ └ Initializer
 │   ├ AddressOf [Id = 11] [Type = 'long *']
 │   │ └ Subscript [Id = 10] [Type = 'long']
-│   │   ├ AddressOf [Id = 42] [Type = 'long *']
+│   │   ├ AddressOf [Id = 43] [Type = 'long *']
 │   │   │ └ Ident: x [x] [Id = 8] [Type = 'long [4]']
 │   │   └ IntegerLiteral(0) [Id = 9] [Type = 'int'] [ConstantExpr]
 │   └ Constant Eval: long *
@@ -47,30 +47,30 @@ TranslationUnit
     │ ├ Linkage: none
     │ ├ Storage: automatic
     │ └ Initializer
-    │   └ StringLiteral("abcd" ["abcd"]) [Id = 53] [Type = 'char [4]'] [ConstantExpr]
+    │   └ StringLiteral("abcd" ["abcd"]) [Id = 54] [Type = 'char [4]'] [ConstantExpr]
     ├ VariableDefn: str [id.str.1], declared="char *" [Type = 'char *']
     │ ├ Linkage: none
     │ ├ Storage: automatic
     │ └ Initializer
-    │   └ AddressOf [Id = 47] [Type = 'char *'] [ConstantExpr]
+    │   └ AddressOf [Id = 48] [Type = 'char *'] [ConstantExpr]
     │     └ StringLiteral("Hello, world!\n" ["Hello, world!\n"]) [Id = 28] [Type = 'char [15]'] [ConstantExpr]
     ├ VariableDefn: s [id.s.2], declared="short" [Type = 'short']
     │ ├ Linkage: none
     │ ├ Storage: automatic
     │ └ Initializer
-    │   └ ImplicitCast (short) [Id = 52] [Type = 'short'] [ConstantExpr]
-    │     └ IntegerLiteral(1) [Id = 51] [Type = 'int'] [ConstantExpr]
+    │   └ ImplicitCast (short) [Id = 53] [Type = 'short'] [ConstantExpr]
+    │     └ IntegerLiteral(1) [Id = 52] [Type = 'int'] [ConstantExpr]
     ├ VariableDefn: c [id.c.3], declared="char" [Type = 'char']
     │ ├ Linkage: none
     │ ├ Storage: automatic
     │ └ Initializer
-    │   └ ImplicitCast (char) [Id = 49] [Type = 'char'] [ConstantExpr]
+    │   └ ImplicitCast (char) [Id = 50] [Type = 'char'] [ConstantExpr]
     │     └ CharLiteral('a' [97]) [Id = 32] [Type = 'int'] [ConstantExpr]
     ├ VariableDefn: dd [id.dd.4], declared="long double" [Type = 'long double']
     │ ├ Linkage: none
     │ ├ Storage: automatic
     │ └ Initializer
-    │   └ ImplicitCast (long double) [Id = 50] [Type = 'long double'] [ConstantExpr]
+    │   └ ImplicitCast (long double) [Id = 51] [Type = 'long double'] [ConstantExpr]
     │     └ FloatLiteral(Double = 1.0) [Id = 34] [Type = 'double'] [ConstantExpr]
     └ ReturnStmt
       └ IntegerLiteral(0) [Id = 36] [Type = 'int'] [ConstantExpr]

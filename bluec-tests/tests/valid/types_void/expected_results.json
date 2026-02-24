@@ -1,0 +1,5 @@
+[
+    {"filename": "types_void_cast_to_void.c", "exit_code": 12},
+    {"filename": "types_void_compare_void_ptr_to_other_ptr.c", "exit_code": 1},
+    {"filename": "types_void_simple.c", "exit_code": 100}
+]

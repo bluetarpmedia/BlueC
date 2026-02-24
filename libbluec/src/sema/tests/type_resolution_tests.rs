@@ -10,7 +10,38 @@ use crate::parser::{AstType, Parser};
 use super::super::type_check;
 
 #[test]
-fn invalid_types() {
+fn invalid_type_specifiers() {
+    verify_sema_error("int int a;");
+    verify_sema_error("long long long a;");
+    verify_sema_error("short short a;");
+    verify_sema_error("char char a;");
+
+    verify_sema_error("short long int a;");
+    verify_sema_error("short char a;");
+    verify_sema_error("signed unsigned int a;");
+    verify_sema_error("long int long long a;");
+    verify_sema_error("short int short a;");
+    verify_sema_error("unsigned char char a;");
+    verify_sema_error("signed char char a;");
+
+    verify_sema_error("void a;");
+    verify_sema_error("void int a;");
+    verify_sema_error("char void a;");
+    verify_sema_error("void void a;");
+
+    verify_sema_error("unsigned float f;");
+    verify_sema_error("signed double f;");
+    verify_sema_error("char float f;");
+    verify_sema_error("float float f;");
+    verify_sema_error("float double f;");
+    verify_sema_error("double float f;");
+    verify_sema_error("double double f;");
+    verify_sema_error("long double double f;");
+    verify_sema_error("long long double f;");
+}
+
+#[test]
+fn invalid_function_types() {
     // Function cannot return a function type
     verify_sema_error("int (foo(void))(void);");
     verify_sema_error("typedef int MyFun(int); MyFun func(void);");
@@ -19,7 +50,10 @@ fn invalid_types() {
     verify_sema_error("int ((*invalid_func_ptr)(int, int))(void);");
     verify_sema_error("typedef int MyFun(int); MyFun (*fn)(int);");
     verify_sema_error("typedef int MyFun(int); MyFun (*array_of_fn_ptr[10])(int);");
+}
 
+#[test]
+fn invalid_array_types() {
     // Cannot declare an array of function type
     verify_sema_error("int arr[5](void);");
     verify_sema_error("int (arr[5])(void);");
@@ -36,6 +70,8 @@ fn simple_variables() {
     verify_types(&mut driver, "int ((a)) = 1;", vec![AstType::Int]);
     verify_types(&mut driver, "int (a) = (1), (b) = (2), (c) = (3);", vec![AstType::Int, AstType::Int, AstType::Int]);
     verify_types(&mut driver, "unsigned a;", vec![AstType::UnsignedInt]);
+    verify_types(&mut driver, "signed int signed a;", vec![AstType::Int]);
+    verify_types(&mut driver, "unsigned short unsigned a;", vec![AstType::UnsignedShort]);
     verify_types(&mut driver, "signed a, b;", vec![AstType::Int, AstType::Int]);
     verify_types(&mut driver, "int a, b, c, d;", vec![AstType::Int, AstType::Int, AstType::Int, AstType::Int]);
     verify_types(&mut driver, "int a = 1, b = 2, c = 3;", vec![AstType::Int, AstType::Int, AstType::Int]);
@@ -48,6 +84,7 @@ fn simple_variables() {
 fn pointer_variables() {
     let mut driver = Driver::for_testing();
 
+    verify_types(&mut driver, "void *ptr;", vec![AstType::new_pointer_to(AstType::Void)]);
     verify_types(&mut driver, "int*a;", vec![AstType::new_pointer_to(AstType::Int)]);
     verify_types(&mut driver, "int *a;", vec![AstType::new_pointer_to(AstType::Int)]);
     verify_types(&mut driver, "int **a;", vec![AstType::new_pointer_to(AstType::new_pointer_to(AstType::Int))]);
@@ -281,7 +318,7 @@ fn verify_sema_error(source: &str) {
 
     _ = type_check::type_check(&mut ast_root, &mut chk, &mut driver);
 
-    assert!(driver.has_error_diagnostics(), "Expect errors after sema type checking");
+    assert!(driver.has_error_diagnostics(), "Expect errors after sema type checking:\n{source}");
 }
 
 fn verify_types(driver: &mut Driver, source: &str, expected: Vec<AstType>) {
