@@ -202,6 +202,8 @@ So far I've concentrated mostly on the front-end to implement C language feature
     * ✅ Character
     * ✅ String
   * ✅ Expressions
+    * ✅ `sizeof`
+    * `_Alignof`
   * ✅ Declarations, storage-specifiers, and `typedef`
   * ✅ Statements
       * ✅ Expression
@@ -209,6 +211,7 @@ So far I've concentrated mostly on the front-end to implement C language feature
       * ✅ Control (if, switch, while, do-while, for, break, continue, goto, return)
       * ✅ Labeled
   * Types
+    * ✅ `void`
     * ✅ `char` (8-bit)
     * ✅ `short` (16-bit)
     * ✅ `int` (32-bit)
@@ -220,13 +223,13 @@ So far I've concentrated mostly on the front-end to implement C language feature
     * ✅ Pointers
     * ✅ Function pointers
     * ✅ Arrays
-    * `_Bool`, `void`
-    * `sizeof`, `_Alignof`
-    * Comma operator
-    * Structs
+    * `_Bool`
     * Enums
+    * Structs
     * Unions
   * Type qualifiers (`const`, `volatile`, `restrict`, `_Atomic`)
+  * Comma operator
+  * `_Alignas`, `_Atomic`, `_Decimal...`, `_Generic`, `_Noreturn`, `_Static_assert`, `_Thread_local`
 * Sema
   * ✅ Type checking
   * ✅ Compile-time constant expression evaluator
