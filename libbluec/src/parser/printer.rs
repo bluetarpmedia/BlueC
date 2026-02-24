@@ -904,6 +904,18 @@ fn print_expression<W: Write>(p: &mut AstPrinter<W>, expr: &AstExpression, is_la
             })
         }
 
+        AstExpressionKind::AlignOfType { declared_type } => {
+            print_node_metadata(p, expr.id())?;
+            p.new_line()?;
+
+            p.with_indent(is_last, |p| {
+                p.write_prefix_and_connector(make_last_child_connector())?;
+                write!(p.writer, "Type: \"{}\"", declared_type)?;
+                print_resolved_type(p, declared_type)?;
+                p.new_line()
+            })
+        }
+
         AstExpressionKind::CharLiteral { literal, is_multichar, value } => {
             let multichar_str = if *is_multichar { " [Multi-char]" } else { "" };
 
@@ -998,6 +1010,7 @@ fn get_expression_node_name(kind: &AstExpressionKind) -> &str {
         AstExpressionKind::Ident { .. } => "Ident",
         AstExpressionKind::SizeOfExpr { .. } => "SizeOfExpr",
         AstExpressionKind::SizeOfType { .. } => "SizeOfType",
+        AstExpressionKind::AlignOfType { .. } => "AlignOfType",
         AstExpressionKind::CharLiteral { .. } => "CharLiteral",
         AstExpressionKind::StringLiteral { .. } => "StringLiteral",
         AstExpressionKind::IntegerLiteral { .. } => "IntegerLiteral",

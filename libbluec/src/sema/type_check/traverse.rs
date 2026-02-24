@@ -644,6 +644,8 @@ fn typecheck_expression(
         AstExpressionKind::SizeOfExpr { .. } => typecheck_sizeof_expr(expr, chk, driver),
 
         AstExpressionKind::SizeOfType { .. } => typecheck_sizeof_type(expr, chk, driver),
+
+        AstExpressionKind::AlignOfType { .. } => typecheck_alignof_type(expr, chk, driver),
     }
 }
 
@@ -1648,6 +1650,11 @@ fn get_function_designator_type(
             Ok((None, expr_type))
         }
 
+        AstExpressionKind::AlignOfType { .. } => {
+            let expr_type = chk.get_data_type(expr_id);
+            Ok((None, expr_type))
+        }
+
         AstExpressionKind::CharLiteral { .. } => {
             let expr_type = chk.get_data_type(expr_id);
             Ok((None, expr_type))
@@ -1738,6 +1745,43 @@ fn typecheck_sizeof_type(
 
     // The type of the sizeof expression itself is `size_t` (aka `unsigned long`).
     chk.set_data_type(sizeof_expr_id, &AstType::__size_t());
+
+    Ok(AstType::__size_t())
+}
+
+fn typecheck_alignof_type(
+    expr: &mut AstExpression,
+    chk: &mut TypeChecker,
+    driver: &mut Driver,
+) -> TypeCheckResult<AstType> {
+    let alignof_expr_id = expr.id();
+
+    let AstExpressionKind::AlignOfType { declared_type } = expr.kind_mut() else {
+        ICE!("Expected AstExpressionKind::AlignOfType");
+    };
+
+    // Resolve the type
+    let operand_type =
+        type_resolution::resolve_declared_type(declared_type, chk, driver).map_err(|_| TypeCheckError)?;
+    declared_type.resolved_type = Some(operand_type.clone());
+
+    // Cannot get the alignment of a function
+    if operand_type.is_function() {
+        Error::alignof_function_type(declared_type.location(), driver);
+        return Err(TypeCheckError);
+    }
+
+    // Emit an error if the type is an incomplete array, and then continue with other validation.
+    _ = symbols::validate_type_name(&operand_type, declared_type, driver);
+
+    // Check if the type itself is incomplete.
+    if !operand_type.is_complete() {
+        Error::alignof_incomplete_type(declared_type.location(), &operand_type, driver);
+        return Err(TypeCheckError);
+    }
+
+    // The type of the _Alignof expression itself is `size_t` (aka `unsigned long`).
+    chk.set_data_type(alignof_expr_id, &AstType::__size_t());
 
     Ok(AstType::__size_t())
 }

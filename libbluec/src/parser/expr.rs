@@ -218,6 +218,7 @@ fn parse_binary_expression(
 /// -((long) x)         // OK: Unary(Negate, CastExpr)
 /// sizeof x            // OK: SizeOfExpr(IdentExpr)
 /// sizeof (int)        // OK: SizeOfType(Type)
+/// _Alignof (int)      // OK: AlignOfType(type)
 /// sizeof ((long) x)   // OK: SizeOfExpr(CastExpr)
 /// sizeof (long)x      // Error (correct)
 /// ```
@@ -268,10 +269,10 @@ fn parse_cast_expression(parser: &mut Parser, driver: &mut Driver) -> ParseResul
 
 /// Parses a unary expression.
 ///
-/// A unary expression is either a prefix unary operation, a sizeof expression, or a postfix expression.
+/// A unary expression is either a prefix unary operation, a sizeof/_Alignof expression, or a postfix expression.
 ///
 /// ```markdown
-/// <unary-expr> ::= <unary-op> <unary-expr> | <sizeof-expr> | <postfix-expr>
+/// <unary-expr> ::= <unary-op> <unary-expr> | <sizeof-expr> | <alignof-expr> | <postfix-expr>
 /// ```
 pub fn parse_unary_expression(parser: &mut Parser, driver: &mut Driver) -> ParseResult<AstExpression> {
     if let Some(peek_next_token) = parser.token_stream.peek_next_token() {
@@ -284,6 +285,11 @@ pub fn parse_unary_expression(parser: &mut Parser, driver: &mut Driver) -> Parse
         //
         else if peek_next_token.is_identifier_with_name("sizeof") {
             parse_sizeof_expression(parser, driver)
+        }
+        // _Alignof expression
+        //
+        else if peek_next_token.is_identifier_with_name("_Alignof") {
+            parse_alignof_expression(parser, driver)
         }
         // Postfix expression
         //
@@ -340,6 +346,31 @@ fn parse_sizeof_expression(parser: &mut Parser, driver: &mut Driver) -> ParseRes
 
         Ok(AstExpression::new(node_id, AstExpressionKind::SizeOfExpr { operand: Box::new(operand_expr) }))
     }
+}
+
+/// Parses an `_Alignof` expression.
+///
+/// Future: C23 "alignof"
+///
+/// We only support the C standard `_Alignof(type)`, not the GNU extension `_Alignof <expr>`.
+///
+/// ```markdown
+/// <alignof-expr> ::= "_Alignof" "(" <type-name> ")"
+/// ```
+fn parse_alignof_expression(parser: &mut Parser, driver: &mut Driver) -> ParseResult<AstExpression> {
+    let alignof_loc = utils::expect_identifier_token_with_name("_Alignof", parser, driver)?;
+
+    _ = utils::expect_token(lexer::TokenType::OpenParen, parser, driver)?;
+
+    let declared_type = parse_type_name("_Alignof", parser, driver)?;
+
+    let close_paren_loc = utils::expect_token(lexer::TokenType::CloseParen, parser, driver)?;
+
+    let node_id = driver.make_node_id();
+    parser.metadata.add_source_location(node_id, alignof_loc.merge_with(close_paren_loc));
+    parser.metadata.set_expr_flag(node_id, AstExpressionFlag::IsConstant);
+
+    Ok(AstExpression::new(node_id, AstExpressionKind::AlignOfType { declared_type }))
 }
 
 /// Parses a type name.

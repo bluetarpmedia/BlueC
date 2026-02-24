@@ -334,9 +334,21 @@ impl Error {
         driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
     }
 
+    /// Emits an error that '_Alignof' cannot be used with an incomplete type (e.g. 'void').
+    pub fn alignof_incomplete_type(loc: SourceLocation, operand_type: &AstType, driver: &mut Driver) {
+        let err = format!("Incomplete type '{operand_type}' does not have an alignment");
+        driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
+    }
+
     /// Emits an error that 'sizeof' cannot be used with a function type.
     pub fn sizeof_function_type(loc: SourceLocation, driver: &mut Driver) {
         let err = "Cannot take the size of a function type".to_string();
+        driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
+    }
+
+    /// Emits an error that '_Alignof' cannot be used with a function type.
+    pub fn alignof_function_type(loc: SourceLocation, driver: &mut Driver) {
+        let err = "Function type does not have an alignment".to_string();
         driver.add_diagnostic(Diagnostic::error_at_location(err, loc));
     }
 

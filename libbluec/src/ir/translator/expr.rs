@@ -67,6 +67,7 @@ pub fn translate_expression(
 
         AstExpressionKind::SizeOfExpr { .. } => ICE!("SizeOfExpr should have been replaced in sema"),
         AstExpressionKind::SizeOfType { .. } => ICE!("SizeOfType should have been replaced in sema"),
+        AstExpressionKind::AlignOfType { .. } => ICE!("AlignOfType should have been replaced in sema"),
     }
 }
 

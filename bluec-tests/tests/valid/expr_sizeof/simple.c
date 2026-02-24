@@ -5,8 +5,12 @@ int main(void) {
         return 1;
     }
 
-    if (sizeof 3.0 != 8) {
+    if (sizeof 1.0f != 4) {
         return 2;
+    }
+
+    if (sizeof 3.0 != 8) {
+        return 3;
     }
 
     return 0;

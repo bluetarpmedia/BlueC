@@ -19,8 +19,6 @@ use super::symbol_table::SymbolAttributes;
 use super::type_check::TypeChecker;
 use super::type_resolution;
 
-// Future: _Alignof
-
 /// A constant expression evaluator.
 pub struct Eval<'a, 'b> {
     chk: &'a mut TypeChecker,
@@ -218,6 +216,7 @@ fn evaluate_const_expr_recursively(expr: &AstExpression, eval: &mut Eval) -> Opt
         AstExpressionKind::Conditional { .. } => evaluate_conditional(expr, eval),
         AstExpressionKind::SizeOfExpr { .. } => evaluate_sizeof_expr(expr, eval),
         AstExpressionKind::SizeOfType { .. } => evaluate_sizeof_type(expr, eval),
+        AstExpressionKind::AlignOfType { .. } => evaluate_alignof_type(expr, eval),
     }
 }
 
@@ -426,13 +425,18 @@ fn evaluate_sizeof_type(expr: &AstExpression, eval: &mut Eval) -> Option<Constan
     evaluate_sizeof(&ast_type)
 }
 
+fn evaluate_alignof_type(expr: &AstExpression, eval: &mut Eval) -> Option<ConstantValue> {
+    let AstExpressionKind::AlignOfType { declared_type } = expr.kind() else {
+        ICE!("Expected AstExpressionKind::AlignOfType");
+    };
+
+    let ast_type = type_resolution::resolve_declared_type(declared_type, eval.chk, eval.driver).ok()?;
+    evaluate_alignof(&ast_type)
+}
+
 fn evaluate_sizeof(ast_type: &AstType) -> Option<ConstantValue> {
     if !ast_type.is_complete() {
         return None;
-    }
-
-    if ast_type.is_pointer_to_void() {
-        return Some(ConstantValue::Int { value: 8, signed: false, size: 64 });
     }
 
     if let AstType::Pointer(_) = ast_type {
@@ -458,6 +462,29 @@ fn evaluate_sizeof(ast_type: &AstType) -> Option<ConstantValue> {
     };
 
     // sizeof evaluates to `size_t` aka `unsigned long`
+    expr_size.map(|expr_size| ConstantValue::Int { value: expr_size as i128, signed: false, size: 64 })
+}
+
+fn evaluate_alignof(ast_type: &AstType) -> Option<ConstantValue> {
+    if !ast_type.is_complete() {
+        return None;
+    }
+
+    if let AstType::Pointer(_) = ast_type {
+        return Some(ConstantValue::Int { value: 8, signed: false, size: 64 });
+    }
+
+    if let AstType::Array { element_type, .. } = ast_type {
+        return evaluate_alignof(element_type);
+    }
+
+    let expr_size = match ast_type {
+        AstType::Void => None,
+        AstType::Function { .. } => None,
+        _ => Some(ast_type.bits() / 8),
+    };
+
+    // _Alignof evaluates to `size_t` aka `unsigned long`
     expr_size.map(|expr_size| ConstantValue::Int { value: expr_size as i128, signed: false, size: 64 })
 }
 

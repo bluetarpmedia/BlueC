@@ -203,7 +203,7 @@ So far I've concentrated mostly on the front-end to implement C language feature
     * ✅ String
   * ✅ Expressions
     * ✅ `sizeof`
-    * `_Alignof`
+    * ✅ `_Alignof`
   * ✅ Declarations, storage-specifiers, and `typedef`
   * ✅ Statements
       * ✅ Expression

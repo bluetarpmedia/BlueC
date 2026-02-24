@@ -13,22 +13,33 @@ int main(void) {
         return 3;
     }
 
-    if (sizeof(int) != 4) {
+    if (sizeof(short) != 2) {
         return 4;
     }
-    if (sizeof(unsigned int) != 4) {
+    if (sizeof(unsigned short) != 2) {
         return 5;
     }
 
-    if (sizeof(long) != 8) {
+    if (sizeof(int) != 4) {
         return 6;
     }
-    if (sizeof(unsigned long) != 8) {
+    if (sizeof(unsigned int) != 4) {
         return 7;
     }
 
-    if (sizeof(double) != 8) {
+    if (sizeof(long) != 8) {
         return 8;
+    }
+    if (sizeof(unsigned long) != 8) {
+        return 9;
+    }
+
+    if (sizeof(float) != 4) {
+        return 10;
+    }
+
+    if (sizeof(double) != 8) {
+        return 11;
     }
 
     return 0;

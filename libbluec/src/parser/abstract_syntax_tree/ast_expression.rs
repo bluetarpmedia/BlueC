@@ -67,6 +67,9 @@ pub enum AstExpressionKind {
     SizeOfType {
         declared_type: AstDeclaredType,
     },
+    AlignOfType {
+        declared_type: AstDeclaredType,
+    },
     CharLiteral {
         literal: String,
         is_multichar: bool,

@@ -480,9 +480,18 @@ fn sizeof() {
     verify_value("sizeof (int)", Some(4));
     verify_value("sizeof (long)", Some(8));
     verify_value("sizeof (long long)", Some(8));
+
+    verify_value("sizeof (signed char)", Some(1));
+    verify_value("sizeof (unsigned char)", Some(1));
+    verify_value("sizeof (unsigned short)", Some(2));
+    verify_value("sizeof (unsigned int)", Some(4));
+    verify_value("sizeof (unsigned long)", Some(8));
+    verify_value("sizeof (unsigned long long)", Some(8));
+
     verify_value("sizeof (float)", Some(4));
     verify_value("sizeof (double)", Some(8));
 
+    verify_value("sizeof (void *)", Some(8));
     verify_value("sizeof (char *)", Some(8));
     verify_value("sizeof (short *)", Some(8));
     verify_value("sizeof (int *)", Some(8));
@@ -500,6 +509,9 @@ fn sizeof() {
     verify_value("sizeof (short[12])", Some(24));
     verify_value("sizeof (int[3])", Some(12));
     verify_value("sizeof (int[3][2])", Some(24));
+    verify_value("sizeof (float[16])", Some(64));
+    verify_value("sizeof (double[16])", Some(128));
+    verify_value("sizeof (long double[16])", Some(128));
 
     // sizeof expr
     verify_value("sizeof (int (float, double))", None);
@@ -518,6 +530,75 @@ fn sizeof() {
     verify_value("sizeof 1.0", Some(8));
 
     verify_value("sizeof \"test\"", Some(5));
+}
+
+#[test]
+fn alignof() {
+    let verify_value = |expr: &str, expected: Option<u64>| {
+        let value = evaluate_expr_with_typechecking(expr);
+
+        if expected.is_none() {
+            assert_eq!(value, None);
+            return;
+        }
+
+        let Some(AstConstantValue::Integer(const_integer)) = value else {
+            assert!(value.is_some(), "Expression '{expr}' did not evaluate to Integer");
+            panic!();
+        };
+
+        match const_integer {
+            AstConstantInteger::UnsignedLongLong(value) => {
+                assert_eq!(expected, Some(value));
+            }
+            _ => assert!(false),
+        }
+    };
+
+    verify_value("_Alignof (void)", None);
+    verify_value("_Alignof (void[])", None);
+    verify_value("_Alignof (void[0])", None);
+    verify_value("_Alignof (void[5])", None);
+    verify_value("_Alignof (void[3][2][1])", None);
+
+    verify_value("_Alignof (char)", Some(1));
+    verify_value("_Alignof (short)", Some(2));
+    verify_value("_Alignof (int)", Some(4));
+    verify_value("_Alignof (long)", Some(8));
+    verify_value("_Alignof (long long)", Some(8));
+
+    verify_value("_Alignof (signed char)", Some(1));
+    verify_value("_Alignof (unsigned char)", Some(1));
+    verify_value("_Alignof (unsigned short)", Some(2));
+    verify_value("_Alignof (unsigned int)", Some(4));
+    verify_value("_Alignof (unsigned long)", Some(8));
+    verify_value("_Alignof (unsigned long long)", Some(8));
+
+    verify_value("_Alignof (float)", Some(4));
+    verify_value("_Alignof (double)", Some(8));
+
+    verify_value("_Alignof (void *)", Some(8));
+    verify_value("_Alignof (char *)", Some(8));
+    verify_value("_Alignof (short *)", Some(8));
+    verify_value("_Alignof (int *)", Some(8));
+    verify_value("_Alignof (long *)", Some(8));
+    verify_value("_Alignof (long long *)", Some(8));
+    verify_value("_Alignof (float *)", Some(8));
+    verify_value("_Alignof (double *)", Some(8));
+
+    verify_value("_Alignof (int (*)[3])", Some(8));
+    verify_value("_Alignof (int (*)[3][5])", Some(8));
+    verify_value("_Alignof (int *[3])", Some(8));
+    verify_value("_Alignof (int *[3][5])", Some(8));
+
+    verify_value("_Alignof (char[3])", Some(1));
+    verify_value("_Alignof (short[12])", Some(2));
+    verify_value("_Alignof (int[3])", Some(4));
+    verify_value("_Alignof (int[3][2][1])", Some(4));
+    verify_value("_Alignof (unsigned long[3][2])", Some(8));
+    verify_value("_Alignof (float[16])", Some(4));
+    verify_value("_Alignof (double[16])", Some(8));
+    verify_value("_Alignof (long double[16])", Some(8));
 }
 
 fn verify_expr_evaluates_to_i8(expression_source_code: &str, expected: Option<i8>) {
