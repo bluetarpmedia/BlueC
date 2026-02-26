@@ -212,6 +212,7 @@ So far I've concentrated mostly on the front-end to implement C language feature
       * ✅ Labeled
   * Types
     * ✅ `void`
+    * ✅ `_Bool` (8-bit)
     * ✅ `char` (8-bit)
     * ✅ `short` (16-bit)
     * ✅ `int` (32-bit)
@@ -223,7 +224,6 @@ So far I've concentrated mostly on the front-end to implement C language feature
     * ✅ Pointers
     * ✅ Function pointers
     * ✅ Arrays
-    * `_Bool`
     * Enums
     * Structs
     * Unions

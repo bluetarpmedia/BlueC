@@ -538,6 +538,26 @@ impl Warning {
         driver.add_diagnostic(diag);
     }
 
+    /// Emits a warning that taking the address of a symbol will always evaluate to 'true'.
+    ///
+    /// -Wpointer-bool-conversion
+    pub fn pointer_bool_conversion(
+        symbol_name: &str,
+        symbol_kind: SymbolKind,
+        loc: SourceLocation,
+        driver: &mut Driver,
+    ) {
+        let kind = WarningKind::PointerBoolConversion;
+        let warning = if symbol_kind == SymbolKind::Constant {
+            "Address of constant always evaluates to 'true'".to_string()
+        } else {
+            let symbol_str = if symbol_kind == SymbolKind::Function { "function " } else { "" };
+            format!("Address of {symbol_str}'{symbol_name}' always evaluates to 'true'")
+        };
+
+        driver.add_diagnostic(Diagnostic::warning_at_location(kind, warning, loc));
+    }
+
     /// Emits a warning that an expression evaluated to zero and is interpreted as a null pointer constant.
     ///
     /// -Wnon-literal-null-conversion

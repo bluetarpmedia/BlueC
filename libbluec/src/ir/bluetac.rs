@@ -82,6 +82,10 @@ pub enum BtInstruction {
         src: BtValue,
         dst: BtValue,
     },
+    TruncateTo1Bit {
+        src: BtValue,
+        dst: BtValue,
+    },
     ConvertFp {
         src: BtValue,
         dst: BtValue,

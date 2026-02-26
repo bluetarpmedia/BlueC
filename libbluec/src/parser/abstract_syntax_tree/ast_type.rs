@@ -12,6 +12,7 @@ use crate::ICE;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AstType {
     Void,
+    Bool,
     Char, // Signed in our implementation
     SignedChar,
     Short,
@@ -161,11 +162,12 @@ impl AstType {
         self.is_integer() || self.is_floating_point()
     }
 
-    /// Is this type an integral type?
+    /// Is this type an integral type? (Includes `_Bool`.)
     pub fn is_integer(&self) -> bool {
         matches!(
             self,
-            AstType::Char
+            AstType::Bool
+                | AstType::Char
                 | AstType::SignedChar
                 | AstType::UnsignedChar
                 | AstType::Short
@@ -184,7 +186,7 @@ impl AstType {
         matches!(self, AstType::Float | AstType::Double | AstType::LongDouble)
     }
 
-    /// Is this type a character type?
+    /// Is this type a character type? (Does not include `_Bool`.)
     pub fn is_character(&self) -> bool {
         matches!(self, AstType::Char | AstType::SignedChar | AstType::UnsignedChar)
     }
@@ -205,6 +207,7 @@ impl AstType {
     pub fn bits(&self) -> usize {
         match self {
             AstType::Void => 0,
+            AstType::Bool => 8,
             AstType::Char | AstType::SignedChar | AstType::UnsignedChar => 8,
             AstType::Short | AstType::UnsignedShort => 16,
             AstType::Int | AstType::UnsignedInt => 32,
@@ -226,11 +229,12 @@ impl AstType {
         )
     }
 
-    /// Is this type an unsigned integer?
+    /// Is this type an unsigned integer? (Includes `_Bool`.)
     pub fn is_unsigned_integer(&self) -> bool {
         matches!(
             self,
-            AstType::UnsignedChar
+            AstType::Bool
+                | AstType::UnsignedChar
                 | AstType::UnsignedShort
                 | AstType::UnsignedInt
                 | AstType::UnsignedLong
@@ -249,6 +253,7 @@ impl AstType {
     /// Precondition: `self.is_integer() == true`
     pub fn to_unsigned(self) -> Self {
         match self {
+            AstType::Bool => AstType::Bool,
             AstType::Char | AstType::SignedChar | AstType::UnsignedChar => AstType::UnsignedChar,
             AstType::Short | AstType::UnsignedShort => AstType::UnsignedShort,
             AstType::Int | AstType::UnsignedInt => AstType::UnsignedInt,
@@ -270,6 +275,7 @@ impl AstType {
     #[rustfmt::skip]
     pub fn valid_range_as_str(&self) -> Option<&'static str> {
         match self {
+            AstType::Bool                                     => Some("[0, 1]"),
             AstType::Char | AstType::SignedChar               => Some("[-128, 127]"),
             AstType::Short                                    => Some("[-32768, 32767]"),
             AstType::Int                                      => Some("[-2147483648, 2147483647]"),
@@ -347,6 +353,16 @@ impl AstType {
             return true;
         }
 
+        // If this type is bool, then every other type can hold its values [0, 1].
+        if self == &AstType::Bool {
+            return true;
+        }
+
+        // If the other type is bool, then this type has to be bool for all of its values to fit in the other.
+        if other == &AstType::Bool {
+            return self == other;
+        }
+
         match &self {
             t if t.is_signed_integer() => other.is_signed_integer() && other.bits() >= t.bits(),
             t if t.is_unsigned_integer() && other.is_unsigned_integer() => other.bits() >= t.bits(),
@@ -367,6 +383,7 @@ impl AstType {
     pub fn can_hold_value(&self, value: u64) -> bool {
         match self {
             AstType::Void => false,
+            AstType::Bool => value == 0 || value == 1,
             AstType::Char | AstType::SignedChar => i8::try_from(value).is_ok(),
             AstType::Short => i16::try_from(value).is_ok(),
             AstType::Int => i32::try_from(value).is_ok(),
@@ -408,6 +425,7 @@ impl AstType {
     /// The rank of the integer type. Types that fit larger values have a higher rank.
     pub fn integer_rank(&self) -> usize {
         match self {
+            AstType::Bool => 1,
             AstType::Char | AstType::SignedChar | AstType::UnsignedChar => 2,
             AstType::Short | AstType::UnsignedShort => 3,
             AstType::Int | AstType::UnsignedInt => 4,
@@ -490,6 +508,7 @@ fn to_c_declarator_recursive(ty: &AstType, current: String) -> String {
         //      `int <current declarator buffer>`
         //
         AstType::Void             => format!("void{}",               prefix_with_space(&current)),
+        AstType::Bool             => format!("_Bool{}",              prefix_with_space(&current)),
         AstType::Char             => format!("char{}",               prefix_with_space(&current)),
         AstType::SignedChar       => format!("signed char{}",        prefix_with_space(&current)),
         AstType::Short            => format!("short{}",              prefix_with_space(&current)),

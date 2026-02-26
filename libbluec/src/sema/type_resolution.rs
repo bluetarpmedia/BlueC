@@ -67,6 +67,7 @@ fn resolve_builtin_type_specifiers(
     let type_specifiers = &declared_type.basic_type.0;
 
     let mut void_count = 0;
+    let mut bool_count = 0;
     let mut char_count = 0;
     let mut short_count = 0;
     let mut int_count = 0;
@@ -81,6 +82,7 @@ fn resolve_builtin_type_specifiers(
             AstBasicTypeSpecifier::BuiltinType { specifier, loc } => {
                 match specifier.as_str() {
                     "void" => void_count += 1,
+                    "_Bool" => bool_count += 1,
                     "char" => char_count += 1,
                     "short" => short_count += 1,
                     "int" => int_count += 1,
@@ -96,6 +98,7 @@ fn resolve_builtin_type_specifiers(
 
                 // These type specifiers cannot be repeated.
                 if void_count > 1
+                    || bool_count > 1
                     || char_count > 1
                     || short_count > 1
                     || int_count > 1
@@ -110,7 +113,8 @@ fn resolve_builtin_type_specifiers(
 
                 // 'double' can be combined with 'long' but nothing else.
                 if double_count == 1 && type_specifiers.len() > 1 {
-                    let invalid_combination = char_count > 0
+                    let invalid_combination = bool_count > 0
+                        || char_count > 0
                         || short_count > 0
                         || int_count > 0
                         || long_count > 1
@@ -128,8 +132,12 @@ fn resolve_builtin_type_specifiers(
                 // 'char' can be combined with 'signed' or 'unsigned' but nothing else.
                 //      Allow signed/unsigned to be repeated; we'll warn below.
                 if char_count == 1 && type_specifiers.len() > 1 {
-                    let invalid_combination =
-                        short_count > 0 || int_count > 0 || long_count > 0 || float_count > 0 || double_count > 0;
+                    let invalid_combination = bool_count > 0
+                        || short_count > 0
+                        || int_count > 0
+                        || long_count > 0
+                        || float_count > 0
+                        || double_count > 0;
 
                     if invalid_combination {
                         let specifier = SourceIdentifier(specifier, *loc);
@@ -142,12 +150,19 @@ fn resolve_builtin_type_specifiers(
                 // Cannot combine 'signed' with 'unsigned'.
                 // Cannot combine anything with 'float'.
                 // Cannot combine anything with 'void'.
+                // Cannot combine anything with '_Bool'.
                 let combine_short_long = short_count > 0 && long_count > 0;
                 let combine_signed_unsigned = signed_count > 0 && unsigned_count > 0;
                 let combine_with_float = float_count == 1 && type_specifiers.len() > 1;
                 let combine_with_void = void_count == 1 && type_specifiers.len() > 1;
+                let combine_with_bool = bool_count == 1 && type_specifiers.len() > 1;
 
-                if combine_short_long || combine_signed_unsigned || combine_with_float || combine_with_void {
+                if combine_short_long
+                    || combine_signed_unsigned
+                    || combine_with_float
+                    || combine_with_void
+                    || combine_with_bool
+                {
                     let specifier = SourceIdentifier(specifier, *loc);
                     Error::cannot_combine_type_specifier(specifier, driver);
                     sema_err = true;
@@ -171,11 +186,14 @@ fn resolve_builtin_type_specifiers(
     }
 
     let is_void = void_count == 1;
+    let is_bool = bool_count == 1;
     let is_fp = float_count > 0 || double_count > 0;
     let is_char = char_count == 1;
 
     let ty = if is_void {
         AstType::Void
+    } else if is_bool {
+        AstType::Bool
     } else if is_fp {
         resolve_fp_data_type(float_count, double_count, long_count)
     } else if is_char {

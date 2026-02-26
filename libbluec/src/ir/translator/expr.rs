@@ -231,6 +231,18 @@ fn translate_ident(
         return EvalExpr::Value(dst);
     }
 
+    // When reading a _Bool variable, we need to ensure its value is either 0 or 1.
+    //      For now, we truncate the value to 1-bit and re-assign it before returning the value. This happens
+    //      when both reading the variable and before writing to it, which is unnecessary.
+    //      Future: Refactor the BlueTac IR to perform lvalue-to-rvalue conversion when reading variables.
+    //
+    if expr_data_type == &AstType::Bool {
+        let src = BtValue::Variable(unique_name.to_string());
+        let dst = translator.make_temp_variable(AstType::Bool);
+        instructions.push(BtInstruction::TruncateTo1Bit { src: src.clone(), dst: dst.clone() });
+        instructions.push(BtInstruction::Copy { src: dst, dst: src });
+    }
+
     EvalExpr::Value(BtValue::Variable(unique_name.to_string()))
 }
 
@@ -258,8 +270,13 @@ fn translate_cast(
         return EvalExpr::Void;
     }
 
-    // If we can transform a constant value's type to match the cast-to `dst_type` then we can avoid
-    // performing the cast.
+    // Cast to `_Bool` has different semantics.
+    if *dst_type == AstType::Bool {
+        return convert_value_to_bool(translator, expr_value, instructions);
+    }
+
+    // If we can transform a constant value's type to match the cast-to `dst_type` then we can avoid emitting
+    // instructions to perform the conversion.
     if expr_value.is_constant()
         && dst_type.is_arithmetic()
         && let Some(transformed_constant) = try_transform_constant_value_type(&expr_value, &dst_type.into())
@@ -269,6 +286,30 @@ fn translate_cast(
         let src_type = expr_data_type.clone();
         let casted = add_cast_to_temp_var(translator, expr_value, &src_type, dst_type, instructions);
         EvalExpr::Value(casted)
+    }
+}
+
+fn convert_value_to_bool(
+    translator: &mut BlueTacTranslator,
+    value: BtValue,
+    instructions: &mut Vec<BtInstruction>,
+) -> EvalExpr {
+    // If we're converting a constant value to `_Bool` then we can transform it ourselves instead of emitting
+    // instructions to perform the conversion.
+    if let BtValue::Constant(constant_value) = value {
+        EvalExpr::Value(BtValue::new_constant_i8(constant_value.is_truthy() as i8))
+    } else {
+        let zero = BtValue::Constant(BtConstantValue::zero(value.get_type(&translator.symbols)));
+        let dst = translator.make_temp_variable(AstType::Bool);
+
+        instructions.push(BtInstruction::Binary {
+            op: BtBinaryOp::NotEqualTo,
+            src1: value,
+            src2: zero,
+            dst: dst.clone(),
+        });
+
+        EvalExpr::Value(dst)
     }
 }
 
@@ -492,7 +533,20 @@ fn translate_assignment(
         }
 
         // Copy the result back into the lhs variable, with a cast if necessary.
-        copy_value_with_optional_cast(op_result, lhs_value.clone(), &computation_type, &lhs_type, instructions);
+        //      `_Bool` has different semantics; instead, we compare the result against zero and set the result in dst.
+        //
+        if lhs_type == AstType::Bool {
+            let zero = BtValue::Constant(BtConstantValue::zero(op_result.get_type(&translator.symbols)));
+
+            instructions.push(BtInstruction::Binary {
+                op: BtBinaryOp::NotEqualTo,
+                src1: op_result,
+                src2: zero,
+                dst: lhs_value.clone(),
+            });
+        } else {
+            copy_value_with_optional_cast(op_result, lhs_value.clone(), &computation_type, &lhs_type, instructions);
+        }
 
         if let Some(lhs_object) = lhs_object {
             instructions.push(BtInstruction::Store { src: lhs_value.clone(), dst_ptr: lhs_object });

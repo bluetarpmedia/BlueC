@@ -32,6 +32,7 @@ impl From<&AstType> for BtType {
     fn from(ast_type: &AstType) -> Self {
         match ast_type {
             AstType::Void => BtType::Void,
+            AstType::Bool => BtType::Int8,
             AstType::Char | AstType::SignedChar => BtType::Int8,
             AstType::Short => BtType::Int16,
             AstType::Int => BtType::Int32,

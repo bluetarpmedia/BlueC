@@ -118,6 +118,7 @@ fn print_instruction(instr: &BtInstruction, symbols: &SymbolTable) {
         BtInstruction::SignExtend { src, dst } => print_src_dst_instr("sign-ex", src, dst, symbols),
         BtInstruction::ZeroExtend { src, dst } => print_src_dst_instr("zero-ex", src, dst, symbols),
         BtInstruction::Truncate { src, dst } => print_src_dst_instr("trunc", src, dst, symbols),
+        BtInstruction::TruncateTo1Bit { src, dst } => print_src_dst_instr("trunc-to-i1", src, dst, symbols),
         BtInstruction::ConvertFp { src, dst } => print_src_dst_instr("cast-fp", src, dst, symbols),
         BtInstruction::FpToSignedInteger { src, dst } => print_src_dst_instr("cast-fp-si", src, dst, symbols),
         BtInstruction::FpToUnsignedInteger { src, dst } => print_src_dst_instr("cast-fp-ui", src, dst, symbols),

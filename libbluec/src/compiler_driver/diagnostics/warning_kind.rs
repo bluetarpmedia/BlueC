@@ -106,6 +106,7 @@ define_warning_kind! {
     FloatConversion                => "float-conversion",
     SignConversion                 => "sign-conversion",
     PointerToIntCast               => "pointer-to-int-cast",
+    PointerBoolConversion          => "pointer-bool-conversion",
     NonLiteralNullConversion       => "non-literal-null-conversion",
     //
     // Comparisons
@@ -145,6 +146,7 @@ impl WarningKind {
             WarningKind::Multichar,
             WarningKind::NonLiteralNullConversion,
             WarningKind::Parentheses,
+            WarningKind::PointerBoolConversion,
             WarningKind::PointerIntegerCompare,
             WarningKind::PointerToIntCast,
             WarningKind::PointerTypeMismatch,

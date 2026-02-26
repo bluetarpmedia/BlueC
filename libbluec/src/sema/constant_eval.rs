@@ -8,7 +8,7 @@ use std::convert::TryFrom;
 
 use crate::ICE;
 use crate::compiler_driver::{Driver, Warning};
-use crate::core::SourceLocation;
+use crate::core::{SourceLocation, SymbolKind};
 use crate::parser::{
     AstAddressConstant, AstConstantFp, AstConstantInteger, AstConstantValue, AstExpression, AstExpressionFlag,
     AstExpressionKind, AstFloatLiteralKind, AstIntegerLiteralKind, AstStorageDuration, AstType, AstUnaryOp,
@@ -243,7 +243,11 @@ fn evaluate_address_constant(expr: &AstExpression, eval: &mut Eval) -> Option<As
             if symbol.data_type.is_function() {
                 Some(AstAddressConstant::AddressOfFunction(unique_name.to_string()))
             } else if symbol.storage_duration() == AstStorageDuration::Static {
-                Some(AstAddressConstant::AddressOfObject { object: unique_name.to_string(), byte_offset: 0 })
+                Some(AstAddressConstant::AddressOfObject {
+                    object: unique_name.to_string(),
+                    byte_offset: 0,
+                    object_is_string_literal: false,
+                })
             } else {
                 None
             }
@@ -279,7 +283,7 @@ fn evaluate_address_constant(expr: &AstExpression, eval: &mut Eval) -> Option<As
                 return None;
             };
 
-            if let AstAddressConstant::AddressOfObject { object, .. } = subscript_identifier {
+            if let AstAddressConstant::AddressOfObject { object, object_is_string_literal, .. } = subscript_identifier {
                 let Some(symbol) = eval.chk.symbols.get(AstUniqueName::new(object.clone())) else {
                     ICE!("Symbol should exist for '{object}'");
                 };
@@ -301,7 +305,7 @@ fn evaluate_address_constant(expr: &AstExpression, eval: &mut Eval) -> Option<As
                 let element_bytes = (subscript_expr_type.bits() / 8) as i32;
                 let byte_offset = subscript_index * element_bytes;
 
-                Some(AstAddressConstant::AddressOfObject { object, byte_offset })
+                Some(AstAddressConstant::AddressOfObject { object, byte_offset, object_is_string_literal })
             } else {
                 None
             }
@@ -325,7 +329,11 @@ fn evaluate_address_constant(expr: &AstExpression, eval: &mut Eval) -> Option<As
             let unique_name = AstUniqueName::new(const_name.clone());
             _ = eval.chk.symbols.add(unique_name, lit_data_type, attrs);
 
-            Some(AstAddressConstant::AddressOfObject { object: const_name, byte_offset: 0 })
+            Some(AstAddressConstant::AddressOfObject {
+                object: const_name,
+                byte_offset: 0,
+                object_is_string_literal: true,
+            })
         }
 
         _ => None,
@@ -555,6 +563,11 @@ impl ConstantValue {
             return Some(self);
         }
 
+        // Cast to _Bool has different semantics
+        if target_type == &AstType::Bool {
+            return self.cast_to_bool(target_type, eval);
+        }
+
         // Helper macro that performs a cast to an integer type and emits a warning if the conversion changes
         // the value.
         macro_rules! cast_to_integer {
@@ -754,6 +767,51 @@ impl ConstantValue {
             ConstantValue::Int { value, signed, size } => Some(ConstantValue::Int { value: !value, signed, size }),
             ConstantValue::Float { .. } => None,
             _ => ICE!("Cannot apply bitwise not"),
+        }
+    }
+
+    /// Cast the current value to '_Bool'.
+    fn cast_to_bool(self, target_type: &AstType, eval: &mut Eval) -> Option<Self> {
+        let make_bool = |value: bool| ConstantValue::Int { value: value as i128, signed: true, size: 8 };
+
+        match self {
+            ConstantValue::Int { value, .. } => Some(make_bool(value != 0)),
+
+            ConstantValue::Float { value, size } => {
+                let bool_value = if value == 0.0 {
+                    false
+                } else if value == -0.0 {
+                    let old_type = if size == 32 { AstType::Float } else { AstType::Double };
+                    let old_value = value.to_string();
+                    let new_value = "false".to_string();
+                    let loc = eval.root_expression_sloc;
+                    Warning::constant_conversion(&old_type, target_type, &old_value, &new_value, loc, eval.driver);
+                    false
+                } else {
+                    true
+                };
+
+                Some(make_bool(bool_value))
+            }
+
+            ConstantValue::Pointer(_, init) => match init {
+                AstAddressConstant::NullPointer => Some(make_bool(false)),
+                AstAddressConstant::CastExpression(value) => Some(make_bool(value != 0)),
+                AstAddressConstant::AddressOfObject { object, object_is_string_literal, .. } => {
+                    let loc = eval.root_expression_sloc;
+                    let symbol_kind =
+                        if object_is_string_literal { SymbolKind::Constant } else { SymbolKind::Variable };
+                    Warning::pointer_bool_conversion(&object, symbol_kind, loc, eval.driver);
+                    Some(make_bool(true))
+                }
+                AstAddressConstant::AddressOfFunction(fn_name) => {
+                    let loc = eval.root_expression_sloc;
+                    Warning::pointer_bool_conversion(&fn_name, SymbolKind::Function, loc, eval.driver);
+                    Some(make_bool(true))
+                }
+            },
+
+            ConstantValue::String(_) => Some(make_bool(true)),
         }
     }
 }

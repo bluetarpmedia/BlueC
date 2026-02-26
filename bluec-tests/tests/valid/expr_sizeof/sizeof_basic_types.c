@@ -1,6 +1,10 @@
 /* Make sure we can get the size of all basic type */
 
 int main(void) {
+    if (sizeof(_Bool) != 1) {
+        return 1;
+    }
+
     if (sizeof(char) != 1) {
         return 1;
     }

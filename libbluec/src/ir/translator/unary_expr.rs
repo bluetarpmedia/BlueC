@@ -193,7 +193,7 @@ fn translate_prefix_increment(
         });
     }
 
-    instructions.push(BtInstruction::Copy { src: tmp.clone(), dst: src.clone() });
+    copy_incr_decr_result(translator, tmp, src.clone(), operand_type, instructions);
 
     src
 }
@@ -210,7 +210,7 @@ fn translate_prefix_decrement(
     let src_type = src.get_type(&translator.symbols);
     let tmp = translator.make_temp_variable(operand_type.clone());
 
-    if let AstType::Pointer(referent) = operand_type {
+    if let AstType::Pointer(referent) = &operand_type {
         let scale = referent.bits() / 8;
 
         instructions.push(BtInstruction::AddPtr {
@@ -230,9 +230,24 @@ fn translate_prefix_decrement(
         });
     }
 
-    instructions.push(BtInstruction::Copy { src: tmp.clone(), dst: src.clone() });
+    copy_incr_decr_result(translator, tmp, src.clone(), operand_type, instructions);
 
     src
+}
+
+fn copy_incr_decr_result(
+    translator: &mut BlueTacTranslator,
+    result: BtValue,
+    dst: BtValue,
+    operand_type: AstType,
+    instructions: &mut Vec<BtInstruction>,
+) {
+    if operand_type == AstType::Bool {
+        let zero = BtValue::Constant(BtConstantValue::zero(result.get_type(&translator.symbols)));
+        instructions.push(BtInstruction::Binary { op: BtBinaryOp::NotEqualTo, src1: result, src2: zero, dst });
+    } else {
+        instructions.push(BtInstruction::Copy { src: result, dst });
+    }
 }
 
 fn translate_ast_unary_operator_to_ir(op: &AstUnaryOp) -> BtUnaryOp {

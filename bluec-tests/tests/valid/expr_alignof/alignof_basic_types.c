@@ -1,4 +1,8 @@
 int main(void) {
+    if (_Alignof(_Bool) != 1) {
+        return 1;
+    }
+
     if (_Alignof(char) != 1) {
         return 1;
     }

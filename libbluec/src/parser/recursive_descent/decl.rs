@@ -34,7 +34,7 @@ pub fn parse_declaration(parser: &mut Parser, driver: &mut Driver) -> ParseResul
     //      Remember: This includes `typedef`.
     //
     const EXPECTS_IDENTIFIER: bool = true;
-    let (basic_type, storage) = super::decl::parse_type_and_storage_specifiers(parser, driver, EXPECTS_IDENTIFIER)?;
+    let (basic_type, storage) = parse_type_and_storage_specifiers(parser, driver, EXPECTS_IDENTIFIER)?;
 
     // If the next token is the end of statement ';' then emit a warning because it's a useless declaration, and
     // then return.

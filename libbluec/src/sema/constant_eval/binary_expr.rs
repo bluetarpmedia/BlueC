@@ -412,7 +412,7 @@ fn evaluate_pointer_integer_arithmetic(
         return None;
     };
 
-    if let AstAddressConstant::AddressOfObject { object, byte_offset } = address_constant {
+    if let AstAddressConstant::AddressOfObject { object, byte_offset, object_is_string_literal } = address_constant {
         let referent_bytes = (referent.bits() / 8) as i32;
 
         let new_byte_offset = if op == AstBinaryOp::Add {
@@ -421,7 +421,8 @@ fn evaluate_pointer_integer_arithmetic(
             byte_offset - (referent_bytes * value as i32)
         };
 
-        let new_addr_const = AstAddressConstant::AddressOfObject { object, byte_offset: new_byte_offset };
+        let new_addr_const =
+            AstAddressConstant::AddressOfObject { object, byte_offset: new_byte_offset, object_is_string_literal };
         Some(ConstantValue::Pointer(ty, new_addr_const))
     } else {
         None
@@ -446,12 +447,12 @@ fn evaluate_pointer_arithmetic(op: AstBinaryOp, lhs: ConstantValue, rhs: Constan
         return None;
     }
 
-    let AstAddressConstant::AddressOfObject { object: lhs_object, byte_offset: lhs_offset } = lhs_address_constant
+    let AstAddressConstant::AddressOfObject { object: lhs_object, byte_offset: lhs_offset, .. } = lhs_address_constant
     else {
         return None;
     };
 
-    let AstAddressConstant::AddressOfObject { object: rhs_object, byte_offset: rhs_offset } = rhs_address_constant
+    let AstAddressConstant::AddressOfObject { object: rhs_object, byte_offset: rhs_offset, .. } = rhs_address_constant
     else {
         return None;
     };

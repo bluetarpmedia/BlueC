@@ -1965,6 +1965,11 @@ fn check_conversion(
         return Ok(());
     }
 
+    // Allow implicit conversion of scalar types to `_Bool`.
+    if source_type.is_scalar() && dest_type == &AstType::Bool {
+        return Ok(());
+    }
+
     // Allow implicit conversion to/from a pointer type and `void *`.
     if source_type.is_pointer() && dest_type.is_pointer_to_void()
         || dest_type.is_pointer() && source_type.is_pointer_to_void()

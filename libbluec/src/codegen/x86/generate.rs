@@ -295,6 +295,21 @@ fn generate_asm_instructions(
                 asm_instructions.push(AsmInstruction::MovZx { src_type, dst_type, src: src_operand, dst: dst_operand });
             }
 
+            ir::BtInstruction::TruncateTo1Bit { src, dst } => {
+                let src_operand = generator.translate_bt_value_to_asm_operand(src);
+                let dst_operand = generator.translate_bt_value_to_asm_operand(dst);
+                let asm_type = AsmType::Byte;
+
+                asm_instructions.push(AsmInstruction::Binary {
+                    op: AsmBinaryOp::And,
+                    asm_type,
+                    src: AsmOperand::Imm { value: 1, bits: 8, signed: false },
+                    dst: src_operand.clone(),
+                });
+
+                asm_instructions.push(AsmInstruction::Mov { asm_type, src: src_operand, dst: dst_operand });
+            }
+
             ir::BtInstruction::Truncate { src, dst } => {
                 let src_operand = generator.translate_bt_value_to_asm_operand(src);
                 let dst_operand = generator.translate_bt_value_to_asm_operand(dst);
@@ -316,6 +331,7 @@ fn generate_asm_instructions(
                             src_operand
                         }
                     }
+
                     AsmType::Word => {
                         if let AsmOperand::Imm { value, bits, .. } = src_operand
                             && bits > 16
@@ -325,6 +341,7 @@ fn generate_asm_instructions(
                             src_operand
                         }
                     }
+
                     AsmType::DoubleWord => {
                         if let AsmOperand::Imm { value, bits, .. } = src_operand
                             && bits > 32
@@ -334,6 +351,7 @@ fn generate_asm_instructions(
                             src_operand
                         }
                     }
+
                     _ => src_operand,
                 };
 

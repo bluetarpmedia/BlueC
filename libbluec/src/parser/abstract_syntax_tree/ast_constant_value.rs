@@ -79,7 +79,7 @@ pub enum AstAddressConstant {
     ///
     /// static char *ptr = "Hello";
     /// ```
-    AddressOfObject { object: String, byte_offset: i32 },
+    AddressOfObject { object: String, byte_offset: i32, object_is_string_literal: bool },
 
     /// Initialize a function pointer with the address of a function.
     /// ```c
@@ -205,6 +205,11 @@ impl AstConstantValue {
         macro_rules! make_cast {
             ($value:expr) => {
                 match cast_to_type {
+                    AstType::Bool => {
+                        let valid_value = $value as i8 == 0 || $value as i8 == 1;
+                        assert!(valid_value);
+                        AstConstantValue::Integer(AstConstantInteger::from_value($value as i8))
+                    }
                     AstType::Char | AstType::SignedChar => {
                         AstConstantValue::Integer(AstConstantInteger::from_value($value as i8))
                     }

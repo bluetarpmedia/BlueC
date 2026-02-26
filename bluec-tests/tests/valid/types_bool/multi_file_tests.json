@@ -1,0 +1,20 @@
+[
+    {
+        "test_case": "types_bool_multi_bool_arguments",
+        "filenames": [
+            "multi/bool_arguments.c", "multi/bool_arguments_client.c"
+        ]
+    },
+    {
+        "test_case": "types_bool_multi_global_bool",
+        "filenames": [
+            "multi/global_bool.c", "multi/global_bool_client.c"
+        ]
+    },
+    {
+        "test_case": "types_bool_multi_return_bool",
+        "filenames": [
+            "multi/return_bool.c", "multi/return_bool_client.c"
+        ]
+    }
+]

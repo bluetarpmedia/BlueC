@@ -57,7 +57,7 @@ impl From<AstStaticStorageInitializer> for BtStaticStorageInitializer {
                     BtStaticStorageInitializer::Constant(BtConstantValue::UInt64(val))
                 }
 
-                AstAddressConstant::AddressOfObject { object, byte_offset } => {
+                AstAddressConstant::AddressOfObject { object, byte_offset, .. } => {
                     BtStaticStorageInitializer::AddressOf { object, byte_offset }
                 }
 
