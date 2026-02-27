@@ -85,6 +85,7 @@ define_warning_kind! {
     ArrayBounds                    => "array-bounds",
     UnusedValue                    => "unused-value",
     UnusedComparison               => "unused-comparison",
+    BoolOperation                  => "bool-operation",
     //
     // Arithmetic
     //

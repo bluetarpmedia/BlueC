@@ -778,11 +778,14 @@ impl ConstantValue {
             ConstantValue::Int { value, .. } => Some(make_bool(value != 0)),
 
             ConstantValue::Float { value, size } => {
-                let (bool_value, emit_warning) = if value.is_sign_negative() {
+                let (bool_value, emit_warning) = if value.is_sign_negative() && value == 0.0 {
+                    // `-0.0` evalutes to false, and we want a warning
                     (false, true)
                 } else if value == 0.0 {
+                    // `0.0` evaluates to false, and no warning
                     (false, false)
                 } else {
+                    // Anything else evaluates to true, and we warn for all values except `1.0`.
                     (true, value != 1.0)
                 };
 

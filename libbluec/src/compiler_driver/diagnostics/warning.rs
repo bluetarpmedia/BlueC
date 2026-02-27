@@ -6,7 +6,7 @@ use crate::ICE;
 use crate::core::{SourceIdentifier, SourceLocation, SymbolKind};
 use crate::lexer::TokenType;
 use crate::parser::expr::ops;
-use crate::parser::{AstBinaryOp, AstBinaryOpFamily, AstType};
+use crate::parser::{AstBinaryOp, AstBinaryOpFamily, AstType, AstUnaryOp};
 
 use super::super::{Driver, WarningKind};
 use super::{Diagnostic, SuggestedCode};
@@ -337,6 +337,32 @@ impl Warning {
         let warning = "Integer literal is interpreted as unsigned because it is too large \
                        for a signed integer type";
         driver.add_diagnostic(Diagnostic::warning_at_location(kind, warning.to_string(), loc));
+    }
+
+    /// Emits a warning about a unary operation on a boolean type.
+    ///
+    /// -Wbool-operation
+    pub fn unary_bool_operation(op: AstUnaryOp, op_loc: SourceLocation, expr_loc: SourceLocation, driver: &mut Driver) {
+        let kind = WarningKind::BoolOperation;
+
+        let op_descr = match op {
+            AstUnaryOp::BitwiseNot => "Bitwise complement on",
+            AstUnaryOp::PrefixIncrement => "Increment of",
+            AstUnaryOp::PrefixDecrement => "Decrement of",
+            AstUnaryOp::PostfixIncrement => "Increment of",
+            AstUnaryOp::PostfixDecrement => "Decrement of",
+            _ => ICE!("Unexpected operator '{op}'"),
+        };
+
+        let warning = format!("{op_descr} a boolean expression");
+        let mut diag = Diagnostic::warning_at_location(kind, warning, op_loc);
+
+        if op == AstUnaryOp::BitwiseNot {
+            diag.add_note("Did you mean to use logical not ('!')?".into(), None);
+        }
+
+        diag.add_location(expr_loc);
+        driver.add_diagnostic(diag);
     }
 
     /// Emits a warning that the value result of an expression (with no side-effects) is unused.

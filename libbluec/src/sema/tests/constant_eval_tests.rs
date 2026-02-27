@@ -242,7 +242,38 @@ fn ternary_expressions() {
 }
 
 #[test]
-fn casts() {
+fn bool_casts() {
+    verify_expr_evaluates_to_i8("(_Bool)0", Some(0));
+    verify_expr_evaluates_to_i8("(_Bool)0U", Some(0));
+    verify_expr_evaluates_to_i8("(_Bool)0L", Some(0));
+    verify_expr_evaluates_to_i8("(_Bool)0ULL", Some(0));
+
+    verify_expr_evaluates_to_i8("(_Bool)1", Some(1));
+    verify_expr_evaluates_to_i8("(_Bool)55", Some(1));
+    verify_expr_evaluates_to_i8("(_Bool)-1", Some(1));
+    verify_expr_evaluates_to_i8("(_Bool)-55", Some(1));
+
+    verify_expr_evaluates_to_i8("(_Bool)0.0", Some(0));
+    verify_expr_evaluates_to_i8("(_Bool)-0.0", Some(0));
+    verify_expr_evaluates_to_i8("(_Bool)0.0001", Some(1));
+    verify_expr_evaluates_to_i8("(_Bool)1.0", Some(1));
+    verify_expr_evaluates_to_i8("(_Bool)3.0", Some(1));
+    verify_expr_evaluates_to_i8("(_Bool)-0.0001", Some(1));
+    verify_expr_evaluates_to_i8("(_Bool)-1.0", Some(1));
+    verify_expr_evaluates_to_i8("(_Bool)-3.0", Some(1));
+
+    verify_expr_evaluates_to_i8("(_Bool)0.0f", Some(0));
+    verify_expr_evaluates_to_i8("(_Bool)-0.0f", Some(0));
+    verify_expr_evaluates_to_i8("(_Bool)0.0001f", Some(1));
+    verify_expr_evaluates_to_i8("(_Bool)1.0f", Some(1));
+    verify_expr_evaluates_to_i8("(_Bool)3.0f", Some(1));
+    verify_expr_evaluates_to_i8("(_Bool)-0.0001f", Some(1));
+    verify_expr_evaluates_to_i8("(_Bool)-1.0f", Some(1));
+    verify_expr_evaluates_to_i8("(_Bool)-3.0f", Some(1));
+}
+
+#[test]
+fn integer_casts() {
     verify_expr_evaluates_to_i8("(char)-1", Some(-1));
     verify_expr_evaluates_to_i8("(char)8589934592", Some(0));
     verify_expr_evaluates_to_i8("(char)-1.0", Some(-1));
@@ -290,7 +321,10 @@ fn casts() {
     verify_expr_evaluates_to_u64("(unsigned long)-1", Some(18446744073709551615));
     verify_expr_evaluates_to_u64("(unsigned long)(-1LL)", Some(18446744073709551615));
     verify_expr_evaluates_to_u64("(unsigned long)3.14", Some(3));
+}
 
+#[test]
+fn fp_casts() {
     verify_expr_evaluates_to_f64("(double)1", Some(1.0));
     verify_expr_evaluates_to_f64("(double)-1", Some(-1.0));
     verify_expr_evaluates_to_f64("(double)1 + (double)2", Some(3.0));
@@ -616,7 +650,12 @@ fn verify_expr_evaluates_to_i8(expression_source_code: &str, expected: Option<i8
 
     match const_integer {
         AstConstantInteger::Char(value) => {
-            assert_eq!(expected, Some(value));
+            assert_eq!(
+                expected,
+                Some(value),
+                "Expression '{expression_source_code}' evaluated to {} {const_integer}",
+                const_integer.get_ast_type()
+            );
         }
         _ => assert!(
             false,

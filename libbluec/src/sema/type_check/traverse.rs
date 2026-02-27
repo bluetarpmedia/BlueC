@@ -815,6 +815,13 @@ fn typecheck_unary_operation(
         return Ok(AstType::Int);
     }
 
+    // Warn about certain unary operations on _Bool types.
+    if operand_type == AstType::Bool && (ops::is_incr_or_decr_op(op) || *op == AstUnaryOp::BitwiseNot) {
+        let op_loc = chk.metadata.get_operator_sloc(unary_expr_id);
+        let expr_loc = chk.metadata.get_source_location(operand_expr.id());
+        Warning::unary_bool_operation(*op, op_loc, expr_loc, driver);
+    }
+
     // Integer promotion.
     let operand_type = if operand_type.is_integer()
         && matches!(op, AstUnaryOp::Negate | AstUnaryOp::Plus | AstUnaryOp::BitwiseNot)
