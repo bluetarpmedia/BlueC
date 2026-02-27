@@ -211,6 +211,11 @@ impl AstBinaryOp {
         self.family() == AstBinaryOpFamily::Relational
     }
 
+    /// Is the operator a logical operator?
+    pub fn is_logical(&self) -> bool {
+        self.family() == AstBinaryOpFamily::Logical
+    }
+
     /// The family or group that the operator belongs to.
     pub fn family(&self) -> AstBinaryOpFamily {
         match self {

@@ -114,6 +114,7 @@ define_warning_kind! {
     // Comparisons
     //
     TautologicalCompare            => "tautological-compare",
+    TautologicalBitwiseCompare     => "tautological-bitwise-compare",
     CompareDistinctPointerTypes    => "compare-distinct-pointer-types",
     PointerIntegerCompare          => "pointer-integer-compare",
     //

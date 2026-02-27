@@ -56,18 +56,12 @@ pub fn semantic_analysis(mut ast_root: parser::AstRoot, metadata: parser::AstMet
         switch_stmt::validate_switch_statements(&mut ast_root, &mut chk, driver);
     }
 
-    // Warn about implicit conversions.
+    // Emit warnings for expressions in the AST.
+    //      Implicit conversions.
+    //      Binary and compound assignment expressions with invalid constant operands (e.g. divide by zero).
+    //      Unused expression results (i.e. an expression statement with no side-effects).
     //
-    expr::warn_about_implicit_conversions(&mut ast_root, &mut chk.metadata, driver);
-
-    // Warn about binary and compound assignment expressions with invalid constant operands.
-    //      E.g. divide by zero, shift by negative.
-    //
-    expr::warn_about_expressions_with_invalid_constant_operands(&mut ast_root, &mut chk.metadata, driver);
-
-    // Warn about unused expression results (i.e. an expression statement with no side-effects).
-    //
-    expr::warn_about_unused_expression_results(&mut ast_root, &mut chk.metadata, driver);
+    expr::emit_warnings(&mut ast_root, &mut chk.metadata, driver);
 
     // Warn about unused symbols.
     //

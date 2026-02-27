@@ -525,6 +525,8 @@ impl Warning {
     }
 
     /// Emits a warning that a comparison is redundant/tautological.
+    ///
+    /// -Wtautological-compare
     pub fn tautological_compare(op: AstBinaryOp, op_loc: SourceLocation, driver: &mut Driver) {
         let kind = WarningKind::TautologicalCompare;
 
@@ -541,6 +543,17 @@ impl Warning {
 
         let warning = format!("Self-comparison always evaluates to {result_descr}");
         driver.add_diagnostic(Diagnostic::warning_at_location(kind, warning, op_loc));
+    }
+
+    /// Emits a warning that a bitwise OR with a non-zero value used in a boolean context is redundant.
+    ///
+    /// -Wtautological-bitwise-compare
+    pub fn tautological_bitwise_compare(op_loc: SourceLocation, expr_loc: SourceLocation, driver: &mut Driver) {
+        let kind = WarningKind::TautologicalBitwiseCompare;
+        let warning = "Bitwise OR '|' with a non-zero value always evaluates to true".to_string();
+        let mut diag = Diagnostic::warning_at_location(kind, warning, op_loc);
+        diag.add_location(expr_loc);
+        driver.add_diagnostic(diag);
     }
 
     /// Emits a warning that two different pointer types are being compared.

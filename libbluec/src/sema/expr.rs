@@ -11,10 +11,22 @@ use crate::parser::{
 
 use super::visitor;
 
+/// Emit semantic warnings for expressions in the AST.
+///
+/// Non-constant expressions with implicit conversions that potentially change value.
+/// Binary and compound assignment expressions with invalid constant operands (e.g. divide by zero).
+/// Unused expression results (i.e. an expression statement with no side-effects).
+pub fn emit_warnings(ast_root: &mut AstRoot, metadata: &mut AstMetadata, driver: &mut Driver) {
+    warn_about_implicit_conversions(ast_root, metadata, driver);
+    warn_about_expressions_with_invalid_constant_operands(ast_root, metadata, driver);
+    warn_about_unused_expression_results(ast_root, metadata, driver);
+    warn_about_bool_binary_expressions(ast_root, metadata, driver);
+}
+
 /// Emit warnings about non-constant expressions with implicit conversions.
 ///
 /// The equivalent for constant expressions is handled by `constant_folding`.
-pub fn warn_about_implicit_conversions(ast_root: &mut AstRoot, metadata: &mut AstMetadata, driver: &mut Driver) {
+fn warn_about_implicit_conversions(ast_root: &mut AstRoot, metadata: &mut AstMetadata, driver: &mut Driver) {
     let is_constant_expr =
         |node_id: AstNodeId| -> bool { metadata.is_expr_flag_set(node_id, AstExpressionFlag::IsConstant) };
 
@@ -87,7 +99,7 @@ pub fn warn_about_implicit_conversions(ast_root: &mut AstRoot, metadata: &mut As
 /// Emit warnings about binary and compound assignment expressions with an invalid constant value operand.
 ///
 /// E.g. divide by zero, shift by negative.
-pub fn warn_about_expressions_with_invalid_constant_operands(
+fn warn_about_expressions_with_invalid_constant_operands(
     ast_root: &mut AstRoot,
     metadata: &mut AstMetadata,
     driver: &mut Driver,
@@ -129,7 +141,7 @@ pub fn warn_about_expressions_with_invalid_constant_operands(
 }
 
 /// Emit warnings about unused expression results, i.e. expression statements that have no side-effects.
-pub fn warn_about_unused_expression_results(ast_root: &mut AstRoot, metadata: &mut AstMetadata, driver: &mut Driver) {
+fn warn_about_unused_expression_results(ast_root: &mut AstRoot, metadata: &mut AstMetadata, driver: &mut Driver) {
     let has_side_effects = |_expr: &AstExpression| -> bool {
         // Future: if `expr` is volatile, return true
         false
@@ -190,6 +202,74 @@ pub fn warn_about_unused_expression_results(ast_root: &mut AstRoot, metadata: &m
                 _ => (),
             }
         });
+    });
+}
+
+fn warn_about_bool_binary_expressions(ast_root: &mut AstRoot, metadata: &mut AstMetadata, driver: &mut Driver) {
+    let mut warn_if_tautological_bitwise_or = |expr: &AstExpression| {
+        let binary_expr_id = expr.id();
+
+        let AstExpressionKind::Binary { op, lhs, rhs } = expr.kind() else {
+            return;
+        };
+
+        if *op != AstBinaryOp::BitwiseOr {
+            return;
+        }
+
+        let is_nonzero_integer = |expr: &AstExpression| -> bool {
+            if let AstExpressionKind::IntegerLiteral { value, .. } = expr.kind()
+                && *value > 0
+            {
+                return true;
+            }
+
+            if let AstExpressionKind::CharLiteral { value, .. } = expr.kind()
+                && *value > 0
+            {
+                return true;
+            }
+
+            false
+        };
+
+        if is_nonzero_integer(lhs) {
+            let op_loc = metadata.get_operator_sloc(binary_expr_id);
+            let expr_loc = metadata.get_source_location(lhs.id());
+            Warning::tautological_bitwise_compare(op_loc, expr_loc, driver);
+        }
+
+        if is_nonzero_integer(rhs) {
+            let op_loc = metadata.get_operator_sloc(binary_expr_id);
+            let expr_loc = metadata.get_source_location(rhs.id());
+            Warning::tautological_bitwise_compare(op_loc, expr_loc, driver);
+        }
+    };
+
+    visitor::visit_full_expressions(ast_root, &mut |full_expr: &mut AstExpression| {
+        visitor::visit_sub_expressions(full_expr, &mut |expr: &mut AstExpression| {
+            // Find boolean contexts and then check for redundant bitwise OR expressions within them
+            //
+            match expr.kind() {
+                AstExpressionKind::Unary { op, operand } if *op == AstUnaryOp::LogicalNot => {
+                    warn_if_tautological_bitwise_or(operand)
+                }
+
+                AstExpressionKind::Binary { op, lhs, rhs } if op.is_logical() => {
+                    warn_if_tautological_bitwise_or(lhs);
+                    warn_if_tautological_bitwise_or(rhs);
+                }
+
+                AstExpressionKind::Cast { target_type, inner, is_implicit }
+                    if *is_implicit
+                        && target_type.resolved_type.as_ref().expect("Expected to be resolved") == &AstType::Bool =>
+                {
+                    warn_if_tautological_bitwise_or(inner);
+                }
+
+                _ => (),
+            }
+        })
     });
 }
 
