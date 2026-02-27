@@ -524,6 +524,25 @@ impl Warning {
         driver.add_diagnostic(diag);
     }
 
+    /// Emits a warning that a comparison is redundant/tautological.
+    pub fn tautological_compare(op: AstBinaryOp, op_loc: SourceLocation, driver: &mut Driver) {
+        let kind = WarningKind::TautologicalCompare;
+
+        debug_assert!(op.is_relational());
+        let result_descr = match op {
+            AstBinaryOp::EqualTo => "true",
+            AstBinaryOp::NotEqualTo => "false",
+            AstBinaryOp::LessThan => "false",
+            AstBinaryOp::GreaterThan => "false",
+            AstBinaryOp::LessThanOrEqualTo => "true",
+            AstBinaryOp::GreaterThanOrEqualTo => "true",
+            _ => ICE!("Operator is not relational '{op}'"),
+        };
+
+        let warning = format!("Self-comparison always evaluates to {result_descr}");
+        driver.add_diagnostic(Diagnostic::warning_at_location(kind, warning, op_loc));
+    }
+
     /// Emits a warning that two different pointer types are being compared.
     ///
     /// -Wcompare-distinct-pointer-types

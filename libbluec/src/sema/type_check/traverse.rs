@@ -949,6 +949,16 @@ fn typecheck_binary_operation(
         return Err(TypeCheckError);
     }
 
+    // Warn for redundant/tautological comparison (e.g. `a == a`).
+    if op.is_relational()
+        && let AstExpressionKind::Ident { unique_name: lhs_unique, .. } = lhs.kind()
+        && let AstExpressionKind::Ident { unique_name: rhs_unique, .. } = rhs.kind()
+        && lhs_unique == rhs_unique
+    {
+        let op_loc = chk.metadata.get_operator_sloc(binary_expr_id);
+        Warning::tautological_compare(*op, op_loc, driver);
+    }
+
     // Binary operations where one operand is a pointer and the other is an integer: `1 + ptr` or `ptr == 0`.
     //
     if (lhs_type.is_pointer() && rhs_type.is_integer()) || (rhs_type.is_pointer() && lhs_type.is_integer()) {

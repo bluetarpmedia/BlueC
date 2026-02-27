@@ -1,0 +1,37 @@
+warning: Self-comparison always evaluates to true [-Wtautological-compare]
+   |
+   |     res = (a == a);
+   |              ^^
+   |
+
+warning: Self-comparison always evaluates to false [-Wtautological-compare]
+   |
+   |     res = (a != a);
+   |              ^^
+   |
+
+warning: Self-comparison always evaluates to false [-Wtautological-compare]
+   |
+   |     res = (a < a);
+   |              ^
+   |
+
+warning: Self-comparison always evaluates to false [-Wtautological-compare]
+   |
+   |     res = (a > a);
+   |              ^
+   |
+
+warning: Self-comparison always evaluates to true [-Wtautological-compare]
+   |
+   |     res = (a <= a);
+   |              ^^
+   |
+
+warning: Self-comparison always evaluates to true [-Wtautological-compare]
+   |
+   |     res = (a >= a);
+   |              ^^
+   |
+
+6 warnings generated

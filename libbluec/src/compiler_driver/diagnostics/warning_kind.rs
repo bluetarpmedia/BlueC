@@ -113,6 +113,7 @@ define_warning_kind! {
     //
     // Comparisons
     //
+    TautologicalCompare            => "tautological-compare",
     CompareDistinctPointerTypes    => "compare-distinct-pointer-types",
     PointerIntegerCompare          => "pointer-integer-compare",
     //
@@ -156,6 +157,7 @@ impl WarningKind {
             WarningKind::ShiftCountNegative,
             WarningKind::ShiftCountOverflow,
             WarningKind::ShiftCountZero,
+            WarningKind::TautologicalCompare,
             WarningKind::UnknownEscapeSequence,
             WarningKind::UnusedValue,
             WarningKind::UnusedComparison,
