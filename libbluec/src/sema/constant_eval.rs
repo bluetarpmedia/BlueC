@@ -778,18 +778,24 @@ impl ConstantValue {
             ConstantValue::Int { value, .. } => Some(make_bool(value != 0)),
 
             ConstantValue::Float { value, size } => {
-                let bool_value = if value == 0.0 {
-                    false
-                } else if value == -0.0 {
+                let (bool_value, emit_warning) = if value.is_sign_negative() {
+                    (false, true)
+                } else if value == 0.0 {
+                    (false, false)
+                } else {
+                    (true, value != 1.0)
+                };
+
+                // Warn when a floating-point value other than positive 0.0 and 1.0 is implicitly converted to bool.
+                //      This matches gcc/clang.
+                //
+                if emit_warning {
                     let old_type = if size == 32 { AstType::Float } else { AstType::Double };
                     let old_value = value.to_string();
-                    let new_value = "false".to_string();
+                    let new_value = bool_value.to_string();
                     let loc = eval.root_expression_sloc;
-                    Warning::constant_conversion(&old_type, target_type, &old_value, &new_value, loc, eval.driver);
-                    false
-                } else {
-                    true
-                };
+                    Warning::literal_conversion(&old_type, target_type, &old_value, &new_value, loc, eval.driver);
+                }
 
                 Some(make_bool(bool_value))
             }
@@ -801,12 +807,12 @@ impl ConstantValue {
                     let loc = eval.root_expression_sloc;
                     let symbol_kind =
                         if object_is_string_literal { SymbolKind::Constant } else { SymbolKind::Variable };
-                    Warning::pointer_bool_conversion(&object, symbol_kind, loc, eval.driver);
+                    Warning::pointer_bool_conversion(&object, symbol_kind, None, loc, eval.driver);
                     Some(make_bool(true))
                 }
                 AstAddressConstant::AddressOfFunction(fn_name) => {
                     let loc = eval.root_expression_sloc;
-                    Warning::pointer_bool_conversion(&fn_name, SymbolKind::Function, loc, eval.driver);
+                    Warning::pointer_bool_conversion(&fn_name, SymbolKind::Function, None, loc, eval.driver);
                     Some(make_bool(true))
                 }
             },

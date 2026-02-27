@@ -3,7 +3,7 @@
 //! The `expr` module provides semantic analysis functionality for expressions.
 
 use crate::compiler_driver::{Driver, Warning};
-use crate::core::SourceLocation;
+use crate::core::{SourceLocation, SymbolKind};
 use crate::parser::{
     AstBinaryOp, AstBinaryOpFamily, AstExpression, AstExpressionFlag, AstExpressionKind, AstFunction, AstMetadata,
     AstNodeId, AstRoot, AstStatement, AstType, AstUnaryOp,
@@ -11,22 +11,18 @@ use crate::parser::{
 
 use super::visitor;
 
-/// Emit warnings about non-constant expressions with implicit arithmetic conversions.
+/// Emit warnings about non-constant expressions with implicit conversions.
 ///
 /// The equivalent for constant expressions is handled by `constant_folding`.
-pub fn warn_about_implicit_arithmetic_conversions(
-    ast_root: &mut AstRoot,
-    metadata: &mut AstMetadata,
-    driver: &mut Driver,
-) {
+pub fn warn_about_implicit_conversions(ast_root: &mut AstRoot, metadata: &mut AstMetadata, driver: &mut Driver) {
     let is_constant_expr =
         |node_id: AstNodeId| -> bool { metadata.is_expr_flag_set(node_id, AstExpressionFlag::IsConstant) };
 
-    let emit_warning = |from_node_id: AstNodeId,
-                        from_type: &AstType,
-                        to_type: &AstType,
-                        metadata: &AstMetadata,
-                        driver: &mut Driver| {
+    let check_for_arithmetic_conversion = |from_node_id: AstNodeId,
+                                           from_type: &AstType,
+                                           to_type: &AstType,
+                                           metadata: &AstMetadata,
+                                           driver: &mut Driver| {
         let is_int_to_float = from_type.is_integer() && to_type.is_floating_point();
         let is_bigger_int_to_smaller_fp = is_int_to_float && to_type.bits() < from_type.bits();
         let is_arithmetic_cast = from_type.is_arithmetic() && to_type.is_arithmetic() && !is_int_to_float;
@@ -41,6 +37,18 @@ pub fn warn_about_implicit_arithmetic_conversions(
         }
     };
 
+    let check_for_pointer_bool_conversion =
+        |expr: &AstExpression, to_type: &AstType, metadata: &AstMetadata, driver: &mut Driver| {
+            if to_type == &AstType::Bool
+                && let AstExpressionKind::AddressOf { target } = expr.kind()
+                && metadata.get_node_type(target.id()).is_array()
+                && let AstExpressionKind::Ident { name, .. } = target.kind()
+            {
+                let loc = metadata.get_source_location(expr.id());
+                Warning::pointer_bool_conversion(name, SymbolKind::Variable, Some(" array"), loc, driver);
+            }
+        };
+
     visitor::visit_full_expressions(ast_root, &mut |full_expr: &mut AstExpression| {
         visitor::visit_sub_expressions(full_expr, &mut |expr: &mut AstExpression| match expr.kind() {
             // Compound assignment where the rhs was promoted to 'int' but is then cast to the lhs. E.g.
@@ -54,10 +62,10 @@ pub fn warn_about_implicit_arithmetic_conversions(
                 let lhs_type = metadata.get_node_type(lhs.id());
                 let rhs_type = metadata.get_node_type(rhs.id());
 
-                emit_warning(rhs.id(), rhs_type, lhs_type, metadata, driver);
+                check_for_arithmetic_conversion(rhs.id(), rhs_type, lhs_type, metadata, driver);
             }
 
-            // Implicit casts of arithmetic types
+            // Implicit casts
             //
             AstExpressionKind::Cast { target_type, inner, is_implicit, .. }
                 if *is_implicit && !is_constant_expr(inner.id()) =>
@@ -67,7 +75,8 @@ pub fn warn_about_implicit_arithmetic_conversions(
                 debug_assert!(target_type.is_resolved());
                 let target_type = target_type.resolved_type.as_ref().unwrap();
 
-                emit_warning(inner.id(), expr_type, target_type, metadata, driver);
+                check_for_arithmetic_conversion(inner.id(), expr_type, target_type, metadata, driver);
+                check_for_pointer_bool_conversion(inner, target_type, metadata, driver);
             }
 
             _ => (),

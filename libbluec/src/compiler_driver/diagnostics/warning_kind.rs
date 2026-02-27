@@ -97,6 +97,7 @@ define_warning_kind! {
     //
     // Conversions and casts
     //
+    LiteralConversion              => "literal-conversion",
     ConstantConversion             => "constant-conversion",
     ImplicitConversion             => "implicit-conversion",
     ImplicitPromotionConversion    => "implicit-promotion-conversion",
@@ -141,6 +142,7 @@ impl WarningKind {
             WarningKind::FloatingPointOverflow,
             WarningKind::ImplicitlyUnsignedLiteral,
             WarningKind::IntegerOverflow,
+            WarningKind::LiteralConversion,
             WarningKind::LiteralRange,
             WarningKind::ManyBracesAroundScalarInit,
             WarningKind::Multichar,

@@ -1,0 +1,43 @@
+warning: Implicit conversion from 'double' to '_Bool' changes value from -0 to false
+         [-Wliteral-conversion]
+   |
+   | _Bool c = -0.0;
+   |           ^^^^
+   |
+
+warning: Implicit conversion from 'double' to '_Bool' changes value from -1 to false
+         [-Wliteral-conversion]
+   |
+   | _Bool d = -1.0;
+   |           ^^^^
+   |
+
+warning: Implicit conversion from 'double' to '_Bool' changes value from 2 to true
+         [-Wliteral-conversion]
+   |
+   | _Bool e = 2.0;
+   |           ^^^
+   |
+
+warning: Implicit conversion from 'float' to '_Bool' changes value from -0 to false
+         [-Wliteral-conversion]
+   |
+   |     sink(-0.0f);
+   |          ^^^^^
+   |
+
+warning: Implicit conversion from 'float' to '_Bool' changes value from -1 to false
+         [-Wliteral-conversion]
+   |
+   |     sink(-1.0f);
+   |          ^^^^^
+   |
+
+warning: Implicit conversion from 'float' to '_Bool' changes value from 2 to true
+         [-Wliteral-conversion]
+   |
+   |     sink(2.0f);
+   |          ^^^^
+   |
+
+6 warnings generated

@@ -58,7 +58,7 @@ pub fn semantic_analysis(mut ast_root: parser::AstRoot, metadata: parser::AstMet
 
     // Warn about implicit conversions.
     //
-    expr::warn_about_implicit_arithmetic_conversions(&mut ast_root, &mut chk.metadata, driver);
+    expr::warn_about_implicit_conversions(&mut ast_root, &mut chk.metadata, driver);
 
     // Warn about binary and compound assignment expressions with invalid constant operands.
     //      E.g. divide by zero, shift by negative.

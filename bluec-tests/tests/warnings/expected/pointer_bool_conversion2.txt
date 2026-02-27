@@ -1,0 +1,13 @@
+warning: Address of 'text' array always evaluates to 'true' [-Wpointer-bool-conversion]
+   |
+   |     _Bool b1 = text;
+   |                ^^^^
+   |
+
+warning: Address of 'arr' array always evaluates to 'true' [-Wpointer-bool-conversion]
+   |
+   |     _Bool b2 = arr;
+   |                ^^^
+   |
+
+2 warnings generated

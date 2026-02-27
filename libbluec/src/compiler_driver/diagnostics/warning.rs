@@ -41,6 +41,25 @@ impl Warning {
         driver.add_diagnostic(Diagnostic::warning_at_location(kind, message, loc));
     }
 
+    /// Emits an implicit conversion warning that a literal changes its value.
+    ///
+    /// -Wliteral-conversion
+    pub fn literal_conversion(
+        old_type: &AstType,
+        new_type: &AstType,
+        old_value: &str,
+        new_value: &str,
+        loc: SourceLocation,
+        driver: &mut Driver,
+    ) {
+        let kind = WarningKind::LiteralConversion;
+        let message = format!(
+            "Implicit conversion from '{old_type}' to '{new_type}' changes value from {old_value} to {new_value}"
+        );
+
+        driver.add_diagnostic(Diagnostic::warning_at_location(kind, message, loc));
+    }
+
     /// Emits a conversion warning for a floating-point constant that is explicitly cast to an integer type, which
     /// despite the explicit cast is still UB. This is a variation of the warning above, but points out the explicit
     /// cast to the user.
@@ -544,6 +563,7 @@ impl Warning {
     pub fn pointer_bool_conversion(
         symbol_name: &str,
         symbol_kind: SymbolKind,
+        symbol_suffix: Option<&str>,
         loc: SourceLocation,
         driver: &mut Driver,
     ) {
@@ -552,7 +572,11 @@ impl Warning {
             "Address of constant always evaluates to 'true'".to_string()
         } else {
             let symbol_str = if symbol_kind == SymbolKind::Function { "function " } else { "" };
-            format!("Address of {symbol_str}'{symbol_name}' always evaluates to 'true'")
+            if let Some(suffix) = symbol_suffix {
+                format!("Address of {symbol_str}'{symbol_name}'{suffix} always evaluates to 'true'")
+            } else {
+                format!("Address of {symbol_str}'{symbol_name}' always evaluates to 'true'")
+            }
         };
 
         driver.add_diagnostic(Diagnostic::warning_at_location(kind, warning, loc));
