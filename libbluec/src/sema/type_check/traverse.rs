@@ -109,6 +109,12 @@ fn typecheck_declaration(decl: &mut AstDeclaration, chk: &mut TypeChecker, drive
 
             // Type check the parameters
             let valid_params = param_types.iter().zip(param_names).all(|(param_type, (param_ident, param_unique))| {
+                // Mark parameters in function declarations as being used; we don't want to emit an unused-variable
+                // warning for them.
+                if function.body.is_none() {
+                    chk.symbols.set_symbol_used(param_unique);
+                }
+
                 symbols::verify_function_parameter_declaration(param_unique, param_ident, param_type, chk, driver)
                     .is_ok()
             });
@@ -2084,7 +2090,7 @@ fn make_zero_initializer(
         Ok(AstVariableInitializer::Aggregate { node_id, init })
     } else if element_type.is_scalar() {
         // If necessary, this 'int' will get promoted to the `element_type`.
-        let mut constant_zero = make_zero_int_literal(driver);
+        let mut constant_zero = make_zero_int_literal(chk, driver);
 
         chk.metadata.add_source_location(constant_zero.id(), SourceLocation::none());
 
@@ -2097,9 +2103,11 @@ fn make_zero_initializer(
 }
 
 /// Creates an `AstExpression:IntegerLiteral` with a value of zero.
-fn make_zero_int_literal(driver: &mut Driver) -> AstExpression {
+fn make_zero_int_literal(chk: &mut TypeChecker, driver: &mut Driver) -> AstExpression {
+    let node_id = driver.make_node_id();
+    chk.metadata.set_expr_flag(node_id, AstExpressionFlag::IsConstant);
     AstExpression::new(
-        driver.make_node_id(),
+        node_id,
         AstExpressionKind::IntegerLiteral {
             literal: "0".to_string(),
             literal_base: 10,
