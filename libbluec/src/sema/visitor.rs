@@ -4,7 +4,7 @@
 
 use crate::parser::{
     AstBlock, AstBlockItem, AstDeclaration, AstExpression, AstExpressionKind, AstForInitializer, AstFunction, AstRoot,
-    AstStatement, AstVariableDeclaration, AstVariableInitializer,
+    AstStatement, AstType, AstUnaryOp, AstVariableDeclaration, AstVariableInitializer,
 };
 
 /// Visits all function definitions in the AST and, for each one, calls `visitor_func` with the [AstFunction].
@@ -192,6 +192,57 @@ where
             AstDeclaration::TypeAlias(_) => (),
         }
     }
+}
+
+/// Visits expressions which are used in boolean contexts, i.e. the expression must evaluate to 1 or 0.
+pub fn visit_expressions_in_boolean_contexts<F>(ast_root: &mut AstRoot, visitor_func: &mut F)
+where
+    F: FnMut(&mut AstExpression),
+{
+    // Controlling expressions in `if` statements and loops
+    //
+    visit_function_defns(ast_root, &mut |function: &mut AstFunction| {
+        let block = function.body.as_mut().expect("Expect a function definition");
+        visit_statements_in_block(block, &mut |stmt: &mut AstStatement| match stmt {
+            AstStatement::If { controlling_expr, .. } => visitor_func(controlling_expr),
+            AstStatement::While { controlling_expr, .. } => visitor_func(controlling_expr),
+            AstStatement::DoWhile { controlling_expr, .. } => visitor_func(controlling_expr),
+            AstStatement::For { controlling_expr, .. } => {
+                if let Some(controlling_expr) = controlling_expr {
+                    visitor_func(controlling_expr);
+                }
+            }
+            _ => (),
+        });
+    });
+
+    visit_full_expressions(ast_root, &mut |full_expr: &mut AstExpression| {
+        visit_sub_expressions(full_expr, &mut |expr: &mut AstExpression| match expr.kind_mut() {
+            // Logical Not
+            //
+            AstExpressionKind::Unary { op, operand } if *op == AstUnaryOp::LogicalNot => {
+                visitor_func(operand);
+            }
+
+            // Logical And/Or
+            //
+            AstExpressionKind::Binary { op, lhs, rhs } if op.is_logical() => {
+                visitor_func(lhs);
+                visitor_func(rhs);
+            }
+
+            // Implicit cast to bool
+            //
+            AstExpressionKind::Cast { target_type, inner, is_implicit }
+                if *is_implicit
+                    && target_type.resolved_type.as_ref().expect("Expected to be resolved") == &AstType::Bool =>
+            {
+                visitor_func(inner);
+            }
+
+            _ => (),
+        })
+    });
 }
 
 /// Visits an expression and its children, if it has any, using pre-order traversal (root, left, right).

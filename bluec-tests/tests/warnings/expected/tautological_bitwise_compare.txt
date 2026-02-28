@@ -33,4 +33,11 @@ warning: Bitwise OR '|' with a non-zero value always evaluates to true
    |                ^ ~
    |
 
-5 warnings generated
+warning: Bitwise OR '|' with a non-zero value always evaluates to true
+         [-Wtautological-bitwise-compare]
+   |
+   |     if (a | 1) {
+   |           ^ ~
+   |
+
+6 warnings generated

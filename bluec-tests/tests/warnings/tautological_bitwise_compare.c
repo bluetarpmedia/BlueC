@@ -20,5 +20,9 @@ int main(void) {
     result = (_Bool)(a | 2);  // No warning
     result = a | 2;
 
+    if (a | 1) {
+        return 1;
+    }
+
     return 0;
 }

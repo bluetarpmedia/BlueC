@@ -20,7 +20,7 @@ pub fn emit_warnings(ast_root: &mut AstRoot, metadata: &mut AstMetadata, driver:
     warn_about_implicit_conversions(ast_root, metadata, driver);
     warn_about_expressions_with_invalid_constant_operands(ast_root, metadata, driver);
     warn_about_unused_expression_results(ast_root, metadata, driver);
-    warn_about_bool_binary_expressions(ast_root, metadata, driver);
+    warn_about_expressions_in_boolean_contexts(ast_root, metadata, driver);
 }
 
 /// Emit warnings about non-constant expressions with implicit conversions.
@@ -205,7 +205,7 @@ fn warn_about_unused_expression_results(ast_root: &mut AstRoot, metadata: &mut A
     });
 }
 
-fn warn_about_bool_binary_expressions(ast_root: &mut AstRoot, metadata: &mut AstMetadata, driver: &mut Driver) {
+fn warn_about_expressions_in_boolean_contexts(ast_root: &mut AstRoot, metadata: &mut AstMetadata, driver: &mut Driver) {
     let mut warn_if_tautological_bitwise_or = |expr: &AstExpression| {
         let binary_expr_id = expr.id();
 
@@ -246,30 +246,11 @@ fn warn_about_bool_binary_expressions(ast_root: &mut AstRoot, metadata: &mut Ast
         }
     };
 
-    visitor::visit_full_expressions(ast_root, &mut |full_expr: &mut AstExpression| {
-        visitor::visit_sub_expressions(full_expr, &mut |expr: &mut AstExpression| {
-            // Find boolean contexts and then check for redundant bitwise OR expressions within them
-            //
-            match expr.kind() {
-                AstExpressionKind::Unary { op, operand } if *op == AstUnaryOp::LogicalNot => {
-                    warn_if_tautological_bitwise_or(operand)
-                }
-
-                AstExpressionKind::Binary { op, lhs, rhs } if op.is_logical() => {
-                    warn_if_tautological_bitwise_or(lhs);
-                    warn_if_tautological_bitwise_or(rhs);
-                }
-
-                AstExpressionKind::Cast { target_type, inner, is_implicit }
-                    if *is_implicit
-                        && target_type.resolved_type.as_ref().expect("Expected to be resolved") == &AstType::Bool =>
-                {
-                    warn_if_tautological_bitwise_or(inner);
-                }
-
-                _ => (),
-            }
-        })
+    // Find all boolean expression contexts and then check for redundant expressions within them.
+    //      E.g. `if (a | 1)` always evaluates to true.
+    //
+    visitor::visit_expressions_in_boolean_contexts(ast_root, &mut |expr: &mut AstExpression| {
+        warn_if_tautological_bitwise_or(expr);
     });
 }
 
