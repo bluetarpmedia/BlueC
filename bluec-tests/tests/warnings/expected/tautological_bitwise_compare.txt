@@ -1,0 +1,36 @@
+warning: Bitwise OR '|' with a non-zero value always evaluates to true
+         [-Wtautological-bitwise-compare]
+   |
+   |     b = a && (a | 2);
+   |                 ^ ~
+   |
+
+warning: Bitwise OR '|' with a non-zero value always evaluates to true
+         [-Wtautological-bitwise-compare]
+   |
+   |     b = (2 | a) || a;
+   |          ~ ^
+   |
+
+warning: Bitwise OR '|' with a non-zero value always evaluates to true
+         [-Wtautological-bitwise-compare]
+   |
+   |     b = !(a | 2);
+   |             ^ ~
+   |
+
+warning: Implicit conversion from 'int' to '_Bool' loses precision and changes
+         signedness [-Wsign-conversion]
+   |
+   |     result = a | 2;
+   |              ^^^^^
+   |
+
+warning: Bitwise OR '|' with a non-zero value always evaluates to true
+         [-Wtautological-bitwise-compare]
+   |
+   |     result = a | 2;
+   |                ^ ~
+   |
+
+5 warnings generated
