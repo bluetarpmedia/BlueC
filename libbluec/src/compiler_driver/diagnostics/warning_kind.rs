@@ -59,69 +59,70 @@ define_warning_kind! {
     //
     // Literals
     //
-    Multichar                      => "multichar",
-    UnknownEscapeSequence          => "unknown-escape-sequence",
-    ImplicitlyUnsignedLiteral      => "implicitly-unsigned-literal",
-    LiteralRange                   => "literal-range",
+    Multichar                                      => "multichar",
+    UnknownEscapeSequence                          => "unknown-escape-sequence",
+    ImplicitlyUnsignedLiteral                      => "implicitly-unsigned-literal",
+    LiteralRange                                   => "literal-range",
     //
     // Declarations and initializers
     //
-    MissingDeclarations            => "missing-declarations",
-    DuplicateDeclSpecifier         => "duplicate-decl-specifier",
-    ExternInitializer              => "extern-initializer",
-    Uninitialized                  => "uninitialized",
-    UnusedVariable                 => "unused-variable",
-    UnusedFunction                 => "unused-function",
-    UnusedLocalTypedef             => "unused-local-typedef",
-    ExcessInitializers             => "excess-initializers",
-    MissingBraces                  => "missing-braces",
-    ManyBracesAroundScalarInit     => "many-braces-around-scalar-init",
+    MissingDeclarations                            => "missing-declarations",
+    DuplicateDeclSpecifier                         => "duplicate-decl-specifier",
+    ExternInitializer                              => "extern-initializer",
+    Uninitialized                                  => "uninitialized",
+    UnusedVariable                                 => "unused-variable",
+    UnusedFunction                                 => "unused-function",
+    UnusedLocalTypedef                             => "unused-local-typedef",
+    ExcessInitializers                             => "excess-initializers",
+    MissingBraces                                  => "missing-braces",
+    ManyBracesAroundScalarInit                     => "many-braces-around-scalar-init",
     //
     // Expressions
     //
-    LogicalOpParentheses           => "logical-op-parentheses",
-    BitwiseOpParentheses           => "bitwise-op-parentheses",
-    Parentheses                    => "parentheses",
-    ArrayBounds                    => "array-bounds",
-    UnusedValue                    => "unused-value",
-    UnusedComparison               => "unused-comparison",
-    BoolOperation                  => "bool-operation",
+    LogicalOpParentheses                           => "logical-op-parentheses",
+    BitwiseOpParentheses                           => "bitwise-op-parentheses",
+    Parentheses                                    => "parentheses",
+    ArrayBounds                                    => "array-bounds",
+    UnusedValue                                    => "unused-value",
+    UnusedComparison                               => "unused-comparison",
+    BoolOperation                                  => "bool-operation",
     //
     // Arithmetic
     //
-    DivisionByZero                 => "division-by-zero",
-    IntegerOverflow                => "integer-overflow",
-    FloatingPointOverflow          => "floating-point-overflow",
-    ShiftCountNegative             => "shift-count-negative",
-    ShiftCountOverflow             => "shift-count-overflow",
-    ShiftCountZero                 => "shift-count-zero",
+    DivisionByZero                                 => "division-by-zero",
+    IntegerOverflow                                => "integer-overflow",
+    FloatingPointOverflow                          => "floating-point-overflow",
+    ShiftCountNegative                             => "shift-count-negative",
+    ShiftCountOverflow                             => "shift-count-overflow",
+    ShiftCountZero                                 => "shift-count-zero",
     //
     // Conversions and casts
     //
-    LiteralConversion              => "literal-conversion",
-    ConstantConversion             => "constant-conversion",
-    ImplicitConversion             => "implicit-conversion",
-    ImplicitPromotionConversion    => "implicit-promotion-conversion",
-    ImplicitIntConversion          => "implicit-int-conversion",
-    ImplicitFloatConversion        => "implicit-float-conversion",
-    ImplicitIntFloatConversion     => "implicit-int-float-conversion",
-    FloatConversion                => "float-conversion",
-    SignConversion                 => "sign-conversion",
-    PointerToIntCast               => "pointer-to-int-cast",
-    PointerBoolConversion          => "pointer-bool-conversion",
-    NonLiteralNullConversion       => "non-literal-null-conversion",
+    LiteralConversion                              => "literal-conversion",
+    ConstantConversion                             => "constant-conversion",
+    ImplicitConversion                             => "implicit-conversion",
+    ImplicitPromotionConversion                    => "implicit-promotion-conversion",
+    ImplicitIntConversion                          => "implicit-int-conversion",
+    ImplicitFloatConversion                        => "implicit-float-conversion",
+    ImplicitIntFloatConversion                     => "implicit-int-float-conversion",
+    FloatConversion                                => "float-conversion",
+    SignConversion                                 => "sign-conversion",
+    PointerToIntCast                               => "pointer-to-int-cast",
+    PointerBoolConversion                          => "pointer-bool-conversion",
+    NonLiteralNullConversion                       => "non-literal-null-conversion",
     //
     // Comparisons
     //
-    TautologicalCompare            => "tautological-compare",
-    TautologicalBitwiseCompare     => "tautological-bitwise-compare",
-    CompareDistinctPointerTypes    => "compare-distinct-pointer-types",
-    PointerIntegerCompare          => "pointer-integer-compare",
+    TautologicalCompare                            => "tautological-compare",
+    TautologicalBitwiseCompare                     => "tautological-bitwise-compare",
+    TautologicalConstantOutOfRangeCompare          => "tautological-constant-out-of-range-compare",
+    CompareDistinctPointerTypes                    => "compare-distinct-pointer-types",
+    PointerIntegerCompare                          => "pointer-integer-compare",
     //
     // Types
     //
-    ConditionalTypeMismatch        => "conditional-type-mismatch",
-    PointerTypeMismatch            => "pointer-type-mismatch",
+    ConditionalTypeMismatch                        => "conditional-type-mismatch",
+    PointerTypeMismatch                            => "pointer-type-mismatch",
 }
 
 impl fmt::Display for WarningKind {
@@ -159,6 +160,7 @@ impl WarningKind {
             WarningKind::ShiftCountOverflow,
             WarningKind::ShiftCountZero,
             WarningKind::TautologicalCompare,
+            WarningKind::TautologicalConstantOutOfRangeCompare,
             WarningKind::UnknownEscapeSequence,
             WarningKind::UnusedValue,
             WarningKind::UnusedComparison,

@@ -153,6 +153,11 @@ impl AstExpression {
         )
     }
 
+    /// Is the AST expression an integer or character literal?
+    pub fn is_integral_literal(&self) -> bool {
+        matches!(self.kind, AstExpressionKind::CharLiteral { .. } | AstExpressionKind::IntegerLiteral { .. })
+    }
+
     /// Is the AST expression a single character literal?
     pub fn is_single_char_literal(&self) -> bool {
         if let AstExpressionKind::CharLiteral { is_multichar, .. } = self.kind { !is_multichar } else { false }

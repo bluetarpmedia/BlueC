@@ -61,7 +61,7 @@ pub fn semantic_analysis(mut ast_root: parser::AstRoot, metadata: parser::AstMet
     //      Binary and compound assignment expressions with invalid constant operands (e.g. divide by zero).
     //      Unused expression results (i.e. an expression statement with no side-effects).
     //
-    expr::emit_warnings(&mut ast_root, &mut chk.metadata, driver);
+    expr::emit_warnings(&mut ast_root, &mut chk, driver);
 
     // Warn about unused symbols.
     //

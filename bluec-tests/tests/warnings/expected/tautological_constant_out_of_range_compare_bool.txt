@@ -1,0 +1,99 @@
+warning: Comparing expression of type '_Bool' == -1 always evaluates to false
+         [-Wtautological-constant-out-of-range-compare]
+   |
+   |     if (b == -1) return 1;
+   |         ~ ^^ ~~
+   |
+
+warning: Comparing expression of type '_Bool' == 2 always evaluates to false
+         [-Wtautological-constant-out-of-range-compare]
+   |
+   |     if (b == 2) return 1;
+   |         ~ ^^ ~
+   |
+
+warning: Comparing expression of type '_Bool' != -1 always evaluates to true
+         [-Wtautological-constant-out-of-range-compare]
+   |
+   |     if (b != -1) return 1;
+   |         ~ ^^ ~~
+   |
+
+warning: Comparing expression of type '_Bool' != 2 always evaluates to true
+         [-Wtautological-constant-out-of-range-compare]
+   |
+   |     if (b != 2) return 1;
+   |         ~ ^^ ~
+   |
+
+warning: Comparing expression of type '_Bool' < 0 always evaluates to false
+         [-Wtautological-constant-out-of-range-compare]
+   |
+   |     if (b < 0) return 2;
+   |         ~ ^ ~
+   |
+
+warning: Comparing expression of type '_Bool' > 1 always evaluates to false
+         [-Wtautological-constant-out-of-range-compare]
+   |
+   |     if (b > 1) return 2;
+   |         ~ ^ ~
+   |
+
+warning: Comparing expression of type '_Bool' < 2 always evaluates to true
+         [-Wtautological-constant-out-of-range-compare]
+   |
+   |     if (b < 2) return 2;
+   |         ~ ^ ~
+   |
+
+warning: Comparing expression of type '_Bool' > -1 always evaluates to true
+         [-Wtautological-constant-out-of-range-compare]
+   |
+   |     if (b > -1) return 2;
+   |         ~ ^ ~~
+   |
+
+warning: Comparing expression of type '_Bool' <= -1 always evaluates to false
+         [-Wtautological-constant-out-of-range-compare]
+   |
+   |     if (b <= -1) return 3;
+   |         ~ ^^ ~~
+   |
+
+warning: Comparing expression of type '_Bool' >= 2 always evaluates to false
+         [-Wtautological-constant-out-of-range-compare]
+   |
+   |     if (b >= 2) return 3;
+   |         ~ ^^ ~
+   |
+
+warning: Comparing expression of type '_Bool' >= -1 always evaluates to true
+         [-Wtautological-constant-out-of-range-compare]
+   |
+   |     if (b >= -1) return 4;
+   |         ~ ^^ ~~
+   |
+
+warning: Comparing expression of type '_Bool' >= 0 always evaluates to true
+         [-Wtautological-constant-out-of-range-compare]
+   |
+   |     if (b >= 0) return 4;
+   |         ~ ^^ ~
+   |
+
+warning: Comparing expression of type '_Bool' <= 1 always evaluates to true
+         [-Wtautological-constant-out-of-range-compare]
+   |
+   |     if (b <= 1) return 4;
+   |         ~ ^^ ~
+   |
+
+warning: Comparing expression of type '_Bool' <= 2 always evaluates to true
+         [-Wtautological-constant-out-of-range-compare]
+   |
+   |     if (b <= 2) return 4;
+   |         ~ ^^ ~
+   |
+
+14 warnings generated

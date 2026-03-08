@@ -2,13 +2,16 @@
 //
 //! The `expr` module provides semantic analysis functionality for expressions.
 
+use crate::ICE;
 use crate::compiler_driver::{Driver, Warning};
 use crate::core::{SourceLocation, SymbolKind};
 use crate::parser::{
-    AstBinaryOp, AstBinaryOpFamily, AstExpression, AstExpressionFlag, AstExpressionKind, AstFunction, AstMetadata,
-    AstNodeId, AstRoot, AstStatement, AstType, AstUnaryOp,
+    AstBinaryOp, AstBinaryOpFamily, AstConstantValue, AstExpression, AstExpressionFlag, AstExpressionKind, AstFunction,
+    AstMetadata, AstNodeId, AstRoot, AstStatement, AstType, AstUnaryOp, CmpValueType,
 };
 
+use super::TypeChecker;
+use super::constant_eval;
 use super::visitor;
 
 /// Emit semantic warnings for expressions in the AST.
@@ -16,11 +19,11 @@ use super::visitor;
 /// Non-constant expressions with implicit conversions that potentially change value.
 /// Binary and compound assignment expressions with invalid constant operands (e.g. divide by zero).
 /// Unused expression results (i.e. an expression statement with no side-effects).
-pub fn emit_warnings(ast_root: &mut AstRoot, metadata: &mut AstMetadata, driver: &mut Driver) {
-    warn_about_implicit_conversions(ast_root, metadata, driver);
-    warn_about_expressions_with_invalid_constant_operands(ast_root, metadata, driver);
-    warn_about_unused_expression_results(ast_root, metadata, driver);
-    warn_about_expressions_in_boolean_contexts(ast_root, metadata, driver);
+pub fn emit_warnings(ast_root: &mut AstRoot, chk: &mut TypeChecker, driver: &mut Driver) {
+    warn_about_implicit_conversions(ast_root, &mut chk.metadata, driver);
+    warn_about_expressions_with_invalid_constant_operands(ast_root, &mut chk.metadata, driver);
+    warn_about_unused_expression_results(ast_root, &mut chk.metadata, driver);
+    warn_about_expressions_in_boolean_contexts(ast_root, chk, driver);
 }
 
 /// Emit warnings about non-constant expressions with implicit conversions.
@@ -205,8 +208,8 @@ fn warn_about_unused_expression_results(ast_root: &mut AstRoot, metadata: &mut A
     });
 }
 
-fn warn_about_expressions_in_boolean_contexts(ast_root: &mut AstRoot, metadata: &mut AstMetadata, driver: &mut Driver) {
-    let mut warn_if_tautological_bitwise_or = |expr: &AstExpression| {
+fn warn_about_expressions_in_boolean_contexts(ast_root: &mut AstRoot, chk: &mut TypeChecker, driver: &mut Driver) {
+    let warn_if_tautological_bitwise_or = |expr: &AstExpression, chk: &mut TypeChecker, driver: &mut Driver| {
         let binary_expr_id = expr.id();
 
         let AstExpressionKind::Binary { op, lhs, rhs } = expr.kind() else {
@@ -234,23 +237,150 @@ fn warn_about_expressions_in_boolean_contexts(ast_root: &mut AstRoot, metadata: 
         };
 
         if is_nonzero_integer(lhs) {
-            let op_loc = metadata.get_operator_sloc(binary_expr_id);
-            let expr_loc = metadata.get_source_location(lhs.id());
+            let op_loc = chk.metadata.get_operator_sloc(binary_expr_id);
+            let expr_loc = chk.metadata.get_source_location(lhs.id());
             Warning::tautological_bitwise_compare(op_loc, expr_loc, driver);
         }
 
         if is_nonzero_integer(rhs) {
-            let op_loc = metadata.get_operator_sloc(binary_expr_id);
-            let expr_loc = metadata.get_source_location(rhs.id());
+            let op_loc = chk.metadata.get_operator_sloc(binary_expr_id);
+            let expr_loc = chk.metadata.get_source_location(rhs.id());
             Warning::tautological_bitwise_compare(op_loc, expr_loc, driver);
         }
     };
+
+    let warn_if_tautological_compare_with_constant =
+        |expr: &AstExpression, chk: &mut TypeChecker, driver: &mut Driver| {
+            let binary_expr_id = expr.id();
+
+            let AstExpressionKind::Binary { op, lhs, rhs } = expr.kind() else {
+                return;
+            };
+
+            if !op.is_relational() {
+                return;
+            }
+
+            let mut eval = constant_eval::Eval::new(chk, driver);
+            let constant_lhs = eval.evaluate_expr(lhs);
+            let constant_rhs = eval.evaluate_expr(rhs);
+
+            let (const_int, other_expr) = if let Some(constant_lhs) = constant_lhs
+                && let AstConstantValue::Integer(const_int) = constant_lhs
+            {
+                (const_int, rhs)
+            } else if let Some(constant_rhs) = constant_rhs
+                && let AstConstantValue::Integer(const_int) = constant_rhs
+            {
+                (const_int, lhs)
+            } else {
+                return;
+            };
+
+            let other_expr_type = if let AstExpressionKind::Cast { inner, is_implicit, .. } = other_expr.kind()
+                && *is_implicit
+            {
+                chk.metadata.try_get_node_type(inner.id())
+            } else {
+                chk.metadata.try_get_node_type(other_expr.id())
+            };
+
+            // If we can't get the expression type then the type checker has emitted an error, and so we can't do any
+            // further validation.
+            let Some(other_expr_type) = other_expr_type else {
+                return;
+            };
+
+            if !other_expr_type.is_integer() {
+                return;
+            }
+
+            let ordering = const_int.valid_for_type(other_expr_type);
+
+            // If the value is within the type's range, and not equal to the min/max then there's nothing to warn about.
+            if let CmpValueType::Equal { equal_to_min: false, equal_to_max: false } = ordering {
+                return;
+            };
+
+            // If the operator is `==` or `!=` and the value is within the type's range, even the min/max, then
+            // there's nothing to warn about. E.g. `char c; if (c == 127)`.
+            //
+            let equality_op = matches!(op, AstBinaryOp::EqualTo | AstBinaryOp::NotEqualTo);
+            if equality_op && let CmpValueType::Equal { .. } = ordering {
+                return;
+            };
+
+            // If the value equals the minimum valid value then we need to warn about `<` and `>=` comparisons.
+            // E.g.
+            //          char c;
+            //          if (c <  -128)  // Always false
+            //          if (c >= -128)  // Always true
+            //
+            if !matches!(op, AstBinaryOp::LessThan | AstBinaryOp::GreaterThanOrEqualTo)
+                && let CmpValueType::Equal { equal_to_min: true, equal_to_max: false } = ordering
+            {
+                return;
+            };
+
+            // If the value equals the maximum valid value then we need to warn about `>` and `<=` comparisons.
+            // E.g.
+            //          char c;
+            //          if (c >  127)  // Always false
+            //          if (c <= 127)  // Always true
+            //
+            if !matches!(op, AstBinaryOp::GreaterThan | AstBinaryOp::LessThanOrEqualTo)
+                && let CmpValueType::Equal { equal_to_min: false, equal_to_max: true } = ordering
+            {
+                return;
+            };
+
+            // Determine the boolean result of the comparison.
+            let comparison_result = match (op, ordering) {
+                (AstBinaryOp::EqualTo, _) => false,
+                (AstBinaryOp::NotEqualTo, _) => true,
+
+                (AstBinaryOp::LessThan, CmpValueType::Equal { equal_to_min: true, .. }) => false,
+                (AstBinaryOp::GreaterThan, CmpValueType::Equal { equal_to_max: true, .. }) => false,
+
+                (AstBinaryOp::LessThanOrEqualTo, CmpValueType::Equal { equal_to_max: true, .. }) => true,
+                (AstBinaryOp::GreaterThanOrEqualTo, CmpValueType::Equal { equal_to_min: true, .. }) => true,
+
+                (AstBinaryOp::LessThan, CmpValueType::Less) => false,
+                (AstBinaryOp::LessThan, CmpValueType::Greater) => true,
+                (AstBinaryOp::LessThanOrEqualTo, CmpValueType::Less) => false,
+                (AstBinaryOp::LessThanOrEqualTo, CmpValueType::Greater) => true,
+
+                (AstBinaryOp::GreaterThan, CmpValueType::Less) => true,
+                (AstBinaryOp::GreaterThan, CmpValueType::Greater) => false,
+                (AstBinaryOp::GreaterThanOrEqualTo, CmpValueType::Less) => true,
+                (AstBinaryOp::GreaterThanOrEqualTo, CmpValueType::Greater) => false,
+
+                _ => ICE!("Did not handle {op}"),
+            };
+
+            let constant_descr = const_int.to_string();
+            let op_loc = chk.metadata.get_operator_sloc(binary_expr_id);
+            let lhs_loc = chk.metadata.get_source_location(lhs.id());
+            let rhs_loc = chk.metadata.get_source_location(rhs.id());
+
+            Warning::tautological_constant_out_of_range_compare(
+                *op,
+                other_expr_type,
+                &constant_descr,
+                &comparison_result.to_string(),
+                op_loc,
+                lhs_loc,
+                rhs_loc,
+                driver,
+            );
+        };
 
     // Find all boolean expression contexts and then check for redundant expressions within them.
     //      E.g. `if (a | 1)` always evaluates to true.
     //
     visitor::visit_expressions_in_boolean_contexts(ast_root, &mut |expr: &mut AstExpression| {
-        warn_if_tautological_bitwise_or(expr);
+        warn_if_tautological_bitwise_or(expr, chk, driver);
+        warn_if_tautological_compare_with_constant(expr, chk, driver);
     });
 }
 

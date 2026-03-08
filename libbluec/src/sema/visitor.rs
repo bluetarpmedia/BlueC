@@ -207,11 +207,7 @@ where
             AstStatement::If { controlling_expr, .. } => visitor_func(controlling_expr),
             AstStatement::While { controlling_expr, .. } => visitor_func(controlling_expr),
             AstStatement::DoWhile { controlling_expr, .. } => visitor_func(controlling_expr),
-            AstStatement::For { controlling_expr, .. } => {
-                if let Some(controlling_expr) = controlling_expr {
-                    visitor_func(controlling_expr);
-                }
-            }
+            AstStatement::For { controlling_expr: Some(controlling_expr), .. } => visitor_func(controlling_expr),
             _ => (),
         });
     });

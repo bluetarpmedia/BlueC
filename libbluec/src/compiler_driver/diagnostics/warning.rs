@@ -545,6 +545,34 @@ impl Warning {
         driver.add_diagnostic(Diagnostic::warning_at_location(kind, warning, op_loc));
     }
 
+    /// Emits a warning that a comparison with a constant/literal is redundant/tautological.
+    ///
+    /// -Wtautological-constant-out-of-range-compare
+    pub fn tautological_constant_out_of_range_compare(
+        op: AstBinaryOp,
+        expr_type: &AstType,
+        constant_descr: &str,
+        result_descr: &str,
+        op_loc: SourceLocation,
+        lhs_loc: SourceLocation,
+        rhs_loc: SourceLocation,
+        driver: &mut Driver,
+    ) {
+        let kind = WarningKind::TautologicalConstantOutOfRangeCompare;
+
+        let op_str = TokenType::from(op).to_string();
+
+        let warning = format!(
+            "Comparing expression of type '{expr_type}' {op_str} {constant_descr} \
+             always evaluates to {result_descr}"
+        );
+
+        let mut diag = Diagnostic::warning_at_location(kind, warning, op_loc);
+        diag.add_location(lhs_loc);
+        diag.add_location(rhs_loc);
+        driver.add_diagnostic(diag);
+    }
+
     /// Emits a warning that a bitwise OR with a non-zero value used in a boolean context is redundant.
     ///
     /// -Wtautological-bitwise-compare
