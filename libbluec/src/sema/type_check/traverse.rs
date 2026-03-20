@@ -520,7 +520,9 @@ pub(super) fn typecheck_expression_with_decay(
         chk.metadata.add_source_location(node_id, original_expr_loc);
         chk.metadata.propagate_const_flag_from_child(original_expr.id(), node_id);
 
-        *expr = AstExpression::new(node_id, AstExpressionKind::AddressOf { target: Box::new(original_expr) });
+        let is_implicit = true;
+        *expr =
+            AstExpression::new(node_id, AstExpressionKind::AddressOf { target: Box::new(original_expr), is_implicit });
 
         let decayed_type = AstType::new_pointer_to(*element_type);
         chk.set_data_type(node_id, &decayed_type);
@@ -536,7 +538,9 @@ pub(super) fn typecheck_expression_with_decay(
         chk.metadata.add_source_location(node_id, original_expr_loc);
         chk.metadata.propagate_const_flag_from_child(original_expr.id(), node_id);
 
-        *expr = AstExpression::new(node_id, AstExpressionKind::AddressOf { target: Box::new(original_expr) });
+        let is_implicit = true;
+        *expr =
+            AstExpression::new(node_id, AstExpressionKind::AddressOf { target: Box::new(original_expr), is_implicit });
 
         let decayed_type = AstType::new_pointer_to(ty);
         chk.set_data_type(node_id, &decayed_type);
@@ -621,7 +625,7 @@ fn typecheck_expression(
             }
         }
 
-        AstExpressionKind::AddressOf { target: address_of_expr } => {
+        AstExpressionKind::AddressOf { target: address_of_expr, .. } => {
             let expr_type = typecheck_expression(address_of_expr, chk, driver)?; // Note: No decay
 
             if address_of_expr.is_lvalue() {
@@ -684,8 +688,12 @@ fn typecheck_cast_expression(
         return Ok(cast_to_type);
     }
 
-    // Warn if casting a pointer to an integer type smaller than pointer size.
-    if expr_type.is_pointer() && cast_to_type.is_integer() && cast_to_type.bits() < expr_type.bits() {
+    // Warn if casting a pointer to an integer type (other than bool) that is smaller than pointer size.
+    if expr_type.is_pointer()
+        && cast_to_type.is_integer()
+        && !cast_to_type.is_boolean()
+        && cast_to_type.bits() < expr_type.bits()
+    {
         let cast_op_loc = chk.metadata.get_operator_sloc(cast_expr_id);
         let expr_loc = chk.metadata.get_source_location(inner_expr.id());
         Warning::pointer_to_smaller_int_cast(&expr_type, &cast_to_type, cast_op_loc, expr_loc, driver);

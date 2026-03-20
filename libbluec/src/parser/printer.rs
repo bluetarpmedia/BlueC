@@ -812,7 +812,7 @@ fn print_expression<W: Write>(p: &mut AstPrinter<W>, expr: &AstExpression, is_la
             p.with_indent(is_last, |p| print_expression(p, pointer, true))
         }
 
-        AstExpressionKind::AddressOf { target } => {
+        AstExpressionKind::AddressOf { target, .. } => {
             print_node_metadata(p, expr.id())?;
             p.new_line()?;
 
@@ -1003,6 +1003,7 @@ fn get_expression_node_name(kind: &AstExpressionKind) -> &str {
         AstExpressionKind::Conditional { .. } => "Ternary",
         AstExpressionKind::FunctionCall { .. } => "Call",
         AstExpressionKind::Deref { .. } => "Deref",
+        AstExpressionKind::AddressOf { is_implicit, .. } if *is_implicit => "ImplicitAddressOf",
         AstExpressionKind::AddressOf { .. } => "AddressOf",
         AstExpressionKind::Subscript { .. } => "Subscript",
         AstExpressionKind::Cast { is_implicit, .. } if *is_implicit => "ImplicitCast",

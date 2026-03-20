@@ -273,7 +273,7 @@ where
         AstExpressionKind::Deref { pointer } => {
             visit_expression_recursive(pointer, visitor_func);
         }
-        AstExpressionKind::AddressOf { target } => {
+        AstExpressionKind::AddressOf { target, .. } => {
             visit_expression_recursive(target, visitor_func);
         }
         AstExpressionKind::Subscript { expr1, expr2 } => {

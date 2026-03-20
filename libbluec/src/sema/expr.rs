@@ -62,12 +62,23 @@ fn warn_about_implicit_conversions(ast_root: &mut AstRoot, metadata: &mut AstMet
     let check_for_pointer_bool_conversion =
         |expr: &AstExpression, to_type: &AstType, metadata: &AstMetadata, driver: &mut Driver| {
             if to_type == &AstType::Bool
-                && let AstExpressionKind::AddressOf { target } = expr.kind()
-                && metadata.get_node_type(target.id()).is_array()
-                && let AstExpressionKind::Ident { name, .. } = target.kind()
+                && let AstExpressionKind::AddressOf { target, is_implicit: implicit_address_of } = expr.kind()
             {
-                let loc = metadata.get_source_location(expr.id());
-                Warning::pointer_bool_conversion(name, SymbolKind::Variable, Some(" array"), loc, driver);
+                let target_type = metadata.get_node_type(target.id());
+
+                if (target_type.is_array() || (target_type.is_function() && *implicit_address_of))
+                    && let AstExpressionKind::Ident { name, .. } = target.kind()
+                {
+                    let loc = metadata.get_source_location(expr.id());
+
+                    let (symbol_kind, suffix) = if target_type.is_array() {
+                        (SymbolKind::Variable, Some(" array"))
+                    } else {
+                        (SymbolKind::Function, Some(" function"))
+                    };
+
+                    Warning::pointer_bool_conversion(name, symbol_kind, suffix, loc, driver);
+                }
             }
         };
 

@@ -30,7 +30,7 @@ pub fn parse_prefix_unary_operation(parser: &mut Parser, driver: &mut Driver) ->
     // for type checking etc.
     let kind = match op {
         AstUnaryOp::Deref => AstExpressionKind::Deref { pointer: Box::new(operand_expr) },
-        AstUnaryOp::AddressOf => AstExpressionKind::AddressOf { target: Box::new(operand_expr) },
+        AstUnaryOp::AddressOf => AstExpressionKind::AddressOf { target: Box::new(operand_expr), is_implicit: false },
         _ => AstExpressionKind::Unary { op, operand: Box::new(operand_expr) },
     };
 

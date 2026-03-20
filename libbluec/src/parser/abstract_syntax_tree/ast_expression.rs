@@ -47,6 +47,7 @@ pub enum AstExpressionKind {
     },
     AddressOf {
         target: Box<AstExpression>,
+        is_implicit: bool, // Was the cast expression added by sema/type checking
     },
     Subscript {
         expr1: Box<AstExpression>, // Pointer and Index sub-expressions can be swapped so we name them 1 & 2.

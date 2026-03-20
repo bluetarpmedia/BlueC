@@ -221,7 +221,7 @@ fn evaluate_const_expr_recursively(expr: &AstExpression, eval: &mut Eval) -> Opt
 }
 
 fn evaluate_address_of(expr: &AstExpression, eval: &mut Eval) -> Option<ConstantValue> {
-    let AstExpressionKind::AddressOf { target } = expr.kind() else {
+    let AstExpressionKind::AddressOf { target, .. } = expr.kind() else {
         ICE!("Expected AstExpression::AddressOf");
     };
 
