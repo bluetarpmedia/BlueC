@@ -87,6 +87,7 @@ define_warning_kind! {
     UnusedComparison                               => "unused-comparison",
     BoolOperation                                  => "bool-operation",
     ConstantLogicalOperand                         => "constant-logical-operand",
+    SwitchBool                                     => "switch-bool",
     //
     // Arithmetic
     //
@@ -162,6 +163,7 @@ impl WarningKind {
             WarningKind::ShiftCountNegative,
             WarningKind::ShiftCountOverflow,
             WarningKind::ShiftCountZero,
+            WarningKind::SwitchBool,
             WarningKind::TautologicalCompare,
             WarningKind::TautologicalConstantOutOfRangeCompare,
             WarningKind::UnknownEscapeSequence,

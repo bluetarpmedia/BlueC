@@ -269,6 +269,17 @@ impl Warning {
         driver.add_diagnostic(Diagnostic::warning_at_location(kind, warning, loc));
     }
 
+    /// Emits a warning that a switch statement's condition is a boolean type.
+    ///
+    /// -Wswitch-bool
+    pub fn switch_bool(switch_loc: SourceLocation, condition_loc: SourceLocation, driver: &mut Driver) {
+        let kind = WarningKind::SwitchBool;
+        let warning = "Switch controlling expression has boolean value".to_string();
+        let mut diag = Diagnostic::warning_at_location(kind, warning, switch_loc);
+        diag.add_location(condition_loc);
+        driver.add_diagnostic(diag);
+    }
+
     /// Emits a warning about an 'extern' variable with an initializer.
     pub fn extern_initializer(loc: SourceLocation, driver: &mut Driver) {
         let kind = WarningKind::ExternInitializer;

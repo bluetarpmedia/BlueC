@@ -404,7 +404,7 @@ fn typecheck_switch_statement(
     chk: &mut TypeChecker,
     driver: &mut Driver,
 ) -> TypeCheckResult<()> {
-    let AstStatement::Switch { controlling_expr, body, .. } = stmt else {
+    let AstStatement::Switch { node_id, controlling_expr, body, .. } = stmt else {
         ICE!("Expected switch statement");
     };
 
@@ -416,7 +416,14 @@ fn typecheck_switch_statement(
     //      boolean types (C23 'bool' / '_Bool'), an `enum` type, or bitfields of an integer type.
     //
     if controlling_expr_type.is_integer() {
+        if controlling_expr_type.is_boolean() {
+            let switch_loc = chk.metadata.get_source_location(*node_id);
+            let condition_loc = chk.metadata.get_source_location(controlling_expr.id());
+            Warning::switch_bool(switch_loc, condition_loc, driver);
+        }
+
         let (promoted_type, promoted) = controlling_expr_type.promote_if_rank_lower_than_int();
+
         if promoted {
             // Cast the controlling expression to 'int'.
             *controlling_expr =
