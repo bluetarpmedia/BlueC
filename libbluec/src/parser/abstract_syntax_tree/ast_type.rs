@@ -186,6 +186,11 @@ impl AstType {
         matches!(self, AstType::Float | AstType::Double | AstType::LongDouble)
     }
 
+    /// Is this type a boolean type?
+    pub fn is_boolean(&self) -> bool {
+        matches!(self, AstType::Bool)
+    }
+
     /// Is this type a character type? (Does not include `_Bool`.)
     pub fn is_character(&self) -> bool {
         matches!(self, AstType::Char | AstType::SignedChar | AstType::UnsignedChar)

@@ -110,6 +110,7 @@ define_warning_kind! {
     PointerToIntCast                               => "pointer-to-int-cast",
     PointerBoolConversion                          => "pointer-bool-conversion",
     NonLiteralNullConversion                       => "non-literal-null-conversion",
+    IntInBoolContext                               => "int-in-bool-context",
     //
     // Comparisons
     //

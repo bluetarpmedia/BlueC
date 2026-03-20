@@ -38,6 +38,13 @@ fn warn_about_implicit_conversions(ast_root: &mut AstRoot, metadata: &mut AstMet
                                            to_type: &AstType,
                                            metadata: &AstMetadata,
                                            driver: &mut Driver| {
+        // Don't warn about implicit conversions to boolean
+        //      We have other, more specific warnings for boolean cases.
+        //      See `warn_about_expressions_in_boolean_contexts` below.
+        if to_type.is_boolean() {
+            return;
+        }
+
         let is_int_to_float = from_type.is_integer() && to_type.is_floating_point();
         let is_bigger_int_to_smaller_fp = is_int_to_float && to_type.bits() < from_type.bits();
         let is_arithmetic_cast = from_type.is_arithmetic() && to_type.is_arithmetic() && !is_int_to_float;
@@ -369,11 +376,23 @@ fn warn_about_expressions_in_boolean_contexts(ast_root: &mut AstRoot, chk: &mut 
                 &constant_descr,
                 &comparison_result.to_string(),
                 op_loc,
-                lhs_loc,
-                rhs_loc,
+                &[lhs_loc, rhs_loc],
                 driver,
             );
         };
+
+    let warn_if_int_in_bool_context = |expr: &AstExpression, chk: &mut TypeChecker, driver: &mut Driver| {
+        let binary_expr_id = expr.id();
+
+        let AstExpressionKind::Binary { op, .. } = expr.kind() else {
+            return;
+        };
+
+        if matches!(op, AstBinaryOp::LeftShift | AstBinaryOp::Multiply) {
+            let op_loc = chk.metadata.get_operator_sloc(binary_expr_id);
+            Warning::int_in_bool_context(*op, op_loc, driver);
+        }
+    };
 
     // Find all boolean expression contexts and then check for redundant expressions within them.
     //      E.g. `if (a | 1)` always evaluates to true.
@@ -381,6 +400,7 @@ fn warn_about_expressions_in_boolean_contexts(ast_root: &mut AstRoot, chk: &mut 
     visitor::visit_expressions_in_boolean_contexts(ast_root, &mut |expr: &mut AstExpression| {
         warn_if_tautological_bitwise_or(expr, chk, driver);
         warn_if_tautological_compare_with_constant(expr, chk, driver);
+        warn_if_int_in_bool_context(expr, chk, driver);
     });
 }
 

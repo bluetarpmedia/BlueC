@@ -554,8 +554,7 @@ impl Warning {
         constant_descr: &str,
         result_descr: &str,
         op_loc: SourceLocation,
-        lhs_loc: SourceLocation,
-        rhs_loc: SourceLocation,
+        additional_locs: &[SourceLocation],
         driver: &mut Driver,
     ) {
         let kind = WarningKind::TautologicalConstantOutOfRangeCompare;
@@ -568,8 +567,9 @@ impl Warning {
         );
 
         let mut diag = Diagnostic::warning_at_location(kind, warning, op_loc);
-        diag.add_location(lhs_loc);
-        diag.add_location(rhs_loc);
+        for loc in additional_locs {
+            diag.add_location(*loc);
+        }
         driver.add_diagnostic(diag);
     }
 
@@ -582,6 +582,16 @@ impl Warning {
         let mut diag = Diagnostic::warning_at_location(kind, warning, op_loc);
         diag.add_location(expr_loc);
         driver.add_diagnostic(diag);
+    }
+
+    /// Emits a warning that an expression of type 'int' is used in a boolean context, possibly by mistake.
+    ///
+    /// -Wint-in-bool-context
+    pub fn int_in_bool_context(op: AstBinaryOp, op_loc: SourceLocation, driver: &mut Driver) {
+        let kind = WarningKind::IntInBoolContext;
+        let op_str = TokenType::from(op).to_string();
+        let warning = format!("Converting the result of '{op_str}' to a boolean; did you mean to compare with '0'?");
+        driver.add_diagnostic(Diagnostic::warning_at_location(kind, warning, op_loc));
     }
 
     /// Emits a warning that two different pointer types are being compared.

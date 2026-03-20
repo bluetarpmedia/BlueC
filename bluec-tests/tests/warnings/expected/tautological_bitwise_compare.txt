@@ -19,13 +19,6 @@ warning: Bitwise OR '|' with a non-zero value always evaluates to true
    |             ^ ~
    |
 
-warning: Implicit conversion from 'int' to '_Bool' loses precision and changes
-         signedness [-Wsign-conversion]
-   |
-   |     result = a | 2;
-   |              ^^^^^
-   |
-
 warning: Bitwise OR '|' with a non-zero value always evaluates to true
          [-Wtautological-bitwise-compare]
    |
@@ -40,4 +33,4 @@ warning: Bitwise OR '|' with a non-zero value always evaluates to true
    |           ^ ~
    |
 
-6 warnings generated
+5 warnings generated
