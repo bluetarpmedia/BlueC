@@ -365,6 +365,34 @@ impl Warning {
         driver.add_diagnostic(diag);
     }
 
+    /// Emits a warning that a constant is used as the rhs operand in a logical And/Or expression.
+    ///
+    /// -Wconstant-logical-operand
+    pub fn constant_logical_operand(
+        op: AstBinaryOp,
+        op_loc: SourceLocation,
+        rhs_loc: SourceLocation,
+        driver: &mut Driver,
+    ) {
+        let kind = WarningKind::ConstantLogicalOperand;
+        let op_str = TokenType::from(op).to_string();
+        let warning = format!("Use of logical '{op_str}' with constant operand");
+        let mut diag = Diagnostic::warning_at_location(kind, warning, op_loc);
+        diag.add_location(rhs_loc);
+
+        let suggested_op = if op == AstBinaryOp::LogicalAnd {
+            "&"
+        } else if op == AstBinaryOp::LogicalOr {
+            "|"
+        } else {
+            ICE!("Unexpected operator")
+        };
+
+        diag.add_note(format!("Use '{suggested_op}' for a bitwise operation"), None);
+
+        driver.add_diagnostic(diag);
+    }
+
     /// Emits a warning that the value result of an expression (with no side-effects) is unused.
     ///
     /// -Wunused-value

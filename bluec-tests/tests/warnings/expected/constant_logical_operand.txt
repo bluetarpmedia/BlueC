@@ -1,0 +1,17 @@
+warning: Use of logical '&&' with constant operand [-Wconstant-logical-operand]
+   |
+   |     if (a && 3 - 4)
+   |           ^^ ~~~~~
+   |
+note: Use '&' for a bitwise operation
+   |
+
+warning: Use of logical '||' with constant operand [-Wconstant-logical-operand]
+   |
+   |     if (a || 3 + 2)
+   |           ^^ ~~~~~
+   |
+note: Use '|' for a bitwise operation
+   |
+
+2 warnings generated

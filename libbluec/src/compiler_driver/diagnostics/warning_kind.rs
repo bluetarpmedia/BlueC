@@ -86,6 +86,7 @@ define_warning_kind! {
     UnusedValue                                    => "unused-value",
     UnusedComparison                               => "unused-comparison",
     BoolOperation                                  => "bool-operation",
+    ConstantLogicalOperand                         => "constant-logical-operand",
     //
     // Arithmetic
     //
@@ -140,6 +141,7 @@ impl WarningKind {
             WarningKind::ConditionalTypeMismatch,
             WarningKind::ConstantConversion,
             WarningKind::CompareDistinctPointerTypes,
+            WarningKind::ConstantLogicalOperand,
             WarningKind::DivisionByZero,
             WarningKind::DuplicateDeclSpecifier,
             WarningKind::ExcessInitializers,

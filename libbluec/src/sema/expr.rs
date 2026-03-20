@@ -114,6 +114,10 @@ fn warn_about_expressions_with_invalid_constant_operands(
     metadata: &mut AstMetadata,
     driver: &mut Driver,
 ) {
+    let is_constant_expr = |node_id: AstNodeId, metadata: &mut AstMetadata| -> bool {
+        metadata.is_expr_flag_set(node_id, AstExpressionFlag::IsConstant)
+    };
+
     visitor::visit_full_expressions(ast_root, &mut |full_expr: &mut AstExpression| {
         visitor::visit_sub_expressions(full_expr, &mut |expr: &mut AstExpression| match expr.kind() {
             // Cannot divide by zero in '/' or '%' binary expression.
@@ -143,6 +147,18 @@ fn warn_about_expressions_with_invalid_constant_operands(
             AstExpressionKind::Assignment { op, rhs, computation_node_id, .. } if op.is_shift() => {
                 let promoted_to_int = metadata.is_expr_flag_set(rhs.id(), AstExpressionFlag::PromotedToInt);
                 validate_shift(*computation_node_id, rhs, promoted_to_int, metadata, driver);
+            }
+
+            // Logical And/Or with constant rhs operand (other than 0 or 1).
+            //      `a && 2`
+            AstExpressionKind::Binary { op, rhs, .. } if op.is_logical() && is_constant_expr(rhs.id(), metadata) => {
+                if rhs.is_integer_literal_with_value(0) || rhs.is_integer_literal_with_value(1) {
+                    return;
+                }
+
+                let op_loc = metadata.get_operator_sloc(expr.id());
+                let rhs_loc = metadata.get_source_location(rhs.id());
+                Warning::constant_logical_operand(*op, op_loc, rhs_loc, driver);
             }
 
             _ => (),
