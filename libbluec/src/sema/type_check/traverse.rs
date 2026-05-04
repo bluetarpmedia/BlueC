@@ -109,6 +109,12 @@ fn typecheck_declaration(decl: &mut AstDeclaration, chk: &mut TypeChecker, drive
 
             // Type check the parameters
             let valid_params = param_types.iter().zip(param_names).all(|(param_type, (param_ident, param_unique))| {
+                // Mark parameters in function declarations as being used; we don't want to emit an unused-variable
+                // warning for them.
+                if function.body.is_none() {
+                    chk.symbols.set_symbol_used(param_unique);
+                }
+
                 symbols::verify_function_parameter_declaration(param_unique, param_ident, param_type, chk, driver)
                     .is_ok()
             });
@@ -398,7 +404,7 @@ fn typecheck_switch_statement(
     chk: &mut TypeChecker,
     driver: &mut Driver,
 ) -> TypeCheckResult<()> {
-    let AstStatement::Switch { controlling_expr, body, .. } = stmt else {
+    let AstStatement::Switch { node_id, controlling_expr, body, .. } = stmt else {
         ICE!("Expected switch statement");
     };
 
@@ -410,7 +416,14 @@ fn typecheck_switch_statement(
     //      boolean types (C23 'bool' / '_Bool'), an `enum` type, or bitfields of an integer type.
     //
     if controlling_expr_type.is_integer() {
+        if controlling_expr_type.is_boolean() {
+            let switch_loc = chk.metadata.get_source_location(*node_id);
+            let condition_loc = chk.metadata.get_source_location(controlling_expr.id());
+            Warning::switch_bool(switch_loc, condition_loc, driver);
+        }
+
         let (promoted_type, promoted) = controlling_expr_type.promote_if_rank_lower_than_int();
+
         if promoted {
             // Cast the controlling expression to 'int'.
             *controlling_expr =
@@ -514,7 +527,9 @@ pub(super) fn typecheck_expression_with_decay(
         chk.metadata.add_source_location(node_id, original_expr_loc);
         chk.metadata.propagate_const_flag_from_child(original_expr.id(), node_id);
 
-        *expr = AstExpression::new(node_id, AstExpressionKind::AddressOf { target: Box::new(original_expr) });
+        let is_implicit = true;
+        *expr =
+            AstExpression::new(node_id, AstExpressionKind::AddressOf { target: Box::new(original_expr), is_implicit });
 
         let decayed_type = AstType::new_pointer_to(*element_type);
         chk.set_data_type(node_id, &decayed_type);
@@ -530,7 +545,9 @@ pub(super) fn typecheck_expression_with_decay(
         chk.metadata.add_source_location(node_id, original_expr_loc);
         chk.metadata.propagate_const_flag_from_child(original_expr.id(), node_id);
 
-        *expr = AstExpression::new(node_id, AstExpressionKind::AddressOf { target: Box::new(original_expr) });
+        let is_implicit = true;
+        *expr =
+            AstExpression::new(node_id, AstExpressionKind::AddressOf { target: Box::new(original_expr), is_implicit });
 
         let decayed_type = AstType::new_pointer_to(ty);
         chk.set_data_type(node_id, &decayed_type);
@@ -615,7 +632,7 @@ fn typecheck_expression(
             }
         }
 
-        AstExpressionKind::AddressOf { target: address_of_expr } => {
+        AstExpressionKind::AddressOf { target: address_of_expr, .. } => {
             let expr_type = typecheck_expression(address_of_expr, chk, driver)?; // Note: No decay
 
             if address_of_expr.is_lvalue() {
@@ -678,8 +695,12 @@ fn typecheck_cast_expression(
         return Ok(cast_to_type);
     }
 
-    // Warn if casting a pointer to an integer type smaller than pointer size.
-    if expr_type.is_pointer() && cast_to_type.is_integer() && cast_to_type.bits() < expr_type.bits() {
+    // Warn if casting a pointer to an integer type (other than bool) that is smaller than pointer size.
+    if expr_type.is_pointer()
+        && cast_to_type.is_integer()
+        && !cast_to_type.is_boolean()
+        && cast_to_type.bits() < expr_type.bits()
+    {
         let cast_op_loc = chk.metadata.get_operator_sloc(cast_expr_id);
         let expr_loc = chk.metadata.get_source_location(inner_expr.id());
         Warning::pointer_to_smaller_int_cast(&expr_type, &cast_to_type, cast_op_loc, expr_loc, driver);
@@ -809,6 +830,13 @@ fn typecheck_unary_operation(
         return Ok(AstType::Int);
     }
 
+    // Warn about certain unary operations on _Bool types.
+    if operand_type == AstType::Bool && (ops::is_incr_or_decr_op(op) || *op == AstUnaryOp::BitwiseNot) {
+        let op_loc = chk.metadata.get_operator_sloc(unary_expr_id);
+        let expr_loc = chk.metadata.get_source_location(operand_expr.id());
+        Warning::unary_bool_operation(*op, op_loc, expr_loc, driver);
+    }
+
     // Integer promotion.
     let operand_type = if operand_type.is_integer()
         && matches!(op, AstUnaryOp::Negate | AstUnaryOp::Plus | AstUnaryOp::BitwiseNot)
@@ -934,6 +962,16 @@ fn typecheck_binary_operation(
     if has_fp_operand && utils::binary_operator_incompatible_with_fp_operand(*op) {
         utils::error_invalid_binary_expression_operands(binary_expr_id, lhs, rhs, &lhs_type, &rhs_type, chk, driver);
         return Err(TypeCheckError);
+    }
+
+    // Warn for redundant/tautological comparison (e.g. `a == a`).
+    if op.is_relational()
+        && let AstExpressionKind::Ident { unique_name: lhs_unique, .. } = lhs.kind()
+        && let AstExpressionKind::Ident { unique_name: rhs_unique, .. } = rhs.kind()
+        && lhs_unique == rhs_unique
+    {
+        let op_loc = chk.metadata.get_operator_sloc(binary_expr_id);
+        Warning::tautological_compare(*op, op_loc, driver);
     }
 
     // Binary operations where one operand is a pointer and the other is an integer: `1 + ptr` or `ptr == 0`.
@@ -2084,7 +2122,7 @@ fn make_zero_initializer(
         Ok(AstVariableInitializer::Aggregate { node_id, init })
     } else if element_type.is_scalar() {
         // If necessary, this 'int' will get promoted to the `element_type`.
-        let mut constant_zero = make_zero_int_literal(driver);
+        let mut constant_zero = make_zero_int_literal(chk, driver);
 
         chk.metadata.add_source_location(constant_zero.id(), SourceLocation::none());
 
@@ -2097,9 +2135,11 @@ fn make_zero_initializer(
 }
 
 /// Creates an `AstExpression:IntegerLiteral` with a value of zero.
-fn make_zero_int_literal(driver: &mut Driver) -> AstExpression {
+fn make_zero_int_literal(chk: &mut TypeChecker, driver: &mut Driver) -> AstExpression {
+    let node_id = driver.make_node_id();
+    chk.metadata.set_expr_flag(node_id, AstExpressionFlag::IsConstant);
     AstExpression::new(
-        driver.make_node_id(),
+        node_id,
         AstExpressionKind::IntegerLiteral {
             literal: "0".to_string(),
             literal_base: 10,

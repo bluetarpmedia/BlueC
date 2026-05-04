@@ -6,6 +6,7 @@ use std::fmt;
 
 use crate::ICE;
 use crate::parser::AstType;
+use crate::parser::abstract_syntax_tree::ast_type;
 
 /// A constant value that was either parsed from a literal or was evaluated from a constant expression.
 #[derive(Debug, Clone, PartialEq)]
@@ -291,6 +292,13 @@ impl_from_trait! {
     u64 => UnsignedLongLong,
 }
 
+/// The result of checking if an [`AstConstantInteger`] fits within the range of values for an [`AstType`].
+pub enum CmpValueType {
+    Less,
+    Equal { equal_to_min: bool, equal_to_max: bool },
+    Greater,
+}
+
 impl AstConstantInteger {
     /// Makes an `AstConstantInteger` with the appropriate discriminant from the given value.
     pub fn from_value<T: Into<AstConstantInteger>>(value: T) -> Self {
@@ -322,6 +330,44 @@ impl AstConstantInteger {
             AstConstantInteger::UnsignedShort(value) => *value == 0,
             AstConstantInteger::UnsignedInt(value) => *value == 0,
             AstConstantInteger::UnsignedLongLong(value) => *value == 0,
+        }
+    }
+
+    /// Returns whether this integer constant value is within the valid range for the given integer `AstType`.
+    ///
+    /// ```rust,ignore
+    /// assert_eq!(AstConstantInteger::Int(-129).valid_for_type(&AstType::Char), CmpValueType::Less);
+    /// assert_eq!(AstConstantInteger::Int(-128).valid_for_type(&AstType::Char), CmpValueType::Equal{ true, false });
+    /// assert_eq!(AstConstantInteger::Int(   0).valid_for_type(&AstType::Char), CmpValueType::Equal{ false, false });
+    /// assert_eq!(AstConstantInteger::Int( 127).valid_for_type(&AstType::Char), CmpValueType::Equal{ false, true });
+    /// assert_eq!(AstConstantInteger::Int( 128).valid_for_type(&AstType::Char), CmpValueType::Greater);
+    /// ```
+    pub fn valid_for_type(&self, ty: &AstType) -> CmpValueType {
+        assert!(ty.is_integer());
+
+        let (ty_min, ty_max) = ast_type::integer_valid_range(ty);
+
+        let is_in_range = |value: i128| {
+            if value < ty_min {
+                CmpValueType::Less
+            } else if value > ty_max {
+                CmpValueType::Greater
+            } else {
+                let equal_to_min = value == ty_min;
+                let equal_to_max = value == ty_max;
+                CmpValueType::Equal { equal_to_min, equal_to_max }
+            }
+        };
+
+        match self {
+            AstConstantInteger::Char(value) => is_in_range(*value as i128),
+            AstConstantInteger::Short(value) => is_in_range(*value as i128),
+            AstConstantInteger::Int(value) => is_in_range(*value as i128),
+            AstConstantInteger::LongLong(value) => is_in_range(*value as i128),
+            AstConstantInteger::UnsignedChar(value) => is_in_range(*value as i128),
+            AstConstantInteger::UnsignedShort(value) => is_in_range(*value as i128),
+            AstConstantInteger::UnsignedInt(value) => is_in_range(*value as i128),
+            AstConstantInteger::UnsignedLongLong(value) => is_in_range(*value as i128),
         }
     }
 }

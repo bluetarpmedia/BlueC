@@ -186,6 +186,11 @@ impl AstType {
         matches!(self, AstType::Float | AstType::Double | AstType::LongDouble)
     }
 
+    /// Is this type a boolean type?
+    pub fn is_boolean(&self) -> bool {
+        matches!(self, AstType::Bool)
+    }
+
     /// Is this type a character type? (Does not include `_Bool`.)
     pub fn is_character(&self) -> bool {
         matches!(self, AstType::Char | AstType::SignedChar | AstType::UnsignedChar)
@@ -573,5 +578,21 @@ fn to_c_declarator_recursive(ty: &AstType, current: String) -> String {
 
             to_c_declarator_recursive(return_type, new_declarator)
         }
+    }
+}
+
+/// Returns the [min, max] valid range of values for an integer type.
+pub fn integer_valid_range(ty: &AstType) -> (i128, i128) {
+    match ty {
+        AstType::Bool => (0_i128, 1_i128),
+        AstType::Char | AstType::SignedChar => (-128_i128, 127_i128),
+        AstType::Short => (-32768_i128, 32767_i128),
+        AstType::Int => (-2147483648_i128, 2147483647_i128),
+        AstType::Long | AstType::LongLong => (-9223372036854775808_i128, 9223372036854775807_i128),
+        AstType::UnsignedChar => (0_i128, 255_i128),
+        AstType::UnsignedShort => (0_i128, 65535_i128),
+        AstType::UnsignedInt => (0_i128, 4294967295_i128),
+        AstType::UnsignedLong | AstType::UnsignedLongLong => (0_i128, 18446744073709551615_i128),
+        _ => ICE!("Expected an integer AstType instead of {ty}"),
     }
 }

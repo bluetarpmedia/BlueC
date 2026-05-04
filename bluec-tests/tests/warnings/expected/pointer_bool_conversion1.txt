@@ -1,0 +1,27 @@
+warning: Address of function 'calc' always evaluates to 'true'
+         [-Wpointer-bool-conversion]
+   |
+   |     static _Bool b1 = calc;
+   |                       ^^^^
+   |
+
+warning: Address of function 'calc' always evaluates to 'true'
+         [-Wpointer-bool-conversion]
+   |
+   |     static _Bool b2 = &calc;
+   |                       ^^^^^
+   |
+
+warning: Address of 'x' always evaluates to 'true' [-Wpointer-bool-conversion]
+   |
+   |     static _Bool b3 = &x;
+   |                       ^^
+   |
+
+warning: Address of constant always evaluates to 'true' [-Wpointer-bool-conversion]
+   |
+   |     static _Bool b4 = "test";
+   |                       ^^^^^^
+   |
+
+4 warnings generated

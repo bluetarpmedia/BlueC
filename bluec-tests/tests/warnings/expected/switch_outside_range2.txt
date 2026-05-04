@@ -1,0 +1,15 @@
+warning: Case value is out of range of the switch controlling expression's type
+         [-Wswitch-outside-range]
+   |
+   |   case 128:
+   |        ^^^
+   |
+
+warning: Case value is out of range of the switch controlling expression's type
+         [-Wswitch-outside-range]
+   |
+   |   case -129:
+   |        ^^^^
+   |
+
+2 warnings generated

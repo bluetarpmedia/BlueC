@@ -1,0 +1,8 @@
+warning: Address of function 'add' function always evaluates to 'true'
+         [-Wpointer-bool-conversion]
+   |
+   |     _Bool exists1 = add;
+   |                     ^^^
+   |
+
+1 warning generated

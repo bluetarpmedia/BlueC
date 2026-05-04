@@ -1,0 +1,8 @@
+warning: Case value is out of range of the switch controlling expression's type
+         [-Wswitch-outside-range]
+   |
+   |   case 65536:
+   |        ^^^^^
+   |
+
+1 warning generated

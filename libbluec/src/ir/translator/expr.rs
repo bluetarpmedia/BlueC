@@ -331,7 +331,7 @@ fn translate_address_of(
     expr: &AstExpression,
     instructions: &mut Vec<BtInstruction>,
 ) -> EvalExpr {
-    let AstExpressionKind::AddressOf { target } = expr.kind() else {
+    let AstExpressionKind::AddressOf { target, .. } = expr.kind() else {
         ICE!("Expected an AstExpressionKind::AddressOf");
     };
 

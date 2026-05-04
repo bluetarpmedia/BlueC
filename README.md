@@ -237,18 +237,18 @@ So far I've concentrated mostly on the front-end to implement C language feature
   * ✅ Symbol Table for identifier & type alias resolution, which allows us to solve the `type-identifier: name` grammar ambiguity problem
 * Warning diagnostics (`-W` or `-Wno-`)
   * Literals
-    * ✅ `multichar, unknown-escape-sequence, implicitly-unsigned-literal, literal-range`
+    * ✅ `multichar, unknown-escape-sequence, implicitly-unsigned-literal, literal-range, literal-conversion`
   * Declarations and initializers
     * ✅ `missing-declarations, duplicate-decl-specifier, extern-initializer, uninitialized, unused-variable, unused-function, unused-local-typedef, 
 excess-initializers, missing-braces, many-braces-around-scalar-init`
   * Expressions
-    * ✅ `logical-op-parentheses, bitwise-op-parentheses, parentheses, array-bounds, unused-value, unused-comparison`
+    * ✅ `logical-op-parentheses, bitwise-op-parentheses, parentheses, array-bounds, unused-value, unused-comparison, bool-operation, constant-logical-operand, switch-bool, switch-outside-range`
   * Arithmetic
       * ✅ `division-by-zero, integer-overflow, floating-point-overflow, shift-count-negative, shift-count-overflow, shift-count-zero`
   * Conversions and casts
-      * ✅ `constant-conversion, implicit-conversion, implicit-promotion-conversion, implicit-int-conversion, implicit-float-conversion, implicit-int-float-conversion, float-conversion, sign-conversion, pointer-to-int-cast, non-literal-null-conversion`
+      * ✅ `constant-conversion, implicit-conversion, implicit-promotion-conversion, implicit-int-conversion, implicit-float-conversion, implicit-int-float-conversion, float-conversion, sign-conversion, pointer-to-int-cast, non-literal-null-conversion, int-in-bool-context`
   * Comparisons
-      * ✅ `compare-distinct-pointer-types, pointer-integer-compare`
+      * ✅ `compare-distinct-pointer-types, pointer-integer-compare, tautological-compare, tautological-bitwise-compare, tautological-constant-out-of-range-compare`
   * Types
       * ✅ `conditional-type-mismatch, pointer-type-mismatch`
 * Front-end improvements

@@ -1,0 +1,14 @@
+warning: Switch controlling expression has boolean value [-Wswitch-bool]
+   |
+   |   switch (b) {
+   |   ^^^^^^  ~
+   |
+
+warning: Case value is out of range of the switch controlling expression's type
+         [-Wswitch-outside-range]
+   |
+   |   case 2:
+   |        ^
+   |
+
+2 warnings generated

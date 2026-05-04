@@ -6,7 +6,7 @@ use crate::ICE;
 use crate::core::{SourceIdentifier, SourceLocation, SymbolKind};
 use crate::lexer::TokenType;
 use crate::parser::expr::ops;
-use crate::parser::{AstBinaryOp, AstBinaryOpFamily, AstType};
+use crate::parser::{AstBinaryOp, AstBinaryOpFamily, AstType, AstUnaryOp};
 
 use super::super::{Driver, WarningKind};
 use super::{Diagnostic, SuggestedCode};
@@ -37,6 +37,25 @@ impl Warning {
                 "Implicit conversion from '{old_type}' to '{new_type}' changes value from {old_value} to {new_value}"
             )
         };
+
+        driver.add_diagnostic(Diagnostic::warning_at_location(kind, message, loc));
+    }
+
+    /// Emits an implicit conversion warning that a literal changes its value.
+    ///
+    /// -Wliteral-conversion
+    pub fn literal_conversion(
+        old_type: &AstType,
+        new_type: &AstType,
+        old_value: &str,
+        new_value: &str,
+        loc: SourceLocation,
+        driver: &mut Driver,
+    ) {
+        let kind = WarningKind::LiteralConversion;
+        let message = format!(
+            "Implicit conversion from '{old_type}' to '{new_type}' changes value from {old_value} to {new_value}"
+        );
 
         driver.add_diagnostic(Diagnostic::warning_at_location(kind, message, loc));
     }
@@ -250,6 +269,26 @@ impl Warning {
         driver.add_diagnostic(Diagnostic::warning_at_location(kind, warning, loc));
     }
 
+    /// Emits a warning that a switch statement's condition is a boolean type.
+    ///
+    /// -Wswitch-bool
+    pub fn switch_bool(switch_loc: SourceLocation, condition_loc: SourceLocation, driver: &mut Driver) {
+        let kind = WarningKind::SwitchBool;
+        let warning = "Switch controlling expression has boolean value".to_string();
+        let mut diag = Diagnostic::warning_at_location(kind, warning, switch_loc);
+        diag.add_location(condition_loc);
+        driver.add_diagnostic(diag);
+    }
+
+    /// Emits a warning that a switch statement's case label has a value outside the valid range of the type.
+    ///
+    /// -Wswitch-outside-range
+    pub fn switch_outside_range(case_loc: SourceLocation, driver: &mut Driver) {
+        let kind = WarningKind::SwitchOutsideRange;
+        let warning = "Case value is out of range of the switch controlling expression's type".to_string();
+        driver.add_diagnostic(Diagnostic::warning_at_location(kind, warning, case_loc));
+    }
+
     /// Emits a warning about an 'extern' variable with an initializer.
     pub fn extern_initializer(loc: SourceLocation, driver: &mut Driver) {
         let kind = WarningKind::ExternInitializer;
@@ -318,6 +357,60 @@ impl Warning {
         let warning = "Integer literal is interpreted as unsigned because it is too large \
                        for a signed integer type";
         driver.add_diagnostic(Diagnostic::warning_at_location(kind, warning.to_string(), loc));
+    }
+
+    /// Emits a warning about a unary operation on a boolean type.
+    ///
+    /// -Wbool-operation
+    pub fn unary_bool_operation(op: AstUnaryOp, op_loc: SourceLocation, expr_loc: SourceLocation, driver: &mut Driver) {
+        let kind = WarningKind::BoolOperation;
+
+        let op_descr = match op {
+            AstUnaryOp::BitwiseNot => "Bitwise complement on",
+            AstUnaryOp::PrefixIncrement => "Increment of",
+            AstUnaryOp::PrefixDecrement => "Decrement of",
+            AstUnaryOp::PostfixIncrement => "Increment of",
+            AstUnaryOp::PostfixDecrement => "Decrement of",
+            _ => ICE!("Unexpected operator '{op}'"),
+        };
+
+        let warning = format!("{op_descr} a boolean expression");
+        let mut diag = Diagnostic::warning_at_location(kind, warning, op_loc);
+
+        if op == AstUnaryOp::BitwiseNot {
+            diag.add_note("Did you mean to use logical not ('!')?".into(), None);
+        }
+
+        diag.add_location(expr_loc);
+        driver.add_diagnostic(diag);
+    }
+
+    /// Emits a warning that a constant is used as the rhs operand in a logical And/Or expression.
+    ///
+    /// -Wconstant-logical-operand
+    pub fn constant_logical_operand(
+        op: AstBinaryOp,
+        op_loc: SourceLocation,
+        rhs_loc: SourceLocation,
+        driver: &mut Driver,
+    ) {
+        let kind = WarningKind::ConstantLogicalOperand;
+        let op_str = TokenType::from(op).to_string();
+        let warning = format!("Use of logical '{op_str}' with constant operand");
+        let mut diag = Diagnostic::warning_at_location(kind, warning, op_loc);
+        diag.add_location(rhs_loc);
+
+        let suggested_op = if op == AstBinaryOp::LogicalAnd {
+            "&"
+        } else if op == AstBinaryOp::LogicalOr {
+            "|"
+        } else {
+            ICE!("Unexpected operator")
+        };
+
+        diag.add_note(format!("Use '{suggested_op}' for a bitwise operation"), None);
+
+        driver.add_diagnostic(diag);
     }
 
     /// Emits a warning that the value result of an expression (with no side-effects) is unused.
@@ -479,6 +572,76 @@ impl Warning {
         driver.add_diagnostic(diag);
     }
 
+    /// Emits a warning that a comparison is redundant/tautological.
+    ///
+    /// -Wtautological-compare
+    pub fn tautological_compare(op: AstBinaryOp, op_loc: SourceLocation, driver: &mut Driver) {
+        let kind = WarningKind::TautologicalCompare;
+
+        debug_assert!(op.is_relational());
+        let result_descr = match op {
+            AstBinaryOp::EqualTo => "true",
+            AstBinaryOp::NotEqualTo => "false",
+            AstBinaryOp::LessThan => "false",
+            AstBinaryOp::GreaterThan => "false",
+            AstBinaryOp::LessThanOrEqualTo => "true",
+            AstBinaryOp::GreaterThanOrEqualTo => "true",
+            _ => ICE!("Operator is not relational '{op}'"),
+        };
+
+        let warning = format!("Self-comparison always evaluates to {result_descr}");
+        driver.add_diagnostic(Diagnostic::warning_at_location(kind, warning, op_loc));
+    }
+
+    /// Emits a warning that a comparison with a constant/literal is redundant/tautological.
+    ///
+    /// -Wtautological-constant-out-of-range-compare
+    pub fn tautological_constant_out_of_range_compare(
+        op: AstBinaryOp,
+        expr_type: &AstType,
+        constant_descr: &str,
+        result_descr: &str,
+        op_loc: SourceLocation,
+        additional_locs: &[SourceLocation],
+        driver: &mut Driver,
+    ) {
+        let kind = WarningKind::TautologicalConstantOutOfRangeCompare;
+
+        let op_str = TokenType::from(op).to_string();
+
+        let warning = format!(
+            "Comparing expression of type '{expr_type}' {op_str} {constant_descr} \
+             always evaluates to {result_descr}"
+        );
+
+        let mut diag = Diagnostic::warning_at_location(kind, warning, op_loc);
+        for loc in additional_locs {
+            diag.add_location(*loc);
+        }
+        driver.add_diagnostic(diag);
+    }
+
+    /// Emits a warning that a bitwise OR with a non-zero value used in a boolean context is redundant.
+    ///
+    /// -Wtautological-bitwise-compare
+    pub fn tautological_bitwise_compare(op_loc: SourceLocation, expr_loc: SourceLocation, driver: &mut Driver) {
+        let kind = WarningKind::TautologicalBitwiseCompare;
+        let warning = "Bitwise OR '|' with a non-zero value always evaluates to true".to_string();
+        let mut diag = Diagnostic::warning_at_location(kind, warning, op_loc);
+        diag.add_location(expr_loc);
+        driver.add_diagnostic(diag);
+    }
+
+    /// Emits a warning that an expression of type 'int' is used in a boolean context, possibly by mistake.
+    ///
+    /// -Wint-in-bool-context
+    pub fn int_in_bool_context(op: AstBinaryOp, op_loc: SourceLocation, driver: &mut Driver) {
+        let kind = WarningKind::IntInBoolContext;
+        let op_str = TokenType::from(op).to_string();
+        let warning = format!("Converting the result of '{op_str}' to a boolean; did you mean to compare with '0'?");
+        driver.add_diagnostic(Diagnostic::warning_at_location(kind, warning, op_loc));
+    }
+
     /// Emits a warning that two different pointer types are being compared.
     ///
     /// -Wcompare-distinct-pointer-types
@@ -544,6 +707,7 @@ impl Warning {
     pub fn pointer_bool_conversion(
         symbol_name: &str,
         symbol_kind: SymbolKind,
+        symbol_suffix: Option<&str>,
         loc: SourceLocation,
         driver: &mut Driver,
     ) {
@@ -552,7 +716,11 @@ impl Warning {
             "Address of constant always evaluates to 'true'".to_string()
         } else {
             let symbol_str = if symbol_kind == SymbolKind::Function { "function " } else { "" };
-            format!("Address of {symbol_str}'{symbol_name}' always evaluates to 'true'")
+            if let Some(suffix) = symbol_suffix {
+                format!("Address of {symbol_str}'{symbol_name}'{suffix} always evaluates to 'true'")
+            } else {
+                format!("Address of {symbol_str}'{symbol_name}' always evaluates to 'true'")
+            }
         };
 
         driver.add_diagnostic(Diagnostic::warning_at_location(kind, warning, loc));

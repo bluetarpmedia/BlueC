@@ -1,0 +1,21 @@
+warning: Increment of a boolean expression [-Wbool-operation]
+   |
+   |     t++;
+   |     ~^^
+   |
+
+warning: Decrement of a boolean expression [-Wbool-operation]
+   |
+   |     --f;
+   |     ^^~
+   |
+
+warning: Bitwise complement on a boolean expression [-Wbool-operation]
+   |
+   |     _Bool complement = ~t;
+   |                        ^~
+   |
+note: Did you mean to use logical not ('!')?
+   |
+
+3 warnings generated

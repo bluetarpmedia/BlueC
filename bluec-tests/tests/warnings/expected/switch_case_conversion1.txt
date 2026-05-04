@@ -1,3 +1,10 @@
+warning: Case value is out of range of the switch controlling expression's type
+         [-Wswitch-outside-range]
+   |
+   |         case -1:
+   |              ^^
+   |
+
 warning: Implicit conversion from case value type 'int' to switch condition type
          'unsigned int' changes value from -1 to 4294967295 [-Wsign-conversion]
    |
@@ -5,4 +12,4 @@ warning: Implicit conversion from case value type 'int' to switch condition type
    |              ^^
    |
 
-1 warning generated
+2 warnings generated

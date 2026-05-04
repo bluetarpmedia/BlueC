@@ -1,0 +1,22 @@
+warning: Converting the result of '<<' to a boolean; did you mean to compare with '0'?
+         [-Wint-in-bool-context]
+   |
+   |     _Bool r1 = a << 1;
+   |                  ^^
+   |
+
+warning: Converting the result of '<<' to a boolean; did you mean to compare with '0'?
+         [-Wint-in-bool-context]
+   |
+   |     _Bool r2 = a || b << 2;
+   |                       ^^
+   |
+
+warning: Converting the result of '*' to a boolean; did you mean to compare with '0'?
+         [-Wint-in-bool-context]
+   |
+   |     if (a * b) {
+   |           ^
+   |
+
+3 warnings generated

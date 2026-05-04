@@ -250,9 +250,14 @@ impl SymbolTable {
             .symbols
             .iter()
             .filter_map(|(unique_name, s)| {
+                let is_constant = s.kind() == SymbolKind::Constant;
                 let is_global_typedef = s.kind() == SymbolKind::TypeAlias && s.attrs.is_file_scope_typedef;
 
-                if !is_global_typedef && s.linkage() != AstLinkage::External && !self.used.contains(unique_name) {
+                if is_constant || is_global_typedef {
+                    return None;
+                }
+
+                if s.linkage() != AstLinkage::External && !self.used.contains(unique_name) {
                     let name =
                         if s.kind() == SymbolKind::Function { unique_name.to_string() } else { s.declared_name() };
                     Some((name, s.kind(), s.location()))

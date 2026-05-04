@@ -47,6 +47,7 @@ pub enum AstExpressionKind {
     },
     AddressOf {
         target: Box<AstExpression>,
+        is_implicit: bool, // Was the cast expression added by sema/type checking
     },
     Subscript {
         expr1: Box<AstExpression>, // Pointer and Index sub-expressions can be swapped so we name them 1 & 2.
@@ -151,6 +152,11 @@ impl AstExpression {
                 | AstExpressionKind::IntegerLiteral { .. }
                 | AstExpressionKind::FloatLiteral { .. }
         )
+    }
+
+    /// Is the AST expression an integer or character literal?
+    pub fn is_integral_literal(&self) -> bool {
+        matches!(self.kind, AstExpressionKind::CharLiteral { .. } | AstExpressionKind::IntegerLiteral { .. })
     }
 
     /// Is the AST expression a single character literal?
