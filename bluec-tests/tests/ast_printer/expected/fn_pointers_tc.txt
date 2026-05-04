@@ -28,7 +28,7 @@ TranslationUnit
 │   │ └ Assignment [Id = 14] [Type = 'int (*)(int, int)']
 │   │   ├ Deref [Id = 12] [Type = 'int (*)(int, int)']
 │   │   │ └ Ident: ptr_to_ptr [id.ptr_to_ptr.4] [Id = 11] [Type = 'int (**)(int, int)']
-│   │   └ AddressOf [Id = 122] [Type = 'int (*)(int, int)']
+│   │   └ ImplicitAddressOf [Id = 122] [Type = 'int (*)(int, int)']
 │   │     └ Ident: multiply [multiply] [Id = 13] [Type = 'int (int, int)']
 │   └ ReturnStmt
 │     └ IntegerLiteral(0) [Id = 16] [Type = 'int'] [ConstantExpr]
@@ -50,7 +50,7 @@ TranslationUnit
     │ ├ Linkage: none
     │ ├ Storage: automatic
     │ └ Initializer
-    │   └ AddressOf [Id = 123] [Type = 'int (*)(int, int)']
+    │   └ ImplicitAddressOf [Id = 123] [Type = 'int (*)(int, int)']
     │     └ Ident: add [add] [Id = 23] [Type = 'int (int, int)']
     ├ IfStmt
     │ ├ Condition
@@ -151,7 +151,7 @@ TranslationUnit
     ├ ExprStmt
     │ └ Assignment [Id = 98] [Type = 'int (*)(int, int)']
     │   ├ Ident: fn_ptr [id.fn_ptr.7] [Id = 96] [Type = 'int (*)(int, int)']
-    │   └ AddressOf [Id = 124] [Type = 'int (*)(int, int)']
+    │   └ ImplicitAddressOf [Id = 124] [Type = 'int (*)(int, int)']
     │     └ Ident: add [add] [Id = 97] [Type = 'int (int, int)']
     ├ IfStmt
     │ ├ Condition

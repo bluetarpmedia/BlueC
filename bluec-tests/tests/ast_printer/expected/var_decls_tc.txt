@@ -19,7 +19,7 @@ TranslationUnit
 │ └ Initializer
 │   ├ AddressOf [Id = 11] [Type = 'long *']
 │   │ └ Subscript [Id = 10] [Type = 'long']
-│   │   ├ AddressOf [Id = 43] [Type = 'long *']
+│   │   ├ ImplicitAddressOf [Id = 43] [Type = 'long *']
 │   │   │ └ Ident: x [x] [Id = 8] [Type = 'long [4]']
 │   │   └ IntegerLiteral(0) [Id = 9] [Type = 'int'] [ConstantExpr]
 │   └ Constant Eval: long *
@@ -52,7 +52,7 @@ TranslationUnit
     │ ├ Linkage: none
     │ ├ Storage: automatic
     │ └ Initializer
-    │   └ AddressOf [Id = 48] [Type = 'char *'] [ConstantExpr]
+    │   └ ImplicitAddressOf [Id = 48] [Type = 'char *'] [ConstantExpr]
     │     └ StringLiteral("Hello, world!\n" ["Hello, world!\n"]) [Id = 28] [Type = 'char [15]'] [ConstantExpr]
     ├ VariableDefn: s [id.s.2], declared="short" [Type = 'short']
     │ ├ Linkage: none

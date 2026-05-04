@@ -55,6 +55,20 @@ fn print_typechecked_ast_with_color(source_filename: &str) {
     print_ast(source_filename, true, false);
 }
 
+fn print_first_diff(actual: &[u8], expected: &[u8]) {
+    let actual_lines = actual.split(|&b| b == b'\n');
+    let expected_lines = expected.split(|&b| b == b'\n');
+
+    let first_diff = actual_lines.zip(expected_lines).enumerate().find(|(_, (a, e))| a != e);
+
+    if let Some((idx, (act_line, exp_line))) = first_diff {
+        let line_no = idx + 1;
+        println!("First difference at line {line_no}:");
+        println!("Actual:   {}", String::from_utf8_lossy(act_line));
+        println!("Expected: {}", String::from_utf8_lossy(exp_line));
+    }
+}
+
 fn print_ast(source_filename: &str, type_checked: bool, no_color: bool) {
     let actual_file = TempFile::try_create_with_extension("bluec", "txt");
     let actual_file = actual_file.expect("Did not create temp txt file");
@@ -99,6 +113,7 @@ fn print_ast(source_filename: &str, type_checked: bool, no_color: bool) {
     });
 
     if actual != expected {
+        print_first_diff(&actual, &expected);
         eprintln!(
             "Actual:\n`{}`\n\nExpected:\n`{}`",
             String::from_utf8(actual).unwrap(),
