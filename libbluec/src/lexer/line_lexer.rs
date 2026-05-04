@@ -108,6 +108,9 @@ impl<'a, 'b> LineLexer<'a, 'b> {
                         '~' => Ok(Some(self.make_token(TokenType::BitwiseNot,     token_len))),
                         '?' => Ok(Some(self.make_token(TokenType::Ternary,        token_len))),
 
+                        // `.<digit>` is handled above; this is for the member access operator.
+                        '.' => Ok(Some(self.make_token(TokenType::Period,         token_len))),
+
                         _ => {
                             let loc = SourceLocation::new(self.cursor_pos(), 1);
                             let diag = Diagnostic::error_at_location(format!("Unexpected character '{0}'", ch), loc);
@@ -152,7 +155,7 @@ impl<'a, 'b> LineLexer<'a, 'b> {
         }
     }
 
-    /// Looks ahead at up to 3 characters create the most appropriate token.
+    /// Looks ahead at up to 3 characters and creates the most appropriate token.
     #[rustfmt::skip]
     fn maximal_munch_up_to_3_chars(&mut self) -> Token {
         let Some((idx, first)) = self.cursor.next() else {
@@ -183,6 +186,7 @@ impl<'a, 'b> LineLexer<'a, 'b> {
 
             ('-', Some('-')) => { advance(self); self.make_token(TokenType::Decrement,              token_len) }
             ('-', Some('=')) => { advance(self); self.make_token(TokenType::SubtractionAssignment,  token_len) }
+            ('-', Some('>')) => { advance(self); self.make_token(TokenType::Arrow,                  token_len) }
             ('-', _)         => {                self.make_token(TokenType::Minus,                  token_len) }
 
             ('*', Some('=')) => { advance(self); self.make_token(TokenType::MultiplyAssignment,     token_len) }

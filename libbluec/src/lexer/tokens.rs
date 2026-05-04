@@ -33,6 +33,7 @@ pub enum TokenType {
     LessThan,
     GreaterThan,
     Ternary, // Aka conditional
+    Period,
 
     // Multi-character tokens
     BitwiseAndAssignment,
@@ -55,6 +56,7 @@ pub enum TokenType {
     NotEqualTo,
     LessThanOrEqualTo,
     GreaterThanOrEqualTo,
+    Arrow,
 
     // Identifiers (which may be keywords)
     Identifier(String),
@@ -209,6 +211,7 @@ impl fmt::Display for TokenType {
             TokenType::LessThan                     => write!(f, "<"),
             TokenType::GreaterThan                  => write!(f, ">"),
             TokenType::Ternary                      => write!(f, "?"),
+            TokenType::Period                       => write!(f, "."),
 
             // Multi-character tokens
             TokenType::BitwiseAndAssignment         => write!(f, "&="),
@@ -231,6 +234,7 @@ impl fmt::Display for TokenType {
             TokenType::NotEqualTo                   => write!(f, "!="),
             TokenType::LessThanOrEqualTo            => write!(f, "<="),
             TokenType::GreaterThanOrEqualTo         => write!(f, ">="),
+            TokenType::Arrow                        => write!(f, "->"),
 
             // Identifiers / keywords
             TokenType::Identifier(id)               => write!(f, "{}", id),
