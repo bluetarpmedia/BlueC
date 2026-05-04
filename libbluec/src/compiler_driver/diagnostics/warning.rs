@@ -280,6 +280,15 @@ impl Warning {
         driver.add_diagnostic(diag);
     }
 
+    /// Emits a warning that a switch statement's case label has a value outside the valid range of the type.
+    ///
+    /// -Wswitch-outside-range
+    pub fn switch_outside_range(case_loc: SourceLocation, driver: &mut Driver) {
+        let kind = WarningKind::SwitchOutsideRange;
+        let warning = "Case value is out of range of the switch controlling expression's type".to_string();
+        driver.add_diagnostic(Diagnostic::warning_at_location(kind, warning, case_loc));
+    }
+
     /// Emits a warning about an 'extern' variable with an initializer.
     pub fn extern_initializer(loc: SourceLocation, driver: &mut Driver) {
         let kind = WarningKind::ExternInitializer;

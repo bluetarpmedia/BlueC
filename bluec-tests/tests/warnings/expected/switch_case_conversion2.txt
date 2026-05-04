@@ -1,3 +1,10 @@
+warning: Case value is out of range of the switch controlling expression's type
+         [-Wswitch-outside-range]
+   |
+   |         case 4294967296:
+   |              ^^^^^^^^^^
+   |
+
 warning: Implicit conversion from case value type 'long long' to switch condition type
          'int' changes value from 4294967296 to 0 [-Wconstant-conversion]
    |
@@ -5,4 +12,4 @@ warning: Implicit conversion from case value type 'long long' to switch conditio
    |              ^^^^^^^^^^
    |
 
-1 warning generated
+2 warnings generated

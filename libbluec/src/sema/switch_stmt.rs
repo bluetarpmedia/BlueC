@@ -4,7 +4,7 @@
 
 use crate::ICE;
 use crate::compiler_driver::{Diagnostic, Driver, Warning};
-use crate::parser::{AstConstantValue, AstFunction, AstRoot, AstStatement};
+use crate::parser::{AstConstantValue, AstExpressionKind, AstFunction, AstRoot, AstStatement, CmpValueType};
 
 use super::constant_eval;
 use super::type_check::TypeChecker;
@@ -24,8 +24,16 @@ pub fn validate_switch_statements(ast_root: &mut AstRoot, chk: &mut TypeChecker,
             if let AstStatement::Switch { node_id: enclosing_switch_node_id, controlling_expr, body } = stmt {
                 // Get the type of the switch statement's controlling expression.
                 //      All case values must be of this type or cast to it.
+                //      This type will be 'int' if the declared switch statement's type is an integer of lower rank,
+                //      since sema will have added an implicit cast to 'int'.
                 //
-                let current_switch_data_type = chk.metadata.get_node_type(controlling_expr.id()).clone();
+                let switch_data_type = chk.metadata.get_node_type(controlling_expr.id()).clone();
+
+                let switch_declared_data_type = if let AstExpressionKind::Cast { inner, .. } = controlling_expr.kind() {
+                    chk.metadata.get_node_type(inner.id()).clone()
+                } else {
+                    switch_data_type.clone()
+                };
 
                 // Visit all the 'case' statements inside the switch body.
                 //      Remember this will find 'case' statements in nested switches too.
@@ -60,10 +68,25 @@ pub fn validate_switch_statements(ast_root: &mut AstRoot, chk: &mut TypeChecker,
                             return;
                         }
 
+                        // Warn if the case value is out of range of the switch controlling expression's type.
+                        {
+                            let AstConstantValue::Integer(constant_integer) = constant_value else {
+                                ICE!("Switch case value '{constant_value}' should be a constant integer");
+                            };
+
+                            if !matches!(
+                                constant_integer.valid_for_type(&switch_declared_data_type),
+                                CmpValueType::Equal { .. }
+                            ) {
+                                let case_loc = chk.metadata.get_source_location(constant_expr.id());
+                                Warning::switch_outside_range(case_loc, driver);
+                            }
+                        }
+
                         // If necessary cast the case constant value to the type of the switch statement's
                         // controlling expression.
                         let case_data_type = constant_value.get_ast_type();
-                        let switch_data_type = &current_switch_data_type;
+                        let switch_data_type = &switch_data_type;
 
                         if case_data_type != *switch_data_type {
                             let old_constant_value = constant_value.clone(); // In case we need to warn of conversion
